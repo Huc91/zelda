@@ -67,6 +67,13 @@ func state_respawning() -> void:
 		_respawn()
 
 
+func _on_attacked(source: Node) -> void:
+	if in_battle: return
+	in_battle = true
+	var enemy = source.user if "user" in source else source
+	Global.request_card_battle(false, enemy)
+
+
 func _custom_collision(other) -> void:
 	if other is Pickup:
 		_pickup(other)

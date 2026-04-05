@@ -1,5 +1,11 @@
 extends Actor
 
+
+func _on_attacked(_source: Node) -> void:
+	if in_battle: return
+	in_battle = true
+	Global.request_card_battle(true, self)
+
 const ROK_PROJECTILE = preload("res://data/actors/attacks/rok.tscn")
 
 @export var move_time : float = 1.0

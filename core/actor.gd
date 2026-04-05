@@ -25,6 +25,8 @@ var sprite_direction := "Down"
 var ray: RayCast2D
 var hitbox: Area2D
 
+var in_battle := false
+
 signal on_hit
 
 func _ready() -> void:
@@ -176,18 +178,24 @@ func _check_collisions():
 				call(on_step)
 		elif other is Attack:
 			if other.actor_type != actor_type and other.damage > 0:
-				_hit(other.damage, other.position)
+				_on_attacked(other)
 		else:
 			_custom_collision(other)
-	
+
 	for other in hitbox.get_overlapping_bodies():
 		if other is Actor:
 			if other.actor_type != actor_type and other.damage > 0:
-				_hit(other.damage, other.position)
+				_on_attacked(other)
 
 
 func _custom_collision(_other):
 	pass
+
+
+# Override in subclasses to intercept hits (e.g. trigger card battle).
+# Default: apply damage normally.
+func _on_attacked(source: Node) -> void:
+	_hit(source.damage, source.position)
 
 
 func _oneshot_vfx(frames : SpriteFrames) -> void:

@@ -42,6 +42,11 @@ project/assembly_name="Zelda"
 
 enabled=PackedStringArray("res://addons/godot-vim/plugin.cfg", "res://addons/map_editor/plugin.cfg")
 
+[gui]
+
+theme/custom_font="res://assets/fonts/Nudge Orb.ttf"
+theme/default_font_size=9
+
 [importer_defaults]
 
 texture={

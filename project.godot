@@ -12,7 +12,7 @@ config_version=5
 
 config/name="Zelda"
 run/main_scene="res://core/main.tscn"
-config/features=PackedStringArray("4.3", "GL Compatibility")
+config/features=PackedStringArray("4.4", "GL Compatibility")
 config/icon="res://editor/icon.png"
 
 [autoload]
@@ -29,6 +29,8 @@ gdscript/warnings/exclude_addons=false
 
 window/size/viewport_width=640
 window/size/viewport_height=576
+window/size/window_width_override=1920
+window/size/window_height_override=1080
 window/stretch/mode="viewport"
 display_server/driver.linuxbsd="wayland"
 

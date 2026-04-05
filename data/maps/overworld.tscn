@@ -1,7 +1,7 @@
 [gd_scene load_steps=3 format=3 uid="uid://cjb7is1lieu4j"]
 
 [ext_resource type="TileSet" uid="uid://blww4jrwxlr0s" path="res://data/tilesets/overworld_tileset.tres" id="1_2l45r"]
-[ext_resource type="Script" path="res://core/map.gd" id="2_corn8"]
+[ext_resource type="Script" uid="uid://badp0jtmytehc" path="res://core/map.gd" id="2_corn8"]
 
 [node name="Overworld" type="TileMap"]
 tile_set = ExtResource("1_2l45r")

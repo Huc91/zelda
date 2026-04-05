@@ -1,9 +1,9 @@
 [gd_scene load_steps=5 format=3 uid="uid://tcebs4gssy5f"]
 
-[ext_resource type="Script" path="res://core/ui/ui.gd" id="1_yab7k"]
-[ext_resource type="Script" path="res://core/ui/hud.gd" id="2_te0tt"]
-[ext_resource type="Script" path="res://core/ui/hearts.gd" id="3_tdn1k"]
-[ext_resource type="Script" path="res://core/ui/inventory.gd" id="4_wggnw"]
+[ext_resource type="Script" uid="uid://cq4pg0xm4nmap" path="res://core/ui/ui.gd" id="1_yab7k"]
+[ext_resource type="Script" uid="uid://cslv502gfm3j4" path="res://core/ui/hud.gd" id="2_te0tt"]
+[ext_resource type="Script" uid="uid://dcwd4spc1t28s" path="res://core/ui/hearts.gd" id="3_tdn1k"]
+[ext_resource type="Script" uid="uid://belq2jbtgu4ch" path="res://core/ui/inventory.gd" id="4_wggnw"]
 
 [node name="UI" type="CanvasLayer"]
 process_mode = 3

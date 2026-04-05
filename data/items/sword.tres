@@ -2,7 +2,7 @@
 
 [ext_resource type="Texture2D" uid="uid://bnrjw1taux5vj" path="res://data/items/sword-icon.png" id="1_wa3fm"]
 [ext_resource type="PackedScene" uid="uid://dhsyuyst7ybd6" path="res://data/actors/attacks/sword.tscn" id="2_x7a6b"]
-[ext_resource type="Script" path="res://core/item_resource.gd" id="3_n578r"]
+[ext_resource type="Script" uid="uid://dyb1suld1dhsk" path="res://core/item_resource.gd" id="3_n578r"]
 [ext_resource type="Texture2D" uid="uid://bcdsfholic3ks" path="res://data/items/sword.png" id="4_ae56g"]
 
 [resource]

@@ -32,6 +32,7 @@ window/size/viewport_height=576
 window/size/window_width_override=1920
 window/size/window_height_override=1080
 window/stretch/mode="viewport"
+window/stretch/scale_mode="integer"
 display_server/driver.linuxbsd="wayland"
 
 [dotnet]

@@ -287,4 +287,4 @@ const ALL_CARDS = [
 	{"id": "token_imp", "name": "Imp", "type": "demon", "subtype": "dark", "cost": 0, "mana_value": 1, "atk": 1, "hp": 1, "rarity": "common", "ability": "haste", "ability_desc": "Haste.", "desc": "A tiny demon."},
 	# Zelda legacy skeletons (IDs moved; bloodungeon 046+ are expansion cards)
 	{"id": "demon_124", "name": "Skeleton", "type": "demon", "subtype": "neutral", "cost": 1, "mana_value": 1, "atk": 1, "hp": 1, "rarity": "common", "ability": "", "ability_desc": "", "desc": "A rookie in the infernal army."},
-	{"id": "demon_125", "name": "Skeleton Soldier", "type": "demon", "subtype": "neutral", "cost": 2, "mana_value": 1, "atk": 2, "hp": 2, "rarity": "common", "ability": "", "ability_desc": "", "desc": "Frontline of the infernal army."},]
+	{"id": "demon_125", "name": "Skeleton Soldier", "type": "demon", "subtype": "neutral", "cost": 2, "mana_value": 1, "atk": 2, "hp": 2, "rarity": "common", "ability": "", "ability_desc": "", "desc": "Frontline of the infernal army."}, ]

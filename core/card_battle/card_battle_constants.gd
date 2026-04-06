@@ -101,11 +101,13 @@ const MODAL_COL_W: float   = 87.0
 const MODAL_ROW_H: float   = 118.0
 const MODAL_COLS: int      = 5
 
+## Rock–paper–scissors: attacker lineage → defender lineage it beats. Neutra has no entry.
 const TYPE_ADV: Dictionary = {
-	"fire":  "beast",
-	"beast": "dark",
-	"dark":  "fire",
+	"obscura": "regalia",
+	"regalia": "terresta",
+	"terresta": "obscura",
 }
+const TYPE_ADV_DAMAGE_BONUS: int = 2
 
 # ── Colours ───────────────────────────────────────────────────────
 const C_BG: Color          = Color("#D9D9D9")

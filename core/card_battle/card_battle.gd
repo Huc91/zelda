@@ -511,6 +511,13 @@ func _resolve_battlecry(d: Dictionary, is_player: bool) -> void:
 	elif "battlecry_buff_all_atk"      in ab:
 		for ally in pf: if ally != d: ally["atk"] += 1
 		for ally in pr: ally["atk"] += 1
+	elif "battlecry_buff_beast"       in ab:
+		for ally in pf:
+			if ally != d and ally["data"].get("subtype", "") == "terresta":
+				ally["atk"] += 1
+		for ally in pr:
+			if ally != d and ally["data"].get("subtype", "") == "terresta":
+				ally["atk"] += 1
 	elif "battlecry_destroy_strongest" in ab:
 		var all_o := of_.duplicate(); all_o.append_array(or_)
 		if not all_o.is_empty():
@@ -1349,7 +1356,9 @@ func _has_exhaust_activation(ability: String) -> bool:
 	return ability.contains("exhaust_")
 
 func _type_advantage(att_sub: String, def_sub: String) -> int:
-	return 1 if CardBattleConstants.TYPE_ADV.get(att_sub, "") == def_sub else 0
+	if CardBattleConstants.TYPE_ADV.get(att_sub, "") == def_sub:
+		return CardBattleConstants.TYPE_ADV_DAMAGE_BONUS
+	return 0
 func _has_taunt(board: Array) -> bool:
 	for d in board:
 		if d.get("taunt", false): return true
@@ -1941,20 +1950,18 @@ func _draw_zoomed_card(card: Dictionary, state: Dictionary) -> void:
 
 	# Type line (local 7,216)
 	if is_dem:
-		_str("DEMON - %s" % card.get("subtype", "dark").to_upper(),
+		_str("DEMON - %s" % card.get("subtype", "neutra").to_upper(),
 			cr.position.x + 7.0, cr.position.y + 216.0, 7, CardBattleConstants.C_MUTED)
 	else:
 		_str_c("SPELL", cr.get_center().x, cr.position.y + 216.0, 7, Color(0.24, 0.40, 0.08))
 
-	# ATK/HP — Figma 12px bottom-right
+	# ATK/HP — Figma 12px bottom-right (no buff/debuff tint on zoom; minis only)
 	if is_dem:
 		var max_hp: int = card.get("hp", 1)
 		var cur_hp: int = state.get("hp", max_hp)
 		var atk_v: int = state.get("atk", card.get("atk", 0))
-		var base_atk: int = card.get("atk", 0)
-		var base_hp: int = card.get("hp", 1)
-		_str_r_atk_hp(atk_v, cur_hp, max_hp, cr.position.x + cr.size.x - 6.0, cr.position.y + 203.0, 12,
-			false, base_atk, base_hp)
+		var exzoom: bool = state.get("exhausted", false) if not state.is_empty() else false
+		_str_r_atk_hp(atk_v, cur_hp, max_hp, cr.position.x + cr.size.x - 6.0, cr.position.y + 203.0, 12, exzoom)
 
 
 func _draw_cost_badge_rect(r: Rect2, cost: int, fill: Color = CardBattleConstants.C_COST_BADGE, label_color: Color = CardBattleConstants.C_TEXT_LT) -> void:

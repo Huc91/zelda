@@ -69,7 +69,14 @@ const TOAST_DUR: float   = 2.2
 const TOAST_X: float = 151.0
 const TOAST_W: float = 338.0
 const TOAST_H: float = 110.0
-const ATTACK_DRAG_THRESH: float = 8.0
+## Drag hand / attack-aim requires this many pixels before drag or attack mode (slightly less sensitive).
+const ATTACK_DRAG_THRESH: float = 12.0
+## After player ends turn: show interstitial banner, then AI (see `fixes.md`).
+const ENEMY_TURN_LEAD_SEC: float = 3.0
+## Uniform mini / hand / zoom card outline (rarity no longer tints border).
+const C_MINI_BORDER: Color = Color("#7F6F01")
+## Field minion ATK/HP higher than printed stat.
+const C_STAT_BUFF: Color = Color("#009944")
 
 const EINFO_TEXT_X: float   = 8.0
 const EINFO_LINE_1_Y: float = 2.0

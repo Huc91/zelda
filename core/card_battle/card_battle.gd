@@ -7,188 +7,8 @@ class _View extends Control:
 	func _process(dt: float) -> void:       b._tick(dt)
 
 
-# ══════════════════════════════════════════════════════════════════
-# LAYOUT  (640 × 576 viewport — Figma test / node 1:3)
+# Pixel-perfect layout / palette: `CardBattleConstants` (card_battle_constants.gd).
 # https://www.figma.com/design/iRJDqyetz1RTxvQOd1a7mU/test?node-id=1-3
-# Pixel-perfect: integer geometry, `_tx()` floors, pixel font — preserve on edits.
-# ══════════════════════════════════════════════════════════════════
-const W        := 640
-const H        := 576
-const LEFT_W   := 176                    # vertical grid at x=176
-# Right rail — vertical chrome at x=549; deck/grave/arsenal content +3px inside rail (x=552)
-const RAIL_LINE_X := 549                 # board | rail divider (Figma)
-const SIDE_ZONE_X := 552                 # left edge of grave/deck/arsenal bands
-const RIGHT_W     := W - RAIL_LINE_X     # full rail width from divider to screen edge
-const SIDE_ZONE_RW := W - SIDE_ZONE_X    # width of sidebar zone content (88)
-const BOARD_X     := LEFT_W
-const BOARD_W     := RAIL_LINE_X - BOARD_X
-const SIDE_ZONE_W := 83                  # grave/deck bar width in Figma
-const SIDE_CARD_INSET := 2.0             # (83−79)/2 — brown/white tiles centered in zone
-const SIDE_CARD_W := 79.0
-
-# Left panel — log ends 162, 10px gap, zoom panel from y=172 (Figma)
-const EINFO_H  := 49
-const LOG_Y    := 49
-const LOG_X    := 8
-const LOG_W    := 163
-const LOG_H    := 113                    # 49→162
-const LINE_Y_LOG_ZOOM := 167             # thin horizontal above zoom (50% − 121px)
-const LINE_Y_PINFO_HAND := 407           # thin horizontal above hand (50% + 119px)
-const ZOOM_Y   := 172                    # zoom strip starts (10px below log)
-const ZOOM_H   := 241                    # 172→413 (player info)
-const PINFO_Y  := 413                    # "You" / Life / Mana (Figma 4:346)
-const PINFO_H  := 52                     # 413→465
-const HAND_Y   := 465
-const HAND_H   := H - HAND_Y             # 111
-
-# Board rows  (absolute Y in the 576-px frame)
-# Specular sides: each side’s *_front is the vanguard toward the midline (meeting line);
-# *_rear is the back line (enemy toward top, player toward bottom). `enemy_front` / `enemy_rear`
-# arrays attach to these Ys — combat “attack their front first” = their vanguard row.
-const ROW_H       := 110
-const EFREAR_Y    := 53                  # enemy back line (top of board)
-const EFFRONT_Y   := 173                 # enemy vanguard — adjacent to midline / player front
-const BOARD_DIV_Y := 288                 # board midline (50% of 576); 4px bar is centered on this Y
-const PFFRONT_Y   := 293                 # player vanguard — adjacent to midline / enemy front
-const PFREAR_Y    := 411                 # player back line (near hand)
-
-# Card sizes  (Figma card: 79 × 110; art 64×64 @ y+15; hand cost 20×19 bottom)
-const MINI_W   := 79
-const MINI_H   := 110
-const MINI_GAP := 6
-const MINI_ART_TOP  := 15.0
-const MINI_ART_SIZE := 64.0
-const HAND_CW  := 79
-const HAND_CH  := 110
-const HAND_COST_W := 20
-const HAND_COST_H := 19
-const HAND_ROW_PAD := 8.0              # flex row, justify-content: flex-start (from board left)
-const MAX_ROW  := 4
-
-# Contextual actions (Figma "card selected" — outline + buttons to the right of mini card)
-const CTX_OUTLINE_W := 83
-const CTX_OUTLINE_H := 114
-const CTX_PAD       := 2.0   # outline extends past card by 2px each side
-const CTX_BTN_W     := 51.0
-const CTX_BTN_H     := 24.0
-const CTX_BTN_GAP_Y := 2.0   # 291 + 24 + 2 = 319, Figma uses 317 for EFF → ~2px gap
-
-# Right sidebar — Figma Group 11 band Y / heights (not equal splits)
-const SIDE_BAND_Y := [0.0, 57.0, 173.0, 293.0, 409.0, 524.0]
-const SIDE_BAND_H := [53.0, 110.0, 110.0, 110.0, 110.0, 52.0]
-
-const STARTING_HP := 15
-## Life display turns red at or below this (~⅓ max life; was a fixed 5 when STARTING_HP was 15).
-const LOW_LIFE_THRESHOLD: int = maxi(3, (STARTING_HP * 5) / 15)
-const STARTING_HAND := 5
-const FONT_MIN      := 8             # never draw UI text smaller than this (project theme default is 9)
-const LOG_LINE_H    := 10            # 8px log body + line spacing inside LOG_H
-const LOG_VISIBLE   := 8             # fits mint log box (y68→~160 with 8px font)
-const TOAST_DUR     := 2.2
-# Toast — Figma 4:1119 (toast/alert): 338×110 @ x=151, vertically centered; 14px label
-const TOAST_X := 151.0
-const TOAST_W := 338.0
-const TOAST_H := 110.0
-const ATTACK_DRAG_THRESH := 8.0      # px before drag-from-minion starts attack arrow
-
-# Figma left strip — text anchors (node 1:3)
-const EINFO_TEXT_X   := 8.0
-const EINFO_LINE_1_Y := 2.0            # "Enemy:" 10px
-const EINFO_LINE_2_Y := 14.0           # "Life:" 14px
-const EINFO_LINE_3_Y := 30.0           # "Hand:" 14px
-const LOG_TITLE_X    := 13.0
-const LOG_TITLE_Y    := 4.0
-const LOG_BODY_X     := 13.0
-const LOG_BODY_Y0    := 19.0           # first line ~y=68 absolute
-const LOG_SCROLL_X   := 162.0
-const LOG_SCROLL_W   := 5.0
-const LOG_TEXT_MAX_W := 145.0
-const PINFO_TEXT_X   := 8.0
-const PINFO_LINE_1_Y := 0.0            # "You" 10px — top of strip
-const PINFO_LINE_2_Y := 14.0           # "Life:" 14px
-const PINFO_LINE_3_Y := 32.0           # "Mana:" 14px
-const TURN_CIRCLE_Y_OFF := -18.0       # above pinfo mid (was −21; +3px down)
-# Deck/grave modal — Figma 4:1120 / 7:1287: black fills board+rail only; no full-viewport overlay
-const MODAL_PANEL_W := W - BOARD_X     # 464 — from x=176 to right edge
-const MODAL_GRID_X0 := 182.0           # first mini column
-const MODAL_GRID_Y0 := 30.0
-const MODAL_COL_W := 87.0              # 79 + 8 gap (Figma mini grid)
-const MODAL_ROW_H := 118.0             # 110 + 8
-const MODAL_COLS := 5
-
-# Type-advantage table  (rock-paper-scissors between subtypes)
-const TYPE_ADV := {
-	"fire":  "beast",
-	"beast": "dark",
-	"dark":  "fire",
-}
-
-
-# ══════════════════════════════════════════════════════════════════
-# COLOURS — Figma test node 1:3
-# ══════════════════════════════════════════════════════════════════
-const C_BG          := Color("#D9D9D9")
-const C_LEFT_BG     := Color("#D9D9D9")
-const C_BOARD_BG    := Color("#D9D9D9")
-const C_EINFO_BG    := Color("#D9D9D9")
-const C_LOG_BG      := Color("#C5FBE1")
-const C_LOG_BORDER  := Color("#3C1E15")
-const C_ZOOM_BG     := Color("#D9D9D9")
-const C_PINFO_BG    := Color("#D9D9D9")
-const C_GRAVE_BG    := Color("#000000")
-const C_DECK_BG     := Color("#513100")
-const C_ARSENAL_BG  := Color("#FFFFFF")
-const C_SIDE_ARSENAL_BORDER := Color("#787878")   # Figma 8:131 arsenal tile
-const C_BLACK       := Color("#000000")
-const C_DIV         := C_BLACK
-const C_LINE_H      := C_BLACK
-const C_CHROME_V    := C_BLACK
-const C_SCROLL_TRACK := Color("#FFFFFF")
-const C_SCROLL_THUMB := Color("#3C1E15")
-
-const C_TEXT        := C_BLACK
-const C_TEXT_LT     := Color("#FFFFFF")
-const C_LOG_TITLE   := Color("#6653CB")
-const C_LOG_BODY    := Color("#3C1E15")
-const C_MUTED       := Color("#404040")
-const C_HP_RED      := Color("#FF2060")
-const C_SEL         := Color("#00CC00")
-const C_TARGET      := Color("#FF4400")
-const C_TURN_AI     := Color("#DD2222")   # turn indicator when enemy / AI acts
-# Opaque only — no alpha channel in UI colours
-## Figma exhausted mini: name, Effect, stats, ZZZ (node 8:61)
-const C_EXHAUST_TEXT := Color("#7C7C7C")
-const C_EXHAUST_BADGE := Color("#B8B8B8")
-const C_END_TURN_DIM       := Color("#5C3D2E")
-const C_TEXT_ON_DARK_DIM   := Color("#A0A0A0")
-const C_TEXT_MUTED_SOLID   := Color("#888888")
-const C_ROW_DROP_FRONT     := Color("#B8F0B8")
-const C_ROW_DROP_REAR      := Color("#B8D4F0")
-const C_GRAYED_CARD_OVERLAY := Color("#555555")
-## ~`C_MUTED` on board grey — no alpha
-const C_BOARD_EMPTY_TEXT := Color("#8A8A8A")
-const C_DEMON_BG    := Color("#F4E4D9")   # zoom / modal card fill
-const C_CARD_MINI   := Color("#FFFFFF")   # field + hand minis (Figma)
-const C_SPELL_BG    := Color("#A1B467")
-
-const RARITY_COL := {
-	"common"   : Color("#7C7C7C"),
-	"uncommon" : Color("#0257F7"),
-	"rare"     : Color("#0257F7"),
-	"mythic"   : Color("#6844FC"),
-	"legendary": Color("#F83902"),
-}
-
-## DIRECT ATTACK — Figma 17:183 (on) / 17:184 (off)
-const C_DIRECT_ATTACK_ON := Color("#6653CB")
-const C_DIRECT_ATTACK_OFF := Color("#90ADBB")
-const C_DIRECT_ATTACK_OFF_TEXT := Color("#56689D")
-const C_END_TURN      := Color("#8B4513")
-const C_COST_BADGE    := Color("#3C1E15")
-
-const FONT_PATH_PRIMARY   := "res://assets/fonts/Nudge Orb.ttf"
-const FONT_PATH_FALLBACK  := "res://assets/fonts/PressStart2P-Regular.ttf"
-
 
 # ══════════════════════════════════════════════════════════════════
 # STATE — game
@@ -196,8 +16,8 @@ const FONT_PATH_FALLBACK  := "res://assets/fonts/PressStart2P-Regular.ttf"
 var enemy_actor:  Node
 var player_first: bool
 
-var player_hp := STARTING_HP
-var enemy_hp  := STARTING_HP
+var player_hp := CardBattleConstants.STARTING_HP
+var enemy_hp  := CardBattleConstants.STARTING_HP
 
 var player_deck:  Array = []
 var enemy_deck:   Array = []
@@ -265,6 +85,8 @@ var _rear_pick_start: Vector2 = Vector2.ZERO
 
 var _toast_text:  String = ""
 var _toast_timer: float  = 0.0
+## True after End Turn opened the Arsenal choice — stashing should finish the turn without a second End press.
+var _pending_finish_after_arsenal: bool = false
 
 var _modal_open:  bool   = false
 var _modal_cards: Array  = []
@@ -302,8 +124,8 @@ func _start_battle() -> void:
 	player_deck = CardDB.starter_deck()
 	enemy_deck  = CardDB.enemy_deck()
 	_ai_type    = _ai_runner.detect_ai_type_from_deck(enemy_deck)
-	if not _draw_mandatory_refresh(player_hand, player_deck, STARTING_HAND, true): return
-	if not _draw_mandatory_refresh(enemy_hand, enemy_deck, STARTING_HAND, false): return
+	if not _draw_mandatory_refresh(player_hand, player_deck, CardBattleConstants.STARTING_HAND, true): return
+	if not _draw_mandatory_refresh(enemy_hand, enemy_deck, CardBattleConstants.STARTING_HAND, false): return
 	_log("Battle started!")
 	_show_toast("Battle Start!")
 	_view.queue_redraw()
@@ -371,7 +193,7 @@ func _draw_one(hand: Array, deck: Array) -> void:
 func _log(s: String) -> void:
 	_battle_log.append(s)
 	var flat: Array[String] = _log_flat_lines()
-	_log_scroll = maxi(0, flat.size() - LOG_VISIBLE)
+	_log_scroll = maxi(0, flat.size() - CardBattleConstants.LOG_VISIBLE)
 	_clamp_log_scroll()
 	_view.queue_redraw()
 
@@ -391,9 +213,9 @@ func _start_player_turn() -> void:
 	_atk_drag_idx      = -1
 	_rear_pick_idx     = -1
 	_pending_card      = {}
-	for d in player_front: d["exhausted"] = false; d["attacked"] = 0
-	for d in player_rear:  d["exhausted"] = false; d["attacked"] = 0
-	_log("--- Your turn %d  (0 mana — pitch cards from hand) ---" % player_turn_num)
+	_begin_turn_refresh_exhaustion_for_side(true)
+	_apply_start_of_turn_board_effects(true)
+	_log("--- Your turn %d — %d mana (pitch hand for more) ---" % [player_turn_num, player_mana])
 	_show_toast("Your Turn")
 	_view.queue_redraw()
 
@@ -401,6 +223,8 @@ func _start_player_turn() -> void:
 ## End Turn button: optional Arsenal stash first (see _handle_end_turn_click).
 func _finish_end_player_turn() -> void:
 	if not is_player_turn or _animating or _ended: return
+	_apply_end_of_turn_board_effects(true)
+	_thaw_frozen_minions_for_side(true)
 	is_player_turn = false
 	_mode          = Mode.IDLE
 	_sel_idx       = -1
@@ -414,12 +238,19 @@ func _finish_end_player_turn() -> void:
 	_pitched_this_turn.clear()
 	for c in player_hand: player_gy.append(c)
 	player_hand.clear()
-	if not _draw_mandatory_refresh(player_hand, player_deck, STARTING_HAND, true):
+	if not _draw_mandatory_refresh(player_hand, player_deck, CardBattleConstants.STARTING_HAND, true):
 		return
 	_check_osiris_combo_win()
 	_view.queue_redraw()
-	await get_tree().create_timer(0.05, true).timeout
+	# Interstitial banner: fully clear before AI runs (fixes.md)
+	_toast_text = "Enemy Turn"
+	_toast_timer = CardBattleConstants.ENEMY_TURN_LEAD_SEC
+	_view.queue_redraw()
+	await get_tree().create_timer(CardBattleConstants.ENEMY_TURN_LEAD_SEC, true).timeout
 	if _ended: return
+	_toast_timer = 0.0
+	_toast_text = ""
+	_view.queue_redraw()
 	_start_enemy_turn()
 
 
@@ -429,10 +260,12 @@ func _handle_end_turn_click() -> void:
 		_log("Finish that action first (attack / row).")
 		return
 	if _mode == Mode.CHOOSE_ARSENAL:
+		_pending_finish_after_arsenal = false
 		_mode = Mode.IDLE
 		await _finish_end_player_turn()
 		return
 	if player_arsenal.is_empty() and not _stashed_this_turn and not player_hand.is_empty():
+		_pending_finish_after_arsenal = true
 		_mode = Mode.CHOOSE_ARSENAL
 		_ctx_idx = -1
 		_ctx_is_front = true
@@ -457,16 +290,13 @@ func _start_enemy_turn() -> void:
 	_enemy_stashed_this_turn = false
 	for c in enemy_hand: enemy_gy.append(c)
 	enemy_hand.clear()
-	if not _draw_mandatory_refresh(enemy_hand, enemy_deck, STARTING_HAND, false):
+	if not _draw_mandatory_refresh(enemy_hand, enemy_deck, CardBattleConstants.STARTING_HAND, false):
 		_animating = false
 		return
-	for d in enemy_front: d["exhausted"] = false; d["attacked"] = 0
-	for d in enemy_rear:  d["exhausted"] = false; d["attacked"] = 0
+	_begin_turn_refresh_exhaustion_for_side(false)
+	_apply_start_of_turn_board_effects(false)
 	_log("--- Enemy turn %d ---" % enemy_turn_num)
-	_show_toast("Enemy Turn")
 	_view.queue_redraw()
-	await get_tree().create_timer(0.4, true).timeout
-	if _ended: return
 	await _ai_runner.play_phase()
 	if _ended: return
 	await _ai_runner.attack_phase()
@@ -475,8 +305,87 @@ func _start_enemy_turn() -> void:
 	for c in _enemy_pitched_this_turn: enemy_deck.append(c)
 	_enemy_pitched_this_turn.clear()
 	_ai_runner.stash_arsenal_at_turn_end()
+	_apply_end_of_turn_board_effects(false)
+	_thaw_frozen_minions_for_side(false)
 	_animating = false
 	if not _ended: _start_player_turn()
+
+
+# ══════════════════════════════════════════════════════════════════
+# START OF TURN — field abilities (after mana reset & before pitch / AI)
+# ══════════════════════════════════════════════════════════════════
+func _apply_start_of_turn_board_effects(is_player: bool) -> void:
+	var pf: Array = player_front if is_player else enemy_front
+	var pr: Array = player_rear  if is_player else enemy_rear
+	var gain: int = 0
+	var parts: Array[String] = []
+	for row in [pf, pr]:
+		for d in row:
+			if d.get("hp", 0) <= 0:
+				continue
+			var ab: String = str(d["data"].get("ability", ""))
+			if _kwrd(ab, "mana_per_turn"):
+				gain += 1
+				parts.append(str(d["data"].get("name", "?")))
+	if gain <= 0:
+		return
+	if is_player:
+		player_mana = mini(player_mana + gain, 10)
+	else:
+		enemy_mana = mini(enemy_mana + gain, 10)
+	var who: String = "You" if is_player else "Enemy"
+	var name_list: String = ""
+	for i in range(parts.size()):
+		if i > 0:
+			name_list += ", "
+		name_list += parts[i]
+	_log("%s: +%d mana (%s)." % [who, gain, name_list])
+
+
+## End of turn — field abilities (e.g. Radiant Sentinel regen) while minions are still on board.
+func _apply_end_of_turn_board_effects(is_player: bool) -> void:
+	var pf: Array = player_front if is_player else enemy_front
+	var pr: Array = player_rear  if is_player else enemy_rear
+	for row in [pf, pr]:
+		for d in row:
+			if d.get("hp", 0) <= 0:
+				continue
+			var ab: String = str(d["data"].get("ability", ""))
+			if not _kwrd(ab, "taunt_regen"):
+				continue
+			var mx: int = int(d["data"].get("hp", 1))
+			if d["hp"] >= mx:
+				continue
+			d["hp"] = mini(d["hp"] + 1, mx)
+			_log("%s restores 1 HP." % str(d["data"].get("name", "?")))
+
+
+## Freeze — show exhausted (ZZZ) on the target until end of that minion owner's next turn (then thaw).
+func _apply_freeze(d: Dictionary) -> void:
+	d["frozen"] = true
+	d["exhausted"] = true
+
+
+func _begin_turn_refresh_exhaustion_for_side(is_player_side: bool) -> void:
+	var pf: Array = player_front if is_player_side else enemy_front
+	var pr: Array = player_rear  if is_player_side else enemy_rear
+	for row in [pf, pr]:
+		for d in row:
+			d["attacked"] = 0
+			if d.get("frozen", false):
+				d["exhausted"] = true
+			else:
+				d["exhausted"] = false
+
+
+func _thaw_frozen_minions_for_side(is_player_side: bool) -> void:
+	var pf: Array = player_front if is_player_side else enemy_front
+	var pr: Array = player_rear  if is_player_side else enemy_rear
+	for row in [pf, pr]:
+		for d in row:
+			if d.get("frozen", false):
+				d["frozen"] = false
+				d["exhausted"] = false
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -493,9 +402,9 @@ func _summon(card: Dictionary, is_player: bool, to_front: bool) -> void:
 	var pr := player_rear  if is_player else enemy_rear
 	var use_front := force_front or to_front
 	var row := pf if use_front else pr
-	if row.size() >= MAX_ROW:
+	if row.size() >= CardBattleConstants.MAX_ROW:
 		var other := pr if use_front else pf
-		if other.size() < MAX_ROW: row = other
+		if other.size() < CardBattleConstants.MAX_ROW: row = other
 		else: return
 	var d := _make_board_demon(card)
 	row.append(d)
@@ -521,6 +430,7 @@ func _make_board_demon(card: Dictionary) -> Dictionary:
 		"unblockable"  : _kwrd(ab, "unblockable"),
 		"rage"         : _kwrd(ab, "rage"),
 		"double_attack": _kwrd(ab, "double_attack"),
+		"frozen"       : false,
 		"uid"          : randi(),
 	}
 
@@ -563,13 +473,26 @@ func _resolve_battlecry(d: Dictionary, is_player: bool) -> void:
 		for o in or_.duplicate(): o["hp"] = 0
 		_process_deaths(of_, not is_player, true); _process_deaths(or_, not is_player, false)
 	elif "battlecry_heal_3"            in ab:
-		if is_player: player_hp = mini(player_hp + 3, STARTING_HP)
-		else:         enemy_hp  = mini(enemy_hp  + 3, STARTING_HP)
+		if is_player: player_hp = mini(player_hp + 3, CardBattleConstants.STARTING_HP)
+		else:         enemy_hp  = mini(enemy_hp  + 3, CardBattleConstants.STARTING_HP)
 	elif "battlecry_summon_imps"       in ab:
 		_summon(CardDB.get_card("token_imp"), is_player, true)
 		_summon(CardDB.get_card("token_imp"), is_player, true)
 	elif "battlecry_summon_imp"        in ab:
 		_summon(CardDB.get_card("token_imp"), is_player, true)
+	elif "battlecry_freeze_all" in ab:
+		for o in of_: _apply_freeze(o)
+		for o in or_: _apply_freeze(o)
+	elif "battlecry_freeze_target" in ab:
+		var all_e: Array = []
+		for o in of_: all_e.append(o)
+		for o in or_: all_e.append(o)
+		if not all_e.is_empty():
+			var hi: Dictionary = all_e[0]
+			for o in all_e:
+				if o["atk"] > hi["atk"]:
+					hi = o
+			_apply_freeze(hi)
 	_check_auto_lose_no_resources(is_player)
 
 
@@ -614,289 +537,7 @@ func _refresh_demon_keywords(d: Dictionary) -> void:
 
 
 func _resolve_spell(card: Dictionary, is_player: bool) -> void:
-	var effect: String = card.get("effect", "")
-	var val: int = card.get("value", 0)
-	var of_  := enemy_front  if is_player else player_front
-	var or_  := enemy_rear   if is_player else player_rear
-	var pf   := player_front if is_player else enemy_front
-	var pr   := player_rear  if is_player else enemy_rear
-	var own_hand := player_hand if is_player else enemy_hand
-	var own_deck := player_deck if is_player else enemy_deck
-
-	var gy_local := player_gy if is_player else enemy_gy
-
-	match effect:
-		"damage", "deal_face":
-			if is_player: _deal_damage_to_enemy(val)
-			else:         _deal_damage_to_player(val)
-		"heal":
-			if is_player: player_hp = mini(player_hp + val, STARTING_HP)
-			else:         enemy_hp  = mini(enemy_hp  + val, STARTING_HP)
-		"draw":
-			for _i in val: _draw_one(own_hand, own_deck)
-		"aoe_enemy", "aoe_demon_dmg":
-			for dd in of_.duplicate(): _hit_demon(dd, val, false)
-			for dd in or_.duplicate(): _hit_demon(dd, val, false)
-			_process_deaths(of_, not is_player, true); _process_deaths(or_, not is_player, false)
-		"mana_boost", "gain_mana":
-			if is_player: player_mana = mini(player_mana + val, 10)
-			else:         enemy_mana  = mini(enemy_mana  + val, 10)
-		"summon_imp":
-			_summon(CardDB.get_card("token_imp"), is_player, true)
-		"buff_atk_all", "buff_atk_all_turn":
-			for dd in pf: dd["atk"] += val
-			for dd in pr: dd["atk"] += val
-		"destroy":
-			var ti := _find_weakest(of_)
-			if ti >= 0: of_[ti]["hp"] = 0; _process_deaths(of_, not is_player, true)
-			else:
-				ti = _find_weakest(or_)
-				if ti >= 0: or_[ti]["hp"] = 0; _process_deaths(or_, not is_player, false)
-		"debuff_atk":
-			var ti2 := _find_strongest(of_)
-			if ti2 >= 0: of_[ti2]["atk"] = maxi(0, of_[ti2]["atk"] - val)
-			else:
-				ti2 = _find_strongest(or_)
-				if ti2 >= 0: or_[ti2]["atk"] = maxi(0, or_[ti2]["atk"] - val)
-		"life_per_demon":
-			var gain := (pf.size() + pr.size()) * val
-			if is_player: player_hp = mini(player_hp + gain, STARTING_HP)
-			else:         enemy_hp  = mini(enemy_hp  + gain, STARTING_HP)
-		"buff_hp":
-			var pool: Array = []
-			for dd in pf: pool.append(dd)
-			for dd in pr: pool.append(dd)
-			if pool.is_empty():
-				_check_auto_lose_no_resources(is_player)
-				return
-			var pick: Dictionary = pool[0]
-			for dd in pool:
-				if dd["hp"] < pick["hp"]: pick = dd
-			pick["hp"] += val
-		"buff_hp_all":
-			for dd in pf: dd["hp"] += val
-			for dd in pr: dd["hp"] += val
-		"cure_all_friendly":
-			for dd in pf: dd["hp"] += 1
-			for dd in pr: dd["hp"] += 1
-		"buff_all_stats":
-			for dd in pf: dd["atk"] += val; dd["hp"] += val
-			for dd in pr: dd["atk"] += val; dd["hp"] += val
-		"buff_target_stats":
-			if pf.is_empty() and pr.is_empty():
-				_check_auto_lose_no_resources(is_player)
-				return
-			var pool2: Array = []
-			for dd in pf: pool2.append(dd)
-			for dd in pr: pool2.append(dd)
-			var best: Dictionary = pool2[0]
-			for dd in pool2:
-				if dd["atk"] > best["atk"]: best = dd
-			best["atk"] += val
-			best["hp"] += val
-		"debuff_atk_all":
-			for dd in of_: dd["atk"] = maxi(0, dd["atk"] - val)
-			for dd in or_: dd["atk"] = maxi(0, dd["atk"] - val)
-		"give_divine_shield":
-			if not pf.is_empty(): pf[0]["divine_active"] = true
-			elif not pr.is_empty(): pr[0]["divine_active"] = true
-		"hp_to_mana":
-			if is_player:
-				player_hp -= val
-				player_mana = mini(player_mana + val, 10)
-			else:
-				enemy_hp -= val
-				enemy_mana = mini(enemy_mana + val, 10)
-		"hp_for_draw":
-			if is_player: player_hp -= val
-			else:         enemy_hp  -= val
-			for _i in val: _draw_one(own_hand, own_deck)
-		"mana_per_demon":
-			var add_m: int = (pf.size() + pr.size()) * val
-			if is_player: player_mana = mini(player_mana + add_m, 10)
-			else:         enemy_mana  = mini(enemy_mana  + add_m, 10)
-		"mana_per_graveyard":
-			var add_g: int = mini(val, gy_local.size())
-			if is_player: player_mana = mini(player_mana + add_g, 10)
-			else:         enemy_mana  = mini(enemy_mana  + add_g, 10)
-		"deal_and_gain_mana":
-			if is_player:
-				_deal_damage_to_enemy(val)
-				player_mana = mini(player_mana + val, 10)
-			else:
-				_deal_damage_to_player(val)
-				enemy_mana = mini(enemy_mana + val, 10)
-		"deal_face_drain":
-			if is_player:
-				_deal_damage_to_enemy(val)
-				player_hp = mini(player_hp + val, STARTING_HP)
-			else:
-				_deal_damage_to_player(val)
-				enemy_hp = mini(enemy_hp + val, STARTING_HP)
-		"face_per_graveyard":
-			var amt: int = gy_local.size() * val
-			if is_player: _deal_damage_to_enemy(amt)
-			else:         _deal_damage_to_player(amt)
-		"aoe_all_2", "aoe_all_hp":
-			for row in [player_front, player_rear, enemy_front, enemy_rear]:
-				for dd in row.duplicate(): _hit_demon(dd, val, false)
-			_process_deaths(player_front, true, true)
-			_process_deaths(player_rear, true, false)
-			_process_deaths(enemy_front, false, true)
-			_process_deaths(enemy_rear, false, false)
-		"aoe_enemy_and_face":
-			for dd in of_.duplicate(): _hit_demon(dd, val, false)
-			for dd in or_.duplicate(): _hit_demon(dd, val, false)
-			_process_deaths(of_, not is_player, true); _process_deaths(or_, not is_player, false)
-			if is_player: _deal_damage_to_enemy(val)
-			else:         _deal_damage_to_player(val)
-		"deal_face_if_low":
-			if is_player:
-				if enemy_hp <= val: _deal_damage_to_enemy(val)
-			else:
-				if player_hp <= val: _deal_damage_to_player(val)
-		"chaos_damage":
-			var r: int = randi_range(1, 8)
-			if is_player: _deal_damage_to_enemy(r)
-			else:         _deal_damage_to_player(r)
-		"freeze_all_enemy":
-			for dd in of_: dd["exhausted"] = true
-			for dd in or_: dd["exhausted"] = true
-		"freeze_one_demon":
-			var all_e: Array = []
-			for dd in of_: all_e.append(dd)
-			for dd in or_: all_e.append(dd)
-			if all_e.is_empty():
-				_check_auto_lose_no_resources(is_player)
-				return
-			var hi: Dictionary = all_e[0]
-			for dd in all_e:
-				if dd["atk"] > hi["atk"]: hi = dd
-			hi["exhausted"] = true
-		"destroy_low_atk":
-			for row in [of_, or_]:
-				for dd in row.duplicate():
-					if dd["atk"] <= val: dd["hp"] = 0
-				var is_f: bool = (row == of_)
-				_process_deaths(row, not is_player, is_f)
-		"destroy_damaged":
-			for row in [of_, or_]:
-				var is_f2: bool = (row == of_)
-				for dd in row.duplicate():
-					var max_hp: int = dd["data"].get("hp", dd["hp"])
-					if dd["hp"] < max_hp: dd["hp"] = 0
-				_process_deaths(row, not is_player, is_f2)
-		"silence_demon":
-			var si := _find_strongest(of_)
-			var srow: Array = of_
-			if si < 0:
-				si = _find_strongest(or_)
-				srow = or_
-			if si < 0:
-				_check_auto_lose_no_resources(is_player)
-				return
-			srow[si]["data"]["ability"] = ""
-			_refresh_demon_keywords(srow[si])
-		"transform_1_1":
-			var wi := _find_weakest(of_)
-			var wrow: Array = of_
-			if wi < 0:
-				wi = _find_weakest(or_)
-				wrow = or_
-			if wi < 0:
-				_check_auto_lose_no_resources(is_player)
-				return
-			var vic: Dictionary = wrow[wi]
-			vic["atk"] = 1
-			vic["hp"] = 1
-			vic["data"]["ability"] = ""
-			_refresh_demon_keywords(vic)
-		"return_demon":
-			var ri := _find_strongest(of_)
-			var rrow: Array = of_
-			if ri < 0:
-				ri = _find_strongest(or_)
-				rrow = or_
-			if ri < 0:
-				_check_auto_lose_no_resources(is_player)
-				return
-			var bounced: Dictionary = rrow[ri]
-			rrow.remove_at(ri)
-			var card_back: Dictionary = bounced["data"].duplicate(true)
-			if is_player: enemy_hand.append(card_back)
-			else:         player_hand.append(card_back)
-		"steal_demon":
-			var sti := _find_weakest(of_)
-			var srow2: Array = of_
-			if sti < 0:
-				sti = _find_weakest(or_)
-				srow2 = or_
-			if sti < 0:
-				_check_auto_lose_no_resources(is_player)
-				return
-			var st_minion: Dictionary = srow2[sti]
-			srow2.remove_at(sti)
-			if is_player:
-				if player_front.size() < MAX_ROW: player_front.append(st_minion)
-				elif player_rear.size() < MAX_ROW: player_rear.append(st_minion)
-			else:
-				if enemy_front.size() < MAX_ROW: enemy_front.append(st_minion)
-				elif enemy_rear.size() < MAX_ROW: enemy_rear.append(st_minion)
-		"destroy_all_both":
-			for dd in player_front: dd["hp"] = 0
-			for dd in player_rear: dd["hp"] = 0
-			for dd in enemy_front: dd["hp"] = 0
-			for dd in enemy_rear: dd["hp"] = 0
-			_process_deaths(player_front, true, true)
-			_process_deaths(player_rear, true, false)
-			_process_deaths(enemy_front, false, true)
-			_process_deaths(enemy_rear, false, false)
-		"resurrect":
-			if gy_local.is_empty():
-				_check_auto_lose_no_resources(is_player)
-				return
-			var top: Dictionary = gy_local.pop_back()
-			own_hand.append(top)
-		"resurrect_all":
-			for i in range(gy_local.size() - 1, -1, -1):
-				var rc: Dictionary = gy_local[i]
-				if rc.get("type", "") == "demon":
-					own_hand.append(rc)
-					gy_local.remove_at(i)
-		"reanimate_top", "reanimate_demon":
-			var best_ii := -1
-			var best_co := -1
-			for i in gy_local.size():
-				var gc: Dictionary = gy_local[i]
-				if gc.get("type", "") != "demon": continue
-				var co: int = gc.get("cost", 0)
-				if co > best_co:
-					best_co = co
-					best_ii = i
-			if best_ii < 0:
-				_check_auto_lose_no_resources(is_player)
-				return
-			var pulled: Dictionary = gy_local[best_ii]
-			gy_local.remove_at(best_ii)
-			_summon(pulled, is_player, true)
-		"poison_all_enemy":
-			for dd in of_.duplicate(): _hit_demon(dd, 1, false)
-			for dd in or_.duplicate(): _hit_demon(dd, 1, false)
-			_process_deaths(of_, not is_player, true); _process_deaths(or_, not is_player, false)
-		"poison_one_enemy":
-			var pi := _find_strongest(of_)
-			var prow: Array = of_
-			if pi < 0:
-				pi = _find_strongest(or_)
-				prow = or_
-			if pi >= 0: _hit_demon(prow[pi], 1, false); _process_deaths(prow, not is_player, prow == of_)
-		"poison_face":
-			if is_player: _deal_damage_to_enemy(val)
-			else:         _deal_damage_to_player(val)
-		"double_next_spell":
-			_log("Arcane Mastery — double cast not implemented here; no effect.")
-	_check_game_over()
-	_check_auto_lose_no_resources(is_player)
+	CardBattleSpellEffects.resolve(self, card, is_player)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -915,13 +556,13 @@ func _do_combat(a_board: Array, a_idx: int, a_is_player: bool, a_is_front: bool,
 	var att_sub: String = att["data"].get("subtype", "")
 	var def_sub: String = def_["data"].get("subtype", "")
 	var type_bonus: int = _type_advantage(att_sub, def_sub)
-	_spawn_float(_board_world_pos(a_is_player, a_is_front, a_idx),      "-%d" % def_atk, C_HP_RED)
-	_spawn_float(_board_world_pos(not a_is_player, d_is_front, d_idx),  "-%d" % (att_atk + type_bonus), C_HP_RED)
+	_spawn_float(CardBattleLayout.board_world_pos(_get_row(a_is_player, a_is_front), a_is_player, a_is_front, a_idx),      "-%d" % def_atk, CardBattleConstants.C_HP_RED)
+	_spawn_float(CardBattleLayout.board_world_pos(_get_row(not a_is_player, d_is_front), not a_is_player, d_is_front, d_idx),  "-%d" % (att_atk + type_bonus), CardBattleConstants.C_HP_RED)
 	_hit_demon(def_, att_atk + type_bonus, att_poi)
 	_hit_demon(att,  def_atk, def_poi)
 	if att.get("lifesteal", false) and att_atk > 0:
-		if a_is_player: player_hp = mini(player_hp + att_atk, STARTING_HP)
-		else:           enemy_hp  = mini(enemy_hp  + att_atk, STARTING_HP)
+		if a_is_player: player_hp = mini(player_hp + att_atk, CardBattleConstants.STARTING_HP)
+		else:           enemy_hp  = mini(enemy_hp  + att_atk, CardBattleConstants.STARTING_HP)
 	_process_deaths(a_board, a_is_player,     a_is_front)
 	_process_deaths(d_board, not a_is_player, d_is_front)
 
@@ -938,7 +579,7 @@ func _process_deaths(board: Array, is_player: bool, is_front: bool) -> void:
 	for i in range(board.size() - 1, -1, -1):
 		if board[i]["hp"] <= 0:
 			var dead: Dictionary = board[i]
-			_spawn_death_fx(_board_world_pos(is_player, is_front, i))
+			_spawn_death_fx(CardBattleLayout.board_world_pos(_get_row(is_player, is_front), is_player, is_front, i))
 			board.remove_at(i)
 			_resolve_deathrattle(dead, is_player, is_front)
 	_check_auto_lose_no_resources(is_player)
@@ -954,6 +595,8 @@ func _resolve_deathrattle(d: Dictionary, is_player: bool, is_front: bool) -> voi
 		else:         _deal_damage_to_player(2)
 	elif "deathrattle_summon_zombie" in ab:
 		_summon(CardDB.get_card("token_zombie"), is_player, is_front)
+	elif "deathrattle_summon_ash_wraith" in ab:
+		_summon(CardDB.get_card("token_ash_wraith"), is_player, is_front)
 	elif "deathrattle_return_hand"   in ab:
 		var hand := player_hand if is_player else enemy_hand
 		hand.append(d["data"])
@@ -969,14 +612,14 @@ func _resolve_deathrattle(d: Dictionary, is_player: bool, is_front: bool) -> voi
 
 func _deal_damage_to_player(n: int) -> void:
 	player_hp -= n
-	_spawn_float(Vector2(float(LEFT_W) * 0.5, float(PINFO_Y) + 10.0), "-%d" % n, C_HP_RED)
+	_spawn_float(Vector2(float(CardBattleConstants.LEFT_W) * 0.5, float(CardBattleConstants.PINFO_Y) + 10.0), "-%d" % n, CardBattleConstants.C_HP_RED)
 	_view.queue_redraw()
 	_check_game_over()
 
 
 func _deal_damage_to_enemy(n: int) -> void:
 	enemy_hp -= n
-	_spawn_float(Vector2(float(LEFT_W) * 0.5, float(EINFO_H) * 0.5), "-%d" % n, C_HP_RED)
+	_spawn_float(Vector2(float(CardBattleConstants.LEFT_W) * 0.5, float(CardBattleConstants.EINFO_H) * 0.5), "-%d" % n, CardBattleConstants.C_HP_RED)
 	_view.queue_redraw()
 	_check_game_over()
 
@@ -1094,24 +737,24 @@ func _on_input(event: InputEvent) -> void:
 
 	# Godot 4 sends wheel as InputEventMouseWheel (not MouseButton) — required for log scroll
 	if str(event.get_class()) == "InputEventMouseWheel":
-		if _log_rect().has_point(event.position):
+		if CardBattleLayout.log_rect().has_point(event.position):
 			if event.delta.y > 0.0:
 				_log_scroll = maxi(0, _log_scroll - 1)
 			elif event.delta.y < 0.0:
 				var fl: Array[String] = _log_flat_lines()
-				_log_scroll = mini(_log_scroll + 1, maxi(0, fl.size() - LOG_VISIBLE))
+				_log_scroll = mini(_log_scroll + 1, maxi(0, fl.size() - CardBattleConstants.LOG_VISIBLE))
 			_clamp_log_scroll()
 			_view.queue_redraw()
 			_view.accept_event()
 		return
 
 	if str(event.get_class()) == "InputEventPanGesture":
-		if _log_rect().has_point(event.position):
+		if CardBattleLayout.log_rect().has_point(event.position):
 			if event.delta.y < -0.35:
 				_log_scroll = maxi(0, _log_scroll - 1)
 			elif event.delta.y > 0.35:
 				var fl2: Array[String] = _log_flat_lines()
-				_log_scroll = mini(_log_scroll + 1, maxi(0, fl2.size() - LOG_VISIBLE))
+				_log_scroll = mini(_log_scroll + 1, maxi(0, fl2.size() - CardBattleConstants.LOG_VISIBLE))
 			_clamp_log_scroll()
 			_view.queue_redraw()
 			_view.accept_event()
@@ -1124,23 +767,23 @@ func _on_input(event: InputEvent) -> void:
 
 	# Fallback: some platforms still emit wheel as MouseButton; do not gate on pressed
 	if mb.button_index == MOUSE_BUTTON_WHEEL_UP:
-		if _log_rect().has_point(pos):
+		if CardBattleLayout.log_rect().has_point(pos):
 			_log_scroll = maxi(0, _log_scroll - 1)
 			_clamp_log_scroll()
 			_view.queue_redraw()
 			_view.accept_event()
 		return
 	if mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-		if _log_rect().has_point(pos):
+		if CardBattleLayout.log_rect().has_point(pos):
 			var fl3: Array[String] = _log_flat_lines()
-			_log_scroll = mini(_log_scroll + 1, maxi(0, fl3.size() - LOG_VISIBLE))
+			_log_scroll = mini(_log_scroll + 1, maxi(0, fl3.size() - CardBattleConstants.LOG_VISIBLE))
 			_clamp_log_scroll()
 			_view.queue_redraw()
 			_view.accept_event()
 		return
 
 	# Modal: Figma — no dimmer; black panel is x≥176 only; close by clicking that panel (or CLOSE)
-	if mb.pressed and _modal_open and pos.x >= float(BOARD_X):
+	if mb.pressed and _modal_open and pos.x >= float(CardBattleConstants.BOARD_X):
 		_modal_open = false
 		_ctx_idx = -1
 		_ctx_is_front = true
@@ -1171,16 +814,16 @@ func _on_input(event: InputEvent) -> void:
 func _modal_hover_index() -> int:
 	if not _modal_open or _modal_cards.is_empty():
 		return -1
-	var sx: float = MODAL_GRID_X0
-	var sy0: float = MODAL_GRID_Y0
-	var mh: float = float(H)
+	var sx: float = CardBattleConstants.MODAL_GRID_X0
+	var sy0: float = CardBattleConstants.MODAL_GRID_Y0
+	var mh: float = float(CardBattleConstants.H)
 	for i in _modal_cards.size():
-		var row: int = i / MODAL_COLS
-		var col: int = i % MODAL_COLS
-		var cy: float = sy0 + float(row) * MODAL_ROW_H
-		if cy + float(HAND_CH) > mh:
+		var row: int = i / CardBattleConstants.MODAL_COLS
+		var col: int = i % CardBattleConstants.MODAL_COLS
+		var cy: float = sy0 + float(row) * CardBattleConstants.MODAL_ROW_H
+		if cy + float(CardBattleConstants.HAND_CH) > mh:
 			break
-		var cr := Rect2(sx + float(col) * MODAL_COL_W, cy, float(HAND_CW), float(HAND_CH))
+		var cr := Rect2(sx + float(col) * CardBattleConstants.MODAL_COL_W, cy, float(CardBattleConstants.HAND_CW), float(CardBattleConstants.HAND_CH))
 		if cr.has_point(_mouse_pos):
 			return i
 	return -1
@@ -1189,7 +832,7 @@ func _modal_hover_index() -> int:
 func _update_hover() -> void:
 	_hover_card = {}; _hover_state = {}
 	if _modal_open:
-		if _mouse_pos.x >= float(BOARD_X):
+		if _mouse_pos.x >= float(CardBattleConstants.BOARD_X):
 			var hi: int = _modal_hover_index()
 			if hi >= 0:
 				var mc: Variant = _modal_cards[hi]
@@ -1198,56 +841,56 @@ func _update_hover() -> void:
 					_hover_state = {}
 		return
 	for i in player_hand.size():
-		if _hand_rect(i).has_point(_mouse_pos):
+		if CardBattleLayout.hand_rect(i, player_hand.size()).has_point(_mouse_pos):
 			_hover_card = player_hand[i]; return
 	for i in player_front.size():
-		if _mini_rect(player_front, PFFRONT_Y, i).has_point(_mouse_pos):
+		if CardBattleLayout.mini_rect(player_front, CardBattleConstants.PFFRONT_Y, i).has_point(_mouse_pos):
 			_hover_card = player_front[i]["data"]; _hover_state = player_front[i]; return
 	for i in player_rear.size():
-		if _mini_rect(player_rear, PFREAR_Y, i).has_point(_mouse_pos):
+		if CardBattleLayout.mini_rect(player_rear, CardBattleConstants.PFREAR_Y, i).has_point(_mouse_pos):
 			_hover_card = player_rear[i]["data"]; _hover_state = player_rear[i]; return
 	for i in enemy_front.size():
-		if _mini_rect(enemy_front, EFFRONT_Y, i).has_point(_mouse_pos):
+		if CardBattleLayout.mini_rect(enemy_front, CardBattleConstants.EFFRONT_Y, i).has_point(_mouse_pos):
 			_hover_card = enemy_front[i]["data"]; _hover_state = enemy_front[i]; return
 	for i in enemy_rear.size():
-		if _mini_rect(enemy_rear, EFREAR_Y, i).has_point(_mouse_pos):
+		if CardBattleLayout.mini_rect(enemy_rear, CardBattleConstants.EFREAR_Y, i).has_point(_mouse_pos):
 			_hover_card = enemy_rear[i]["data"]; _hover_state = enemy_rear[i]; return
-	if not player_arsenal.is_empty() and _player_arsenal_rect().has_point(_mouse_pos):
+	if not player_arsenal.is_empty() and CardBattleLayout.player_arsenal_rect().has_point(_mouse_pos):
 		_hover_card = player_arsenal
-	if not enemy_arsenal.is_empty() and _side_arsenal_rect(true).has_point(_mouse_pos):
+	if not enemy_arsenal.is_empty() and CardBattleLayout.side_arsenal_rect(true).has_point(_mouse_pos):
 		_hover_card = enemy_arsenal
 
 
 func _on_right_click(pos: Vector2) -> void:
 	if not is_player_turn or _animating or _ended: return
 	for i in player_hand.size():
-		if _hand_rect(i).has_point(pos): _pitch_card(i); return
+		if CardBattleLayout.hand_rect(i, player_hand.size()).has_point(pos): _pitch_card(i); return
 
 
 func _on_left_press(pos: Vector2) -> void:
 	if _ended: return
 	# Modal open: left strip (x<176) stays interactive for hover/log; block board actions here
-	if _modal_open and pos.x < float(BOARD_X):
+	if _modal_open and pos.x < float(CardBattleConstants.BOARD_X):
 		return
 
 	# Sidebar: grave / deck → modal
-	if _side_grave_rect(true).has_point(pos):
+	if CardBattleLayout.side_grave_rect(true).has_point(pos):
 		_mode = Mode.IDLE; _sel_idx = -1; _ctx_idx = -1; _ctx_is_front = true; _atk_drag_idx = -1; _rear_pick_idx = -1
 		_open_modal(enemy_gy, "Enemy Graveyard"); return
-	if _side_grave_rect(false).has_point(pos):
+	if CardBattleLayout.side_grave_rect(false).has_point(pos):
 		_mode = Mode.IDLE; _sel_idx = -1; _ctx_idx = -1; _ctx_is_front = true; _atk_drag_idx = -1; _rear_pick_idx = -1
 		_open_modal(player_gy, "Your Graveyard"); return
-	if _side_deck_rect(true).has_point(pos):
+	if CardBattleLayout.side_deck_rect(true).has_point(pos):
 		_mode = Mode.IDLE; _sel_idx = -1; _ctx_idx = -1; _ctx_is_front = true; _atk_drag_idx = -1; _rear_pick_idx = -1
 		var s := enemy_deck.duplicate(); s.shuffle(); _open_modal(s, "Enemy Deck (random)"); return
-	if _side_deck_rect(false).has_point(pos):
+	if CardBattleLayout.side_deck_rect(false).has_point(pos):
 		_mode = Mode.IDLE; _sel_idx = -1; _ctx_idx = -1; _ctx_is_front = true; _atk_drag_idx = -1; _rear_pick_idx = -1
 		var s := player_deck.duplicate(); s.shuffle(); _open_modal(s, "Your Deck (random)"); return
 
 	if not is_player_turn or _animating: return
 
 	# Buttons
-	if _end_btn_rect().has_point(pos):
+	if CardBattleLayout.end_btn_rect().has_point(pos):
 		_ctx_idx = -1
 		_ctx_is_front = true
 		_atk_drag_idx = -1
@@ -1257,32 +900,32 @@ func _on_left_press(pos: Vector2) -> void:
 
 	# CHOOSE_ROW
 	if _mode == Mode.CHOOSE_ROW:
-		if _row_drop_rect(true).has_point(pos):  _place_pending(true);  return
-		if _row_drop_rect(false).has_point(pos): _place_pending(false); return
+		if CardBattleLayout.row_drop_rect(true).has_point(pos):  _place_pending(true);  return
+		if CardBattleLayout.row_drop_rect(false).has_point(pos): _place_pending(false); return
 		_mode = Mode.IDLE; _pending_card = {}; _ctx_idx = -1; _ctx_is_front = true; _atk_drag_idx = -1; _rear_pick_idx = -1
 		_view.queue_redraw(); return
 
 	# Context menu: MOVE / EFF. (selected front or rear minion)
 	if _ctx_idx >= 0:
 		var ctx_row: Array = player_front if _ctx_is_front else player_rear
-		var ctx_y: int = PFFRONT_Y if _ctx_is_front else PFREAR_Y
+		var ctx_y: int = CardBattleConstants.PFFRONT_Y if _ctx_is_front else CardBattleConstants.PFREAR_Y
 		if _ctx_idx >= ctx_row.size():
 			_ctx_idx = -1
 			_ctx_is_front = true
 		else:
-			var cr_ctx := _mini_rect(ctx_row, ctx_y, _ctx_idx)
+			var cr_ctx := CardBattleLayout.mini_rect(ctx_row, ctx_y, _ctx_idx)
 			var d_ctx: Dictionary = ctx_row[_ctx_idx]
 			var ab_ctx: String = d_ctx["data"].get("ability", "")
 			var can_move_btn: bool = is_player_turn and not _moved_this_turn and not _animating
 			var can_eff_btn: bool = is_player_turn and not _animating and not d_ctx.get("exhausted", false) \
 				and _has_exhaust_activation(ab_ctx)
-			if can_move_btn and _context_move_btn_rect(cr_ctx).has_point(pos):
+			if can_move_btn and CardBattleLayout.context_move_btn_rect(cr_ctx).has_point(pos):
 				_on_move_demon(_ctx_idx, _ctx_is_front)
 				_ctx_idx = -1
 				_ctx_is_front = true
 				return
 			if can_eff_btn:
-				var er_hit: Rect2 = _context_eff_btn_rect(cr_ctx) if can_move_btn else _context_move_btn_rect(cr_ctx)
+				var er_hit: Rect2 = CardBattleLayout.context_eff_btn_rect(cr_ctx) if can_move_btn else CardBattleLayout.context_move_btn_rect(cr_ctx)
 				if er_hit.has_point(pos):
 					_on_exhaust_effect(_ctx_idx, _ctx_is_front)
 					_ctx_idx = -1
@@ -1291,7 +934,7 @@ func _on_left_press(pos: Vector2) -> void:
 
 	# Hand → start drag (clears attack prep / menu)
 	for i in player_hand.size():
-		if _hand_rect(i).has_point(pos):
+		if CardBattleLayout.hand_rect(i, player_hand.size()).has_point(pos):
 			_ctx_idx = -1
 			_ctx_is_front = true
 			_atk_drag_idx = -1
@@ -1306,7 +949,7 @@ func _on_left_press(pos: Vector2) -> void:
 			return
 
 	# Arsenal click → play
-	if not player_arsenal.is_empty() and _player_arsenal_rect().has_point(pos):
+	if not player_arsenal.is_empty() and CardBattleLayout.player_arsenal_rect().has_point(pos):
 		_ctx_idx = -1
 		_ctx_is_front = true
 		_atk_drag_idx = -1
@@ -1316,7 +959,7 @@ func _on_left_press(pos: Vector2) -> void:
 
 	# Player front minion: begin drag-vs-click (release chooses — see _on_left_release / _tick)
 	for i in player_front.size():
-		if _mini_rect(player_front, PFFRONT_Y, i).has_point(pos):
+		if CardBattleLayout.mini_rect(player_front, CardBattleConstants.PFFRONT_Y, i).has_point(pos):
 			if _mode == Mode.ATTACKING and i != _sel_idx:
 				return
 			_rear_pick_idx = -1
@@ -1327,7 +970,7 @@ func _on_left_press(pos: Vector2) -> void:
 
 	# Player rear minion: click/release toggles context (MOVE/EFF.); no attack drag from rear
 	for i in player_rear.size():
-		if _mini_rect(player_rear, PFREAR_Y, i).has_point(pos):
+		if CardBattleLayout.mini_rect(player_rear, CardBattleConstants.PFREAR_Y, i).has_point(pos):
 			_atk_drag_idx = -1
 			_rear_pick_idx = i
 			_rear_pick_start = pos
@@ -1349,17 +992,14 @@ func _on_drag_drop(pos: Vector2) -> void:
 	if not is_player_turn or _animating or _ended: _view.queue_redraw(); return
 
 	# Drop on player info → pitch
-	if _pinfo_rect().has_point(pos):
+	if CardBattleLayout.pinfo_rect().has_point(pos):
 		if hand_idx >= 0 and hand_idx < player_hand.size(): _pitch_card(hand_idx)
 		_view.queue_redraw(); return
 
 	# Drop on arsenal
-	if _player_arsenal_rect().has_point(pos):
+	if CardBattleLayout.player_arsenal_rect().has_point(pos):
 		if hand_idx >= 0 and not _stashed_this_turn and player_arsenal.is_empty():
-			var finish_eot: bool = _mode == Mode.CHOOSE_ARSENAL
-			_on_stash(hand_idx)
-			if finish_eot:
-				await _finish_end_player_turn()
+			await _on_stash(hand_idx)
 		_view.queue_redraw(); return
 
 	# Cost check
@@ -1367,8 +1007,9 @@ func _on_drag_drop(pos: Vector2) -> void:
 		_log("Not enough mana!"); _view.queue_redraw(); return
 
 	# Drop on front row
-	if _row_drop_rect(true).has_point(pos):
+	if CardBattleLayout.row_drop_rect(true).has_point(pos):
 		if _mode == Mode.CHOOSE_ARSENAL:
+			_pending_finish_after_arsenal = false
 			_mode = Mode.IDLE
 		if card["type"] == "demon":
 			if hand_idx >= 0: player_hand.remove_at(hand_idx)
@@ -1383,8 +1024,9 @@ func _on_drag_drop(pos: Vector2) -> void:
 		_view.queue_redraw(); _check_game_over(); return
 
 	# Drop on rear row
-	if _row_drop_rect(false).has_point(pos):
+	if CardBattleLayout.row_drop_rect(false).has_point(pos):
 		if _mode == Mode.CHOOSE_ARSENAL:
+			_pending_finish_after_arsenal = false
 			_mode = Mode.IDLE
 		if card["type"] == "demon":
 			var ab: String = card.get("ability", "")
@@ -1398,9 +1040,8 @@ func _on_drag_drop(pos: Vector2) -> void:
 	# End-of-turn Arsenal: release on same hand card → stash it (tap-to-stash)
 	if _mode == Mode.CHOOSE_ARSENAL and hand_idx >= 0 and hand_idx < player_hand.size() \
 			and not _stashed_this_turn and player_arsenal.is_empty():
-		if _hand_rect(hand_idx).has_point(pos):
-			_on_stash(hand_idx)
-			await _finish_end_player_turn()
+		if CardBattleLayout.hand_rect(hand_idx, player_hand.size()).has_point(pos):
+			await _on_stash(hand_idx)
 	_view.queue_redraw()
 
 
@@ -1408,6 +1049,25 @@ func _on_left_release(pos: Vector2) -> void:
 	if _ended or not is_player_turn or _animating:
 		_atk_drag_idx = -1
 		_rear_pick_idx = -1
+		return
+	# DIRECT ATTACK with context menu (IDLE): commit face attack without entering drag-aim first.
+	if CardBattleLayout.direct_attack_btn_rect().has_point(pos) \
+			and _mode == Mode.IDLE and _ctx_idx >= 0 and _ctx_is_front \
+			and _ctx_idx < player_front.size():
+		var att_idle: Dictionary = player_front[_ctx_idx]
+		if not att_idle.get("exhausted", false):
+			_sel_idx = _ctx_idx
+			_mode = Mode.ATTACKING
+			if _direct_attack_face_legal():
+				_on_attack_face()
+			else:
+				_mode = Mode.IDLE
+				_sel_idx = -1
+		_ctx_idx = -1
+		_ctx_is_front = true
+		_atk_drag_idx = -1
+		_rear_pick_idx = -1
+		_view.queue_redraw()
 		return
 	# Drop-to-attack: release completes targeting
 	if _mode == Mode.ATTACKING and _sel_idx >= 0 and _sel_idx < player_front.size():
@@ -1418,7 +1078,7 @@ func _on_left_release(pos: Vector2) -> void:
 	# Rear minion: short click toggles context menu
 	if _rear_pick_idx >= 0 and _rear_pick_idx < player_rear.size():
 		var dist_r: float = pos.distance_to(_rear_pick_start)
-		if dist_r <= ATTACK_DRAG_THRESH:
+		if dist_r <= CardBattleConstants.ATTACK_DRAG_THRESH:
 			if _ctx_idx == _rear_pick_idx and not _ctx_is_front:
 				_ctx_idx = -1
 				_ctx_is_front = true
@@ -1431,7 +1091,7 @@ func _on_left_release(pos: Vector2) -> void:
 	# Front minion: short click toggles context; long drag handled in _tick → ATTACKING
 	if _atk_drag_idx >= 0 and _atk_drag_idx < player_front.size():
 		var dist: float = pos.distance_to(_atk_drag_start)
-		if dist <= ATTACK_DRAG_THRESH:
+		if dist <= CardBattleConstants.ATTACK_DRAG_THRESH:
 			if _ctx_idx == _atk_drag_idx and _ctx_is_front:
 				_ctx_idx = -1
 				_ctx_is_front = true
@@ -1445,19 +1105,19 @@ func _on_left_release(pos: Vector2) -> void:
 func _resolve_attack_at(pos: Vector2) -> void:
 	if _mode != Mode.ATTACKING or _sel_idx < 0 or _sel_idx >= player_front.size():
 		return
-	if _direct_attack_btn_rect().has_point(pos):
+	if CardBattleLayout.direct_attack_btn_rect().has_point(pos):
 		if _direct_attack_face_legal():
 			_on_attack_face()
 		return
-	if _enemy_face_rect().has_point(pos):
+	if CardBattleLayout.enemy_face_rect().has_point(pos):
 		_on_attack_face()
 		return
 	for i in enemy_front.size():
-		if _mini_rect(enemy_front, EFFRONT_Y, i).has_point(pos):
+		if CardBattleLayout.mini_rect(enemy_front, CardBattleConstants.EFFRONT_Y, i).has_point(pos):
 			_on_attack_demon(i, true)
 			return
 	for i in enemy_rear.size():
-		if _mini_rect(enemy_rear, EFREAR_Y, i).has_point(pos):
+		if CardBattleLayout.mini_rect(enemy_rear, CardBattleConstants.EFREAR_Y, i).has_point(pos):
 			_on_attack_demon(i, false)
 			return
 	_mode = Mode.IDLE
@@ -1469,6 +1129,8 @@ func _resolve_attack_at(pos: Vector2) -> void:
 
 func _pitch_card(i: int) -> void:
 	if i >= player_hand.size(): return
+	if _mode == Mode.CHOOSE_ARSENAL:
+		_pending_finish_after_arsenal = false
 	var card: Dictionary = player_hand[i]
 	var mv: int = card.get("mana_value", 1)
 	player_mana += mv
@@ -1486,7 +1148,7 @@ func _pitch_card(i: int) -> void:
 func _place_pending(to_front: bool) -> void:
 	if _pending_card.is_empty(): _mode = Mode.IDLE; return
 	var row := player_front if to_front else player_rear
-	if row.size() >= MAX_ROW:
+	if row.size() >= CardBattleConstants.MAX_ROW:
 		_log("%s row is full!" % ("Front" if to_front else "Rear")); _view.queue_redraw(); return
 	player_mana -= _pending_card.get("cost", 0)
 	if _pending_hand_idx >= 0 and _pending_hand_idx < player_hand.size():
@@ -1506,7 +1168,7 @@ func _on_attack_face() -> void:
 	att["attacked"] += 1
 	att["exhausted"] = att["attacked"] >= (2 if att.get("double_attack", false) else 1)
 	_deal_damage_to_enemy(att["atk"])
-	if att.get("lifesteal", false): player_hp = mini(player_hp + att["atk"], STARTING_HP)
+	if att.get("lifesteal", false): player_hp = mini(player_hp + att["atk"], CardBattleConstants.STARTING_HP)
 	_log("%s attacks face for %d!" % [att["data"]["name"], att["atk"]])
 	_mode = Mode.IDLE
 	_sel_idx = -1
@@ -1560,6 +1222,9 @@ func _on_stash(i: int) -> void:
 	player_arsenal = player_hand[i]; player_hand.remove_at(i)
 	_stashed_this_turn = true; _mode = Mode.IDLE
 	_log("Stashed %s in Arsenal" % player_arsenal["name"]); _view.queue_redraw()
+	if _pending_finish_after_arsenal:
+		_pending_finish_after_arsenal = false
+		await _finish_end_player_turn()
 
 
 func _on_move_demon(i: int, from_front: bool) -> void:
@@ -1568,12 +1233,12 @@ func _on_move_demon(i: int, from_front: bool) -> void:
 	_ctx_is_front = true
 	if from_front:
 		if i >= player_front.size(): return
-		if player_rear.size() >= MAX_ROW: _log("Rear full!"); _mode = Mode.IDLE; _view.queue_redraw(); return
+		if player_rear.size() >= CardBattleConstants.MAX_ROW: _log("Rear full!"); _mode = Mode.IDLE; _view.queue_redraw(); return
 		var d: Dictionary = player_front[i]; player_front.remove_at(i); player_rear.append(d)
 		_log("Moved %s to rear" % d["data"]["name"])
 	else:
 		if i >= player_rear.size(): return
-		if player_front.size() >= MAX_ROW: _log("Front full!"); _mode = Mode.IDLE; _view.queue_redraw(); return
+		if player_front.size() >= CardBattleConstants.MAX_ROW: _log("Front full!"); _mode = Mode.IDLE; _view.queue_redraw(); return
 		var d: Dictionary = player_rear[i]; player_rear.remove_at(i); player_front.append(d)
 		_log("Moved %s to front" % d["data"]["name"])
 	_moved_this_turn = true; _mode = Mode.IDLE; _view.queue_redraw()
@@ -1599,7 +1264,8 @@ func _on_exhaust_effect(idx: int, from_front: bool) -> void:
 # TOAST & MODAL
 # ══════════════════════════════════════════════════════════════════
 func _show_toast(text: String) -> void:
-	_toast_text = text; _toast_timer = TOAST_DUR
+	_toast_text = text
+	_toast_timer = CardBattleConstants.TOAST_DUR
 
 func _open_modal(cards: Array, title: String) -> void:
 	_modal_open = true; _modal_cards = cards; _modal_title = title; _view.queue_redraw()
@@ -1613,20 +1279,8 @@ func _kwrd(ability: String, keyword: String) -> bool: return keyword in ability
 func _has_exhaust_activation(ability: String) -> bool:
 	return ability.contains("exhaust_")
 
-func _selection_outline_rect(card_r: Rect2) -> Rect2:
-	return Rect2(card_r.position.x - CTX_PAD, card_r.position.y - CTX_PAD,
-		float(CTX_OUTLINE_W), float(CTX_OUTLINE_H))
-
-func _context_move_btn_rect(card_r: Rect2) -> Rect2:
-	var x := card_r.position.x + card_r.size.x + 1.0
-	return Rect2(x, card_r.position.y, CTX_BTN_W, CTX_BTN_H)
-
-func _context_eff_btn_rect(card_r: Rect2) -> Rect2:
-	var move_r := _context_move_btn_rect(card_r)
-	return Rect2(move_r.position.x, move_r.position.y + CTX_BTN_H + CTX_BTN_GAP_Y,
-		CTX_BTN_W, CTX_BTN_H)
 func _type_advantage(att_sub: String, def_sub: String) -> int:
-	return 1 if TYPE_ADV.get(att_sub, "") == def_sub else 0
+	return 1 if CardBattleConstants.TYPE_ADV.get(att_sub, "") == def_sub else 0
 func _has_taunt(board: Array) -> bool:
 	for d in board:
 		if d.get("taunt", false): return true
@@ -1659,33 +1313,9 @@ func _enemy_name() -> String:
 # ══════════════════════════════════════════════════════════════════
 # RECT HELPERS
 # ══════════════════════════════════════════════════════════════════
-func _mini_rect(board: Array, board_y: int, i: int) -> Rect2:
-	var count := board.size()
-	var total := float(count * MINI_W + maxi(count - 1, 0) * MINI_GAP)
-	var sx    := BOARD_X + (BOARD_W - total) / 2.0
-	return Rect2(sx + i * (MINI_W + MINI_GAP), float(board_y), MINI_W, MINI_H)
-
-func _hand_rect(i: int) -> Rect2:
-	var count := player_hand.size()
-	var avail := float(RAIL_LINE_X) - HAND_ROW_PAD * 2.0
-	var w     := minf(HAND_CW, (avail - MINI_GAP * maxi(count - 1, 0)) / maxi(count, 1))
-	var sx    := HAND_ROW_PAD
-	return Rect2(sx + i * (w + MINI_GAP), float(HAND_Y), w, float(HAND_CH))
-
-func _row_drop_rect(is_front: bool) -> Rect2:
-	var y := float(PFFRONT_Y) if is_front else float(PFREAR_Y)
-	return Rect2(float(BOARD_X), y, float(BOARD_W), float(ROW_H))
-
-func _enemy_face_rect() -> Rect2:
-	return Rect2(0.0, 0.0, float(LEFT_W), float(EINFO_H))
-
-func _log_rect() -> Rect2:
-	return Rect2(float(LOG_X), float(LOG_Y), float(LOG_W), float(LOG_H))
-
-
 func _clamp_log_scroll() -> void:
 	var flat: Array[String] = _log_flat_lines()
-	var max_start: int = maxi(0, flat.size() - LOG_VISIBLE)
+	var max_start: int = maxi(0, flat.size() - CardBattleConstants.LOG_VISIBLE)
 	_log_scroll = clampi(_log_scroll, 0, max_start)
 
 
@@ -1733,7 +1363,7 @@ func _wrap_log_lines(text: String, max_w: float, sz: int) -> Array[String]:
 func _log_flat_lines() -> Array[String]:
 	var acc: Array[String] = []
 	for entry in _battle_log:
-		for wl in _wrap_log_lines("_" + str(entry), LOG_TEXT_MAX_W, 8):
+		for wl in _wrap_log_lines("_" + str(entry), CardBattleConstants.LOG_TEXT_MAX_W, 8):
 			acc.append(wl)
 	return acc
 
@@ -1742,7 +1372,7 @@ func _draw_log_line_at(text: String, y_arg: float, sz: int, color: Color) -> voi
 	var fs: int = _fs(sz)
 	var f: Font = _fnt()
 	var baseline: float = y_arg + float(fs)
-	_view.draw_string(f, Vector2(_tx(LOG_BODY_X), _tx(baseline)), text,
+	_view.draw_string(f, Vector2(_tx(CardBattleConstants.LOG_BODY_X), _tx(baseline)), text,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, fs, color)
 
 ## Opaque mix toward white (replaces translucent rarity tint on card art).
@@ -1754,13 +1384,6 @@ func _mix_white(c: Color, t: float) -> Color:
 ## Premultiplied RGB → opaque `Color` (fade VFX without alpha channel).
 func _opaque_rgb_fade(c: Color, a: float) -> Color:
 	return Color(c.r * a, c.g * a, c.b * a)
-
-
-func _direct_attack_btn_rect() -> Rect2:
-	# Figma: x=283, y=7, w=166, h=32  (centered in board area)
-	var bw := 166.0; var bh := 32.0
-	var bx := float(BOARD_X) + (float(BOARD_W) - bw) * 0.5
-	return Rect2(bx, 7.0, bw, bh)
 
 
 func _direct_attack_face_legal() -> bool:
@@ -1779,42 +1402,9 @@ func _atk_show_attack_arrow() -> bool:
 		return false
 	if not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		return false
-	var start: Vector2 = _board_world_pos(true, true, _sel_idx)
-	return _mouse_pos.distance_to(start) > ATTACK_DRAG_THRESH
+	var start: Vector2 = CardBattleLayout.board_world_pos(_get_row(true, true), true, true, _sel_idx)
+	return _mouse_pos.distance_to(start) > CardBattleConstants.ATTACK_DRAG_THRESH
 
-func _pinfo_rect() -> Rect2:
-	return Rect2(0.0, float(PINFO_Y), float(LEFT_W), float(PINFO_H))
-
-func _end_btn_rect() -> Rect2:
-	return Rect2(96.0, 431.0, 78.0, 24.0)
-
-func _side_grave_rect(is_enemy: bool) -> Rect2:
-	var sec := 0 if is_enemy else 5
-	return Rect2(float(SIDE_ZONE_X), SIDE_BAND_Y[sec], float(SIDE_ZONE_RW), SIDE_BAND_H[sec])
-
-func _side_arsenal_rect(is_enemy: bool) -> Rect2:
-	var sec := 1 if is_enemy else 4
-	return Rect2(float(SIDE_ZONE_X), SIDE_BAND_Y[sec], float(SIDE_ZONE_RW), SIDE_BAND_H[sec])
-
-func _side_deck_rect(is_enemy: bool) -> Rect2:
-	var sec := 2 if is_enemy else 3
-	return Rect2(float(SIDE_ZONE_X), SIDE_BAND_Y[sec], float(SIDE_ZONE_RW), SIDE_BAND_H[sec])
-
-func _player_arsenal_rect() -> Rect2:
-	return _side_arsenal_rect(false)
-
-func _board_world_pos(is_player: bool, is_front: bool, idx: int) -> Vector2:
-	var row    := _get_row(is_player, is_front)
-	var board_y: int = (PFFRONT_Y if is_front else PFREAR_Y) if is_player else (EFFRONT_Y if is_front else EFREAR_Y)
-	var count  := row.size()
-	var total  := float(count * MINI_W + maxi(count - 1, 0) * MINI_GAP)
-	var sx     := BOARD_X + (BOARD_W - total) / 2.0
-	return Vector2(sx + idx * (MINI_W + MINI_GAP) + MINI_W * 0.5, float(board_y) + MINI_H * 0.5)
-
-
-# ══════════════════════════════════════════════════════════════════
-# VFX
-# ══════════════════════════════════════════════════════════════════
 func _spawn_float(pos: Vector2, text: String, color: Color) -> void:
 	_floats.append({"pos": pos, "text": text, "color": color, "alpha": 1.0,
 		"vel": Vector2(randf_range(-8.0, 8.0), -38.0)})
@@ -1828,7 +1418,11 @@ func _spawn_death_fx(pos: Vector2) -> void:
 
 func _tick(delta: float) -> void:
 	var changed := false
-	if _toast_timer > 0.0: _toast_timer -= delta; changed = true
+	if _toast_timer > 0.0:
+		_toast_timer -= delta
+		if _toast_timer <= 0.0:
+			_toast_text = ""
+		changed = true
 	for i in range(_floats.size() - 1, -1, -1):
 		var f: Dictionary = _floats[i]; f["pos"] += f["vel"] * delta; f["alpha"] -= delta * 1.3
 		if f["alpha"] <= 0.0: _floats.remove_at(i)
@@ -1842,7 +1436,7 @@ func _tick(delta: float) -> void:
 	if _atk_drag_idx >= 0 and not _drag_active and is_player_turn and not _animating and not _ended \
 			and _mode != Mode.CHOOSE_ROW and _mode != Mode.CHOOSE_ARSENAL:
 		if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
-			if _mouse_pos.distance_to(_atk_drag_start) > ATTACK_DRAG_THRESH:
+			if _mouse_pos.distance_to(_atk_drag_start) > CardBattleConstants.ATTACK_DRAG_THRESH:
 				if _atk_drag_idx < player_front.size():
 					var d_try: Dictionary = player_front[_atk_drag_idx]
 					if not d_try.get("exhausted", false):
@@ -1861,13 +1455,13 @@ func _tick(delta: float) -> void:
 # DRAWING — root
 # ══════════════════════════════════════════════════════════════════
 func _on_draw() -> void:
-	_view.draw_rect(Rect2(0, 0, W, H), C_BG)
-	_view.draw_rect(Rect2(0, 0, LEFT_W, HAND_Y), C_LEFT_BG)
-	_view.draw_rect(Rect2(BOARD_X, 0, BOARD_W, HAND_Y), C_BOARD_BG)
-	_view.draw_rect(Rect2(RAIL_LINE_X, 0, RIGHT_W, HAND_Y), C_BG)
-	_view.draw_rect(Rect2(0, HAND_Y, LEFT_W, HAND_H), C_LEFT_BG)
-	_view.draw_rect(Rect2(BOARD_X, HAND_Y, BOARD_W, HAND_H), C_BOARD_BG)
-	_view.draw_rect(Rect2(RAIL_LINE_X, HAND_Y, RIGHT_W, HAND_H), C_BG)
+	_view.draw_rect(Rect2(0, 0, CardBattleConstants.W, CardBattleConstants.H), CardBattleConstants.C_BG)
+	_view.draw_rect(Rect2(0, 0, CardBattleConstants.LEFT_W, CardBattleConstants.HAND_Y), CardBattleConstants.C_LEFT_BG)
+	_view.draw_rect(Rect2(CardBattleConstants.BOARD_X, 0, CardBattleConstants.BOARD_W, CardBattleConstants.HAND_Y), CardBattleConstants.C_BOARD_BG)
+	_view.draw_rect(Rect2(CardBattleConstants.RAIL_LINE_X, 0, CardBattleConstants.RIGHT_W, CardBattleConstants.HAND_Y), CardBattleConstants.C_BG)
+	_view.draw_rect(Rect2(0, CardBattleConstants.HAND_Y, CardBattleConstants.LEFT_W, CardBattleConstants.HAND_H), CardBattleConstants.C_LEFT_BG)
+	_view.draw_rect(Rect2(CardBattleConstants.BOARD_X, CardBattleConstants.HAND_Y, CardBattleConstants.BOARD_W, CardBattleConstants.HAND_H), CardBattleConstants.C_BOARD_BG)
+	_view.draw_rect(Rect2(CardBattleConstants.RAIL_LINE_X, CardBattleConstants.HAND_Y, CardBattleConstants.RIGHT_W, CardBattleConstants.HAND_H), CardBattleConstants.C_BG)
 
 	_draw_left_panel()
 	_draw_board()
@@ -1882,19 +1476,19 @@ func _on_draw() -> void:
 		_view.draw_circle(p["pos"], 2.5, _opaque_rgb_fade(p["color"], p["alpha"]))
 
 	if _drag_active and not _drag_card.is_empty():
-		var r := Rect2(_drag_pos - Vector2(HAND_CW, HAND_CH) * 0.5, Vector2(HAND_CW, HAND_CH))
+		var r := Rect2(_drag_pos - Vector2(CardBattleConstants.HAND_CW, CardBattleConstants.HAND_CH) * 0.5, Vector2(CardBattleConstants.HAND_CW, CardBattleConstants.HAND_CH))
 		_draw_hand_card(r, _drag_card, false, false)
 
 	if _mode == Mode.CHOOSE_ROW:
-		_view.draw_rect(_row_drop_rect(true), C_ROW_DROP_FRONT)
-		_view.draw_rect(_row_drop_rect(false), C_ROW_DROP_REAR)
-		_str_c("FRONT", float(BOARD_X) + float(BOARD_W) * 0.5,
-			float(PFFRONT_Y) + ROW_H * 0.5 - 4.0, 9, Color(0.2, 1.0, 0.2))
-		_str_c("REAR",  float(BOARD_X) + float(BOARD_W) * 0.5,
-			float(PFREAR_Y) + ROW_H * 0.5 - 4.0,  9, Color(0.4, 0.7, 1.0))
+		_view.draw_rect(CardBattleLayout.row_drop_rect(true), CardBattleConstants.C_ROW_DROP_FRONT)
+		_view.draw_rect(CardBattleLayout.row_drop_rect(false), CardBattleConstants.C_ROW_DROP_REAR)
+		_str_c("FRONT", float(CardBattleConstants.BOARD_X) + float(CardBattleConstants.BOARD_W) * 0.5,
+			float(CardBattleConstants.PFFRONT_Y) + CardBattleConstants.ROW_H * 0.5 - 4.0, 9, Color(0.2, 1.0, 0.2))
+		_str_c("REAR",  float(CardBattleConstants.BOARD_X) + float(CardBattleConstants.BOARD_W) * 0.5,
+			float(CardBattleConstants.PFREAR_Y) + CardBattleConstants.ROW_H * 0.5 - 4.0,  9, Color(0.4, 0.7, 1.0))
 
 	if _mode == Mode.CHOOSE_ARSENAL:
-		var az: Rect2 = _player_arsenal_rect()
+		var az: Rect2 = CardBattleLayout.player_arsenal_rect()
 		_view.draw_rect(az, Color(0.25, 0.85, 0.35), false, 2.0)
 
 	if _toast_timer > 0.0: _draw_toast()
@@ -1902,13 +1496,13 @@ func _on_draw() -> void:
 
 
 func _draw_chrome() -> void:
-	# Figma 1:3 — verticals x=176 & rail x=RAIL_LINE_X; horizontals y=167 & y=407; mid y=288 h=4
-	_view.draw_rect(Rect2(176.0, 0.0, 2.0, float(H)), C_CHROME_V)
-	_view.draw_rect(Rect2(float(RAIL_LINE_X), 0.0, 2.0, float(H)), C_CHROME_V)
-	var line_span: float = float(RAIL_LINE_X) - 8.0
-	_view.draw_rect(Rect2(4.0, float(LINE_Y_LOG_ZOOM), line_span, 2.0), C_LINE_H)
-	_view.draw_rect(Rect2(4.0, float(LINE_Y_PINFO_HAND), line_span, 2.0), C_LINE_H)
-	_view.draw_rect(Rect2(float(BOARD_X), float(BOARD_DIV_Y) - 2.0, float(BOARD_W), 4.0), C_LINE_H)
+	# Figma 1:3 — verticals x=176 & rail x=CardBattleConstants.RAIL_LINE_X; horizontals y=167 & y=407; mid y=288 h=4
+	_view.draw_rect(Rect2(176.0, 0.0, 2.0, float(CardBattleConstants.H)), CardBattleConstants.C_CHROME_V)
+	_view.draw_rect(Rect2(float(CardBattleConstants.RAIL_LINE_X), 0.0, 2.0, float(CardBattleConstants.H)), CardBattleConstants.C_CHROME_V)
+	var line_span: float = float(CardBattleConstants.RAIL_LINE_X) - 8.0
+	_view.draw_rect(Rect2(4.0, float(CardBattleConstants.LINE_Y_LOG_ZOOM), line_span, 2.0), CardBattleConstants.C_LINE_H)
+	_view.draw_rect(Rect2(4.0, float(CardBattleConstants.LINE_Y_PINFO_HAND), line_span, 2.0), CardBattleConstants.C_LINE_H)
+	_view.draw_rect(Rect2(float(CardBattleConstants.BOARD_X), float(CardBattleConstants.BOARD_DIV_Y) - 2.0, float(CardBattleConstants.BOARD_W), 4.0), CardBattleConstants.C_LINE_H)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1916,55 +1510,55 @@ func _draw_chrome() -> void:
 # ══════════════════════════════════════════════════════════════════
 func _draw_left_panel() -> void:
 	# Enemy info — Figma 4:347 (10px / 14px / 14px); no stroke on identity strip
-	_view.draw_rect(Rect2(0, 0, LEFT_W, EINFO_H), C_EINFO_BG)
-	_str("Enemy: %s" % _enemy_name(), EINFO_TEXT_X, EINFO_LINE_1_Y, 10, C_TEXT)
-	_str("Life: %d" % enemy_hp, EINFO_TEXT_X, EINFO_LINE_2_Y, 14,
-		C_HP_RED if enemy_hp <= LOW_LIFE_THRESHOLD else C_TEXT)
-	_str("Hand: %d" % enemy_hand.size(), EINFO_TEXT_X, EINFO_LINE_3_Y, 14, C_TEXT)
+	_view.draw_rect(Rect2(0, 0, CardBattleConstants.LEFT_W, CardBattleConstants.EINFO_H), CardBattleConstants.C_EINFO_BG)
+	_str("Enemy: %s" % _enemy_name(), CardBattleConstants.EINFO_TEXT_X, CardBattleConstants.EINFO_LINE_1_Y, 10, CardBattleConstants.C_TEXT)
+	_str("Life: %d" % enemy_hp, CardBattleConstants.EINFO_TEXT_X, CardBattleConstants.EINFO_LINE_2_Y, 14,
+		CardBattleConstants.C_HP_RED if enemy_hp <= CardBattleConstants.LOW_LIFE_THRESHOLD else CardBattleConstants.C_TEXT)
+	_str("Hand: %d" % enemy_hand.size(), CardBattleConstants.EINFO_TEXT_X, CardBattleConstants.EINFO_LINE_3_Y, 14, CardBattleConstants.C_TEXT)
 
 	# Log — Figma 4:352 mint panel + 2px #3c1e15 border
-	_view.draw_rect(_log_rect(), C_LOG_BG)
-	_view.draw_rect(_log_rect(), C_LOG_BORDER, false, 2.0)
-	_str("Log", LOG_TITLE_X, float(LOG_Y) + LOG_TITLE_Y, 10, C_LOG_TITLE)
+	_view.draw_rect(CardBattleLayout.log_rect(), CardBattleConstants.C_LOG_BG)
+	_view.draw_rect(CardBattleLayout.log_rect(), CardBattleConstants.C_LOG_BORDER, false, 2.0)
+	_str("Log", CardBattleConstants.LOG_TITLE_X, float(CardBattleConstants.LOG_Y) + CardBattleConstants.LOG_TITLE_Y, 10, CardBattleConstants.C_LOG_TITLE)
 	_clamp_log_scroll()
 	var flat: Array[String] = _log_flat_lines()
 	var total_lines: int = flat.size()
-	var max_scroll: int = maxi(0, total_lines - LOG_VISIBLE)
+	var max_scroll: int = maxi(0, total_lines - CardBattleConstants.LOG_VISIBLE)
 	var start: int = clampi(_log_scroll, 0, max_scroll)
-	var vis_count: int = mini(LOG_VISIBLE, total_lines - start)
+	var vis_count: int = mini(CardBattleConstants.LOG_VISIBLE, total_lines - start)
 	for i in vis_count:
-		var y_line: float = float(LOG_Y) + LOG_BODY_Y0 + float(i) * float(LOG_LINE_H)
-		_draw_log_line_at(flat[start + i], y_line, 8, C_LOG_BODY)
-	if total_lines > LOG_VISIBLE:
-		var track_h: float = float(LOG_H) - 9.0
-		var thumb_h: float = maxf(8.0, track_h * float(LOG_VISIBLE) / float(total_lines))
+		var y_line: float = float(CardBattleConstants.LOG_Y) + CardBattleConstants.LOG_BODY_Y0 + float(i) * float(CardBattleConstants.LOG_LINE_H)
+		_draw_log_line_at(flat[start + i], y_line, 8, CardBattleConstants.C_LOG_BODY)
+	if total_lines > CardBattleConstants.LOG_VISIBLE:
+		var track_h: float = float(CardBattleConstants.LOG_H) - 9.0
+		var thumb_h: float = maxf(8.0, track_h * float(CardBattleConstants.LOG_VISIBLE) / float(total_lines))
 		var denom: float = float(max_scroll) if max_scroll > 0 else 1.0
-		var thumb_y: float = float(LOG_Y) + 5.0 + (track_h - thumb_h) * float(start) / denom
-		_view.draw_rect(Rect2(LOG_SCROLL_X, float(LOG_Y) + 5.0, LOG_SCROLL_W, track_h), C_SCROLL_TRACK)
-		_view.draw_rect(Rect2(LOG_SCROLL_X, thumb_y, LOG_SCROLL_W, thumb_h), C_SCROLL_THUMB)
+		var thumb_y: float = float(CardBattleConstants.LOG_Y) + 5.0 + (track_h - thumb_h) * float(start) / denom
+		_view.draw_rect(Rect2(CardBattleConstants.LOG_SCROLL_X, float(CardBattleConstants.LOG_Y) + 5.0, CardBattleConstants.LOG_SCROLL_W, track_h), CardBattleConstants.C_SCROLL_TRACK)
+		_view.draw_rect(Rect2(CardBattleConstants.LOG_SCROLL_X, thumb_y, CardBattleConstants.LOG_SCROLL_W, thumb_h), CardBattleConstants.C_SCROLL_THUMB)
 
 	# Zoomed card
-	_view.draw_rect(Rect2(0, ZOOM_Y, LEFT_W, ZOOM_H), C_ZOOM_BG)
-	_view.draw_rect(Rect2(0, ZOOM_Y, LEFT_W, ZOOM_H), C_BLACK, false, 1.0)
+	_view.draw_rect(Rect2(0, CardBattleConstants.ZOOM_Y, CardBattleConstants.LEFT_W, CardBattleConstants.ZOOM_H), CardBattleConstants.C_ZOOM_BG)
+	_view.draw_rect(Rect2(0, CardBattleConstants.ZOOM_Y, CardBattleConstants.LEFT_W, CardBattleConstants.ZOOM_H), CardBattleConstants.C_BLACK, false, 1.0)
 	if not _hover_card.is_empty():
 		_draw_zoomed_card(_hover_card, _hover_state)
 
 	# Player info — Figma 4:346 (You 10px; Life / Mana 14px); no stroke on identity strip
-	_view.draw_rect(Rect2(0, PINFO_Y, LEFT_W, PINFO_H), C_PINFO_BG)
-	_str("You", PINFO_TEXT_X, float(PINFO_Y) + PINFO_LINE_1_Y, 10, C_TEXT)
-	_str("Life: %d" % player_hp, PINFO_TEXT_X, float(PINFO_Y) + PINFO_LINE_2_Y, 14,
-		C_HP_RED if player_hp <= LOW_LIFE_THRESHOLD else C_TEXT)
-	_str("Mana: %d" % player_mana, PINFO_TEXT_X, float(PINFO_Y) + PINFO_LINE_3_Y, 14, C_TEXT)
-	var turn_col: Color = C_SEL if is_player_turn else C_TURN_AI
-	var turn_cy: float = float(PINFO_Y) + float(PINFO_H) * 0.5 + TURN_CIRCLE_Y_OFF
-	_view.draw_circle(Vector2(LEFT_W - 10.0, turn_cy), 6.0, turn_col)
+	_view.draw_rect(Rect2(0, CardBattleConstants.PINFO_Y, CardBattleConstants.LEFT_W, CardBattleConstants.PINFO_H), CardBattleConstants.C_PINFO_BG)
+	_str("You", CardBattleConstants.PINFO_TEXT_X, float(CardBattleConstants.PINFO_Y) + CardBattleConstants.PINFO_LINE_1_Y, 10, CardBattleConstants.C_TEXT)
+	_str("Life: %d" % player_hp, CardBattleConstants.PINFO_TEXT_X, float(CardBattleConstants.PINFO_Y) + CardBattleConstants.PINFO_LINE_2_Y, 14,
+		CardBattleConstants.C_HP_RED if player_hp <= CardBattleConstants.LOW_LIFE_THRESHOLD else CardBattleConstants.C_TEXT)
+	_str("Mana: %d" % player_mana, CardBattleConstants.PINFO_TEXT_X, float(CardBattleConstants.PINFO_Y) + CardBattleConstants.PINFO_LINE_3_Y, 14, CardBattleConstants.C_TEXT)
+	var turn_col: Color = CardBattleConstants.C_SEL if is_player_turn else CardBattleConstants.C_TURN_AI
+	var turn_cy: float = float(CardBattleConstants.PINFO_Y) + float(CardBattleConstants.PINFO_H) * 0.5 + CardBattleConstants.TURN_CIRCLE_Y_OFF
+	_view.draw_circle(Vector2(CardBattleConstants.LEFT_W - 10.0, turn_cy), 6.0, turn_col)
 
 	# END TURN button (Figma: x=96, y=431, 78×24 — pinfo strip)
-	var eb := _end_btn_rect()
+	var eb := CardBattleLayout.end_btn_rect()
 	var ea := is_player_turn and not _animating and not _ended
-	_view.draw_rect(eb, C_END_TURN if ea else C_END_TURN_DIM)
-	_view.draw_rect(eb, C_BLACK, false, 1.0)
-	_str_in_rect_center("END TURN", eb, 9, C_TEXT_LT if ea else C_TEXT_ON_DARK_DIM)
+	_view.draw_rect(eb, CardBattleConstants.C_END_TURN if ea else CardBattleConstants.C_END_TURN_DIM)
+	_view.draw_rect(eb, CardBattleConstants.C_BLACK, false, 1.0)
+	_str_in_rect_center("END TURN", eb, 9, CardBattleConstants.C_TEXT_LT if ea else CardBattleConstants.C_TEXT_ON_DARK_DIM)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1972,84 +1566,84 @@ func _draw_left_panel() -> void:
 # ══════════════════════════════════════════════════════════════════
 func _draw_board() -> void:
 	if enemy_front.is_empty():
-		_str_c("— empty —", float(BOARD_X) + float(BOARD_W) * 0.5,
-			float(EFFRONT_Y) + ROW_H * 0.5 - 4.0, 7, C_BOARD_EMPTY_TEXT)
+		_str_c("— empty —", float(CardBattleConstants.BOARD_X) + float(CardBattleConstants.BOARD_W) * 0.5,
+			float(CardBattleConstants.EFFRONT_Y) + CardBattleConstants.ROW_H * 0.5 - 4.0, 7, CardBattleConstants.C_BOARD_EMPTY_TEXT)
 	if enemy_rear.is_empty():
-		_str_c("— empty —", float(BOARD_X) + float(BOARD_W) * 0.5,
-			float(EFREAR_Y) + ROW_H * 0.5 - 4.0,  7, C_BOARD_EMPTY_TEXT)
+		_str_c("— empty —", float(CardBattleConstants.BOARD_X) + float(CardBattleConstants.BOARD_W) * 0.5,
+			float(CardBattleConstants.EFREAR_Y) + CardBattleConstants.ROW_H * 0.5 - 4.0,  7, CardBattleConstants.C_BOARD_EMPTY_TEXT)
 	if player_front.is_empty():
-		_str_c("— empty —", float(BOARD_X) + float(BOARD_W) * 0.5,
-			float(PFFRONT_Y) + ROW_H * 0.5 - 4.0, 7, C_BOARD_EMPTY_TEXT)
+		_str_c("— empty —", float(CardBattleConstants.BOARD_X) + float(CardBattleConstants.BOARD_W) * 0.5,
+			float(CardBattleConstants.PFFRONT_Y) + CardBattleConstants.ROW_H * 0.5 - 4.0, 7, CardBattleConstants.C_BOARD_EMPTY_TEXT)
 	if player_rear.is_empty():
-		_str_c("— empty —", float(BOARD_X) + float(BOARD_W) * 0.5,
-			float(PFREAR_Y) + ROW_H * 0.5 - 4.0,  7, C_BOARD_EMPTY_TEXT)
+		_str_c("— empty —", float(CardBattleConstants.BOARD_X) + float(CardBattleConstants.BOARD_W) * 0.5,
+			float(CardBattleConstants.PFREAR_Y) + CardBattleConstants.ROW_H * 0.5 - 4.0,  7, CardBattleConstants.C_BOARD_EMPTY_TEXT)
 
 	for i in enemy_front.size():
-		_draw_mini_card(_mini_rect(enemy_front, EFFRONT_Y, i), enemy_front[i],
+		_draw_mini_card(CardBattleLayout.mini_rect(enemy_front, CardBattleConstants.EFFRONT_Y, i), enemy_front[i],
 			_mode == Mode.ATTACKING, false)
 	for i in enemy_rear.size():
 		var tgt := _mode == Mode.ATTACKING and enemy_front.is_empty()
-		_draw_mini_card(_mini_rect(enemy_rear, EFREAR_Y, i), enemy_rear[i], tgt, false)
+		_draw_mini_card(CardBattleLayout.mini_rect(enemy_rear, CardBattleConstants.EFREAR_Y, i), enemy_rear[i], tgt, false)
 	for i in player_front.size():
 		var sel: bool = (_ctx_idx == i and _ctx_is_front) or (_mode == Mode.ATTACKING and _sel_idx == i)
-		_draw_mini_card(_mini_rect(player_front, PFFRONT_Y, i), player_front[i], false, sel)
+		_draw_mini_card(CardBattleLayout.mini_rect(player_front, CardBattleConstants.PFFRONT_Y, i), player_front[i], false, sel)
 	for i in player_rear.size():
 		var sel_rear: bool = _ctx_idx == i and not _ctx_is_front
-		_draw_mini_card(_mini_rect(player_rear, PFREAR_Y, i), player_rear[i], false, sel_rear)
+		_draw_mini_card(CardBattleLayout.mini_rect(player_rear, CardBattleConstants.PFREAR_Y, i), player_rear[i], false, sel_rear)
 
 	# Click minion: green outline + MOVE / EFF. only (no attack arrow)
 	if _ctx_idx >= 0:
 		var ctx_row2: Array = player_front if _ctx_is_front else player_rear
-		var ctx_y2: int = PFFRONT_Y if _ctx_is_front else PFREAR_Y
+		var ctx_y2: int = CardBattleConstants.PFFRONT_Y if _ctx_is_front else CardBattleConstants.PFREAR_Y
 		if _ctx_idx < ctx_row2.size():
-			var cr_ctx := _mini_rect(ctx_row2, ctx_y2, _ctx_idx)
+			var cr_ctx := CardBattleLayout.mini_rect(ctx_row2, ctx_y2, _ctx_idx)
 			var d_ctx: Dictionary = ctx_row2[_ctx_idx]
 			var ab_ctx: String = d_ctx["data"].get("ability", "")
-			var ol_ctx := _selection_outline_rect(cr_ctx)
+			var ol_ctx := CardBattleLayout.selection_outline_rect(cr_ctx)
 			_view.draw_rect(ol_ctx, Color(0.25, 0.88, 0.32), false, 2.0)
 			var can_move_c: bool = is_player_turn and not _moved_this_turn and not _animating
 			var can_eff_c: bool = is_player_turn and not _animating and not d_ctx.get("exhausted", false) \
 				and _has_exhaust_activation(ab_ctx)
 			if can_move_c:
-				var mr_c := _context_move_btn_rect(cr_ctx)
+				var mr_c := CardBattleLayout.context_move_btn_rect(cr_ctx)
 				_view.draw_rect(mr_c, Color(0.22, 0.26, 0.18))
-				_view.draw_rect(mr_c, C_DIV, false, 1.0)
-				_str_c("MOVE", mr_c.get_center().x, mr_c.get_center().y - 4.0, 8, C_TEXT)
+				_view.draw_rect(mr_c, CardBattleConstants.C_DIV, false, 1.0)
+				_str_c("MOVE", mr_c.get_center().x, mr_c.get_center().y - 4.0, 8, CardBattleConstants.C_TEXT)
 			if can_eff_c:
-				var er_c: Rect2 = _context_eff_btn_rect(cr_ctx) if can_move_c else _context_move_btn_rect(cr_ctx)
+				var er_c: Rect2 = CardBattleLayout.context_eff_btn_rect(cr_ctx) if can_move_c else CardBattleLayout.context_move_btn_rect(cr_ctx)
 				_view.draw_rect(er_c, Color(0.22, 0.26, 0.18))
-				_view.draw_rect(er_c, C_DIV, false, 1.0)
-				_str_c("EFF.", er_c.get_center().x, er_c.get_center().y - 4.0, 8, C_TEXT)
+				_view.draw_rect(er_c, CardBattleConstants.C_DIV, false, 1.0)
+				_str_c("EFF.", er_c.get_center().x, er_c.get_center().y - 4.0, 8, CardBattleConstants.C_TEXT)
 
 	# Attack mode: outline always; arrow + type-adv preview only while dragging aim (LMB + past threshold)
 	if _mode == Mode.ATTACKING and _sel_idx >= 0 and _sel_idx < player_front.size():
-		var cr_atk := _mini_rect(player_front, PFFRONT_Y, _sel_idx)
-		var ol_atk := _selection_outline_rect(cr_atk)
+		var cr_atk := CardBattleLayout.mini_rect(player_front, CardBattleConstants.PFFRONT_Y, _sel_idx)
+		var ol_atk := CardBattleLayout.selection_outline_rect(cr_atk)
 		_view.draw_rect(ol_atk, Color(0.25, 0.88, 0.32), false, 2.0)
 
-		var start := _board_world_pos(true, true, _sel_idx)
+		var start := CardBattleLayout.board_world_pos(_get_row(true, true), true, true, _sel_idx)
 		if _atk_show_attack_arrow():
-			_draw_arrow(start, _mouse_pos, C_SEL)
+			_draw_arrow(start, _mouse_pos, CardBattleConstants.C_SEL)
 			if not _hover_card.is_empty() and _hover_state.has("data"):
 				var att_sub: String = player_front[_sel_idx]["data"].get("subtype", "")
 				var def_sub: String = _hover_card.get("subtype", "")
 				var bonus := _type_advantage(att_sub, def_sub)
 				if bonus > 0:
 					var mid := (start + _mouse_pos) * 0.5
-					_str_c("Type Adv +%d dmg" % bonus, mid.x, mid.y - 10.0, 7, Color(1.0, 0.92, 0.1))
+					_str_c("Type Adv +%d dmg" % bonus, mid.x, mid.y - 10.0, 8, CardBattleConstants.C_TEXT)
 
 	# DIRECT ATTACK — always visible on your turn; enabled = face legal (Figma 17:183 / 17:184)
 	if is_player_turn and not _animating and not _ended:
 		var da_legal: bool = _direct_attack_face_legal()
-		var db := _direct_attack_btn_rect()
+		var db := CardBattleLayout.direct_attack_btn_rect()
 		if da_legal:
-			_view.draw_rect(db, C_DIRECT_ATTACK_ON)
+			_view.draw_rect(db, CardBattleConstants.C_DIRECT_ATTACK_ON)
 			var accent := Rect2(db.position.x, db.position.y + db.size.y - 2.0, db.size.x, 2.0)
-			_view.draw_rect(accent, C_LOG_BORDER)
-			_str_in_rect_center("DIRECT ATTACK", db, 8, C_TEXT_LT)
+			_view.draw_rect(accent, CardBattleConstants.C_LOG_BORDER)
+			_str_in_rect_center("DIRECT ATTACK", db, 8, CardBattleConstants.C_TEXT_LT)
 		else:
-			_view.draw_rect(db, C_DIRECT_ATTACK_OFF)
-			_str_in_rect_center("DIRECT ATTACK", db, 8, C_DIRECT_ATTACK_OFF_TEXT)
+			_view.draw_rect(db, CardBattleConstants.C_DIRECT_ATTACK_OFF)
+			_str_in_rect_center("DIRECT ATTACK", db, 8, CardBattleConstants.C_DIRECT_ATTACK_OFF_TEXT)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -2083,10 +1677,10 @@ func _draw_side_zone_count_line(x_left: float, baseline_y: float, count: int) ->
 	var fs_c: int = _fs(8)
 	var num_s: String = str(count)
 	_view.draw_string(f, Vector2(_tx(x_left), _tx(baseline_y)), num_s,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, fs_n, C_TEXT_LT)
+		HORIZONTAL_ALIGNMENT_LEFT, -1, fs_n, CardBattleConstants.C_TEXT_LT)
 	var wn: float = f.get_string_size(num_s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs_n).x
 	_view.draw_string(f, Vector2(_tx(x_left + wn + 2.0), _tx(baseline_y)), "cards",
-		HORIZONTAL_ALIGNMENT_LEFT, -1, fs_c, C_TEXT_LT)
+		HORIZONTAL_ALIGNMENT_LEFT, -1, fs_c, CardBattleConstants.C_TEXT_LT)
 
 
 ## Figma 8:137 — `ARSENAL` stacked vertically, centered (empty tile)
@@ -2103,29 +1697,30 @@ func _draw_side_arsenal_vertical_label(inner: Rect2) -> void:
 		var tw: float = f.get_string_size(ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 		var y_line: float = y0 + float(i) * step
 		_view.draw_string(f, Vector2(_tx(cx - tw * 0.5), _tx(y_line + float(fs))), ch,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, fs, C_TEXT)
+			HORIZONTAL_ALIGNMENT_LEFT, -1, fs, CardBattleConstants.C_TEXT)
 
 
 func _draw_side_sec(sec: int, label: String, count: int, card: Dictionary) -> void:
-	var r := Rect2(float(SIDE_ZONE_X), SIDE_BAND_Y[sec], float(SIDE_ZONE_RW), SIDE_BAND_H[sec])
+	var r := Rect2(float(CardBattleConstants.SIDE_ZONE_X), CardBattleConstants.SIDE_BAND_Y[sec], float(CardBattleConstants.SIDE_ZONE_RW), CardBattleConstants.SIDE_BAND_H[sec])
 	var tx: float = r.position.x + 4.0
 	var inner_h: float = minf(r.size.y, 110.0)
-	var inner: Rect2 = Rect2(r.position.x + SIDE_CARD_INSET, r.position.y, SIDE_CARD_W, inner_h)
+	var inner: Rect2 = Rect2(r.position.x + CardBattleConstants.SIDE_CARD_INSET, r.position.y, CardBattleConstants.SIDE_CARD_W, inner_h)
 
 	if count >= 0:
 		if label == "GRAVE":
-			_view.draw_rect(Rect2(r.position.x, r.position.y, float(SIDE_ZONE_W), r.size.y), C_GRAVE_BG)
+			_view.draw_rect(Rect2(r.position.x, r.position.y, float(CardBattleConstants.SIDE_ZONE_W), r.size.y), CardBattleConstants.C_GRAVE_BG)
 		else:
-			_view.draw_rect(inner, C_DECK_BG)
-		_str(label, tx, _side_label_top_y(r), 8, C_TEXT_LT)
+			_view.draw_rect(inner, CardBattleConstants.C_DECK_BG)
+		_str(label, tx, _side_label_top_y(r), 8, CardBattleConstants.C_TEXT_LT)
 		_draw_side_zone_count_line(tx, _side_count_baseline(r), count)
 	else:
-		_view.draw_rect(inner, C_ARSENAL_BG)
-		_view.draw_rect(inner, C_SIDE_ARSENAL_BORDER, false, 2.0)
+		_view.draw_rect(inner, CardBattleConstants.C_ARSENAL_BG)
+		_view.draw_rect(inner, CardBattleConstants.C_SIDE_ARSENAL_BORDER, false, 2.0)
 		if not card.is_empty():
-			var cr := Rect2(inner.position.x + 1.0, inner.position.y + 13.0,
-				inner.size.x - 2.0, inner.size.y - 16.0)
-			_draw_side_card(cr, card)
+			var cx: float = inner.position.x + (inner.size.x - float(CardBattleConstants.MINI_W)) * 0.5
+			var cy: float = inner.position.y + (inner.size.y - float(CardBattleConstants.MINI_H)) * 0.5
+			var full := Rect2(cx, cy, float(CardBattleConstants.MINI_W), float(CardBattleConstants.MINI_H))
+			_draw_hand_card(full, card, false, false)
 		else:
 			_draw_side_arsenal_vertical_label(inner)
 
@@ -2135,12 +1730,12 @@ func _draw_side_sec(sec: int, label: String, count: int, card: Dictionary) -> vo
 # ══════════════════════════════════════════════════════════════════
 func _draw_hand() -> void:
 	if player_hand.is_empty():
-		_str("(empty hand)", HAND_ROW_PAD,
-			float(HAND_Y) + (float(HAND_CH) - 8.0) * 0.5, 8, C_MUTED)
+		_str("(empty hand)", CardBattleConstants.HAND_ROW_PAD,
+			float(CardBattleConstants.HAND_Y) + (float(CardBattleConstants.HAND_CH) - 8.0) * 0.5, 8, CardBattleConstants.C_MUTED)
 		return
 	for i in player_hand.size():
 		if _drag_active and _drag_hand_idx == i: continue
-		var r    := _hand_rect(i)
+		var r    := CardBattleLayout.hand_rect(i, player_hand.size())
 		var card: Dictionary = player_hand[i]
 		var gray: bool = card.get("cost", 0) > player_mana
 		_draw_hand_card(r, card, false, gray)
@@ -2162,69 +1757,74 @@ func _draw_mini_card(r: Rect2, d: Dictionary, targetable: bool, selected: bool) 
 	var card: Dictionary = d["data"]
 	var is_dem: bool = card.get("type", "demon") == "demon"
 	var ex: bool = d.get("exhausted", false)
-	_view.draw_rect(r, C_CARD_MINI if is_dem else C_SPELL_BG)
+	var fill_c: Color = CardBattleConstants.C_SPELL_BG
+	if is_dem:
+		fill_c = CardBattleConstants.C_DEMON_BG if not ex else CardBattleConstants.C_CARD_MINI
+	_view.draw_rect(r, fill_c)
 
-	var rc: Color = RARITY_COL.get(card.get("rarity", "common"), C_MUTED)
-	var border := C_SEL if selected else (C_TARGET if targetable else rc)
+	var border: Color = CardBattleConstants.C_SEL if selected \
+		else (CardBattleConstants.C_TARGET if targetable else CardBattleConstants.C_MINI_BORDER)
 	_view.draw_rect(r, border, false, 2.0)
 
 	if d.get("taunt", false):
 		_view.draw_rect(r, Color(1.0, 0.85, 0.1), false, 3.0)
 
-	var nm_col: Color = C_EXHAUST_TEXT if ex else C_TEXT
+	var nm_col: Color = CardBattleConstants.C_EXHAUST_TEXT if ex else CardBattleConstants.C_TEXT
 	var nm: String = card.get("name", "")
 	if nm.length() > 8: nm = nm.left(8) + "..."
 	_str(nm, r.position.x + 5.0, r.position.y + 2.0, 8, nm_col)
 
-	var art_bg_c: Color = C_CARD_MINI if is_dem else C_SPELL_BG
-	var art_r := Rect2(r.position.x + 8.0, r.position.y + MINI_ART_TOP, MINI_ART_SIZE, MINI_ART_SIZE)
+	var art_bg_c: Color = fill_c
+	var art_r := Rect2(r.position.x + 8.0, r.position.y + CardBattleConstants.MINI_ART_TOP, CardBattleConstants.MINI_ART_SIZE, CardBattleConstants.MINI_ART_SIZE)
 	_view.draw_rect(art_r, Color(art_bg_c.r * 0.85, art_bg_c.g * 0.85, art_bg_c.b * 0.85))
 
 	if _mini_shows_effect_label(card):
-		var art_bot: float = r.position.y + MINI_ART_TOP + MINI_ART_SIZE
+		var art_bot: float = r.position.y + CardBattleConstants.MINI_ART_TOP + CardBattleConstants.MINI_ART_SIZE
 		var fs_e: int = _fs(8)
-		var eff_col: Color = C_EXHAUST_TEXT if ex else C_TEXT
+		var eff_col: Color = CardBattleConstants.C_EXHAUST_TEXT if ex else CardBattleConstants.C_TEXT
 		_str("Effect", r.position.x + 5.0, art_bot - 2.0 - float(fs_e), 8, eff_col)
 
 	if is_dem:
 		var max_hp: int = card.get("hp", 1)
 		var cur_hp: int = d.get("hp", max_hp)
 		var atk_v: int = d.get("atk", card.get("atk", 0))
+		var base_atk: int = card.get("atk", 0)
+		var base_hp: int = card.get("hp", 1)
 		_str_r_atk_hp(atk_v, cur_hp, max_hp, r.position.x + r.size.x - 3.0,
-			r.position.y + r.size.y - 12.0, 10, ex)
+			r.position.y + r.size.y - 12.0, 10, ex, base_atk, base_hp)
 
-	var cost_fill: Color = C_EXHAUST_BADGE if ex else C_COST_BADGE
-	var cost_lbl: Color = C_EXHAUST_TEXT if ex else C_TEXT_LT
+	var cost_fill: Color = CardBattleConstants.C_EXHAUST_BADGE if ex else CardBattleConstants.C_COST_BADGE
+	var cost_lbl: Color = CardBattleConstants.C_EXHAUST_TEXT if ex else CardBattleConstants.C_TEXT_LT
 	# Mana — bottom-left (same as hand; field minis are not centered)
-	_draw_cost_badge_rect(Rect2(r.position.x, r.position.y + float(MINI_H - HAND_COST_H),
-		float(HAND_COST_W), float(HAND_COST_H)), card.get("cost", 0), cost_fill, cost_lbl)
+	_draw_cost_badge_rect(Rect2(r.position.x, r.position.y + float(CardBattleConstants.MINI_H - CardBattleConstants.HAND_COST_H),
+		float(CardBattleConstants.HAND_COST_W), float(CardBattleConstants.HAND_COST_H)), card.get("cost", 0), cost_fill, cost_lbl)
 
 	if ex:
 		var zcx: float = r.position.x + r.size.x * 0.5
-		var zcy: float = r.position.y + MINI_ART_TOP + MINI_ART_SIZE * 0.5 - 6.0
-		_str_c("ZZZ", zcx, zcy, 10, C_EXHAUST_TEXT)
+		var zcy: float = r.position.y + CardBattleConstants.MINI_ART_TOP + CardBattleConstants.MINI_ART_SIZE * 0.5 - 6.0
+		_str_c("ZZZ", zcx, zcy, 10, CardBattleConstants.C_EXHAUST_TEXT)
 
 
 func _draw_hand_card(r: Rect2, card: Dictionary, selected: bool, grayed: bool) -> void:
 	var is_dem: bool = card.get("type", "demon") == "demon"
-	_view.draw_rect(r, C_CARD_MINI if is_dem else C_SPELL_BG)
-	var rc: Color = RARITY_COL.get(card.get("rarity", "common"), C_MUTED)
-	_view.draw_rect(r, C_SEL if selected else rc, false, 2.0)
-	if grayed: _view.draw_rect(r, C_GRAYED_CARD_OVERLAY)
+	_view.draw_rect(r, CardBattleConstants.C_DEMON_BG if is_dem else CardBattleConstants.C_SPELL_BG)
+	var border_col: Color = CardBattleConstants.C_SEL if selected else CardBattleConstants.C_MINI_BORDER
+	_view.draw_rect(r, border_col, false, 2.0)
+	if grayed: _view.draw_rect(r, CardBattleConstants.C_GRAYED_CARD_OVERLAY)
 
 	var nm: String = card.get("name", "")
 	if nm.length() > 8: nm = nm.left(8) + "..."
-	_str(nm, r.position.x + 5.0, r.position.y + 2.0, 8, C_TEXT)
+	_str(nm, r.position.x + 5.0, r.position.y + 2.0, 8, CardBattleConstants.C_TEXT)
 
-	var art_bg: Color = C_CARD_MINI if is_dem else C_SPELL_BG
-	var art := Rect2(r.position.x + 8.0, r.position.y + MINI_ART_TOP, MINI_ART_SIZE, MINI_ART_SIZE)
+	var art_bg: Color = CardBattleConstants.C_DEMON_BG if is_dem else CardBattleConstants.C_SPELL_BG
+	var art := Rect2(r.position.x + 8.0, r.position.y + CardBattleConstants.MINI_ART_TOP, CardBattleConstants.MINI_ART_SIZE, CardBattleConstants.MINI_ART_SIZE)
 	_view.draw_rect(art, Color(art_bg.r * 0.84, art_bg.g * 0.84, art_bg.b * 0.84))
-	_view.draw_rect(art, _mix_white(rc, 0.35), false, 1.0)
+	_view.draw_rect(art, _mix_white(CardBattleConstants.C_MINI_BORDER, 0.35), false, 1.0)
 
 	if _mini_shows_effect_label(card):
-		var art_bot: float = r.position.y + MINI_ART_TOP + MINI_ART_SIZE
+		var art_bot: float = r.position.y + CardBattleConstants.MINI_ART_TOP + CardBattleConstants.MINI_ART_SIZE
 		var fs_e: int = _fs(8)
-		_str("Effect", r.position.x + 5.0, art_bot - 2.0 - float(fs_e), 8, C_TEXT)
+		_str("Effect", r.position.x + 5.0, art_bot - 2.0 - float(fs_e), 8, CardBattleConstants.C_TEXT)
 
 	if is_dem:
 		var max_hp: int = card.get("hp", 1)
@@ -2234,44 +1834,40 @@ func _draw_hand_card(r: Rect2, card: Dictionary, selected: bool, grayed: bool) -
 		_str_c("SPELL", r.get_center().x, r.position.y + r.size.y - 14.0, 8, Color(0.24, 0.40, 0.08))
 
 	# Mana — Figma hand: 20×19 badge flush bottom-left
-	_draw_cost_badge_rect(Rect2(r.position.x, r.position.y + float(HAND_CH - HAND_COST_H),
-		float(HAND_COST_W), float(HAND_COST_H)), card.get("cost", 0))
+	_draw_cost_badge_rect(Rect2(r.position.x, r.position.y + float(CardBattleConstants.HAND_CH - CardBattleConstants.HAND_COST_H),
+		float(CardBattleConstants.HAND_COST_W), float(CardBattleConstants.HAND_COST_H)), card.get("cost", 0))
 
 
 func _draw_zoomed_card(card: Dictionary, state: Dictionary) -> void:
 	# Figma 3:74 — x=8 y=172 w=165 h=230
-	var cr := Rect2(8.0, float(ZOOM_Y), 165.0, 230.0)
+	var cr := Rect2(8.0, float(CardBattleConstants.ZOOM_Y), 165.0, 230.0)
 	var is_dem: bool = card.get("type", "demon") == "demon"
-	_view.draw_rect(cr, C_DEMON_BG if is_dem else C_SPELL_BG)
-	var rc: Color = RARITY_COL.get(card.get("rarity", "common"), C_MUTED)
-	_view.draw_rect(cr, rc, false, 2.0)
+	_view.draw_rect(cr, CardBattleConstants.C_DEMON_BG if is_dem else CardBattleConstants.C_SPELL_BG)
+	_view.draw_rect(cr, CardBattleConstants.C_MINI_BORDER, false, 2.0)
 
-	_str_fit(card.get("name", ""), cr.position.x + 6.0, cr.position.y + 6.0,
-		cr.size.x - 14.0, 12, C_TEXT)
+	_str_wrap(card.get("name", ""), cr.position.x + 6.0, cr.position.y + 6.0,
+		cr.size.x - 14.0, 12, CardBattleConstants.C_TEXT)
 
 	# Mana badge — Figma 20×19 @ top-right (local ~143, 2)
 	_draw_cost_badge_rect(Rect2(cr.position.x + cr.size.x - 22.0, cr.position.y + 2.0, 20.0, 19.0),
 		card.get("cost", 0))
 
-	# Art placeholder (local 18,20 → 128×128)
-	var art := Rect2(cr.position.x + 18.0, cr.position.y + 20.0, 128.0, 128.0)
-	var art_bg := C_DEMON_BG if is_dem else C_SPELL_BG
+	# Art placeholder — below up-to-2-line title (fixes.md long names)
+	var art := Rect2(cr.position.x + 18.0, cr.position.y + 30.0, 128.0, 128.0)
+	var art_bg := CardBattleConstants.C_DEMON_BG if is_dem else CardBattleConstants.C_SPELL_BG
 	_view.draw_rect(art, Color(art_bg.r * 0.80, art_bg.g * 0.80, art_bg.b * 0.80))
-	_view.draw_rect(art, _mix_white(rc, 0.28), false, 1.0)
+	_view.draw_rect(art, _mix_white(CardBattleConstants.C_MINI_BORDER, 0.28), false, 1.0)
 
-	# Rarity jewel — right edge of art (vertical crystal, pixel rects)
-	_draw_rarity_jewel_zoom(Vector2(cr.position.x + 148.0, cr.position.y + 138.0), rc)
-
-	# Effect text (local 6,151 — just below art)
+	# Effect text — just below art
 	var ab_desc: String = card.get("ability_desc", card.get("desc", ""))
 	if ab_desc != "":
-		_str_wrap_ml(ab_desc, cr.position.x + 6.0, cr.position.y + 151.0,
-			cr.size.x - 12.0, 7, C_TEXT)
+		_str_wrap_ml(ab_desc, cr.position.x + 6.0, cr.position.y + 162.0,
+			cr.size.x - 12.0, 7, CardBattleConstants.C_TEXT)
 
 	# Type line (local 7,216)
 	if is_dem:
 		_str("DEMON - %s" % card.get("subtype", "dark").to_upper(),
-			cr.position.x + 7.0, cr.position.y + 216.0, 7, C_MUTED)
+			cr.position.x + 7.0, cr.position.y + 216.0, 7, CardBattleConstants.C_MUTED)
 	else:
 		_str_c("SPELL", cr.get_center().x, cr.position.y + 216.0, 7, Color(0.24, 0.40, 0.08))
 
@@ -2280,47 +1876,20 @@ func _draw_zoomed_card(card: Dictionary, state: Dictionary) -> void:
 		var max_hp: int = card.get("hp", 1)
 		var cur_hp: int = state.get("hp", max_hp)
 		var atk_v: int = state.get("atk", card.get("atk", 0))
-		_str_r_atk_hp(atk_v, cur_hp, max_hp, cr.position.x + cr.size.x - 6.0, cr.position.y + 203.0, 12)
+		var base_atk: int = card.get("atk", 0)
+		var base_hp: int = card.get("hp", 1)
+		_str_r_atk_hp(atk_v, cur_hp, max_hp, cr.position.x + cr.size.x - 6.0, cr.position.y + 203.0, 12,
+			false, base_atk, base_hp)
 
 
-func _draw_side_card(r: Rect2, card: Dictionary) -> void:
-	var is_dem: bool = card.get("type", "demon") == "demon"
-	_view.draw_rect(r, C_DEMON_BG if is_dem else C_SPELL_BG)
-	var rc: Color = RARITY_COL.get(card.get("rarity", "common"), C_MUTED)
-	_view.draw_rect(r, rc, false, 1.5)
-	var nm: String = card.get("name", "")
-	if nm.length() > 7: nm = nm.left(7) + "..."
-	_str(nm, r.position.x + 2.0, r.position.y + 2.0, 6, C_TEXT)
-	if card.get("ability", "") != "":
-		_str_c("Effect", r.get_center().x, r.get_center().y - 4.0, 6, Color(0.28, 0.18, 0.60))
-	if is_dem:
-		var mx: int = card.get("hp", 1)
-		_str_r_atk_hp(card.get("atk", 0), card.get("hp", 1), mx,
-			r.position.x + r.size.x - 2.0, r.position.y + r.size.y - 10.0, 8)
-	else:
-		_str_c("SPELL", r.get_center().x, r.position.y + r.size.y - 12.0, 6, Color(0.24, 0.40, 0.08))
-
-
-func _draw_rarity_jewel_zoom(origin: Vector2, c: Color) -> void:
-	var x: int = int(floor(origin.x))
-	var y: int = int(floor(origin.y))
-	var shade := Color(c.r * 0.42, c.g * 0.42, c.b * 0.42)
-	var lite := Color(minf(c.r * 1.18, 1.0), minf(c.g * 1.18, 1.0), minf(c.b * 1.18, 1.0))
-	_view.draw_rect(Rect2(x + 3, y,      6, 3), lite)
-	_view.draw_rect(Rect2(x + 1, y + 3, 10, 8), c)
-	_view.draw_rect(Rect2(x,     y + 4,  3, 6), shade)
-	_view.draw_rect(Rect2(x + 9, y + 4,  3, 6), lite)
-	_view.draw_rect(Rect2(x + 3, y + 11, 6, 4), shade)
-
-
-func _draw_cost_badge_rect(r: Rect2, cost: int, fill: Color = C_COST_BADGE, label_color: Color = C_TEXT_LT) -> void:
+func _draw_cost_badge_rect(r: Rect2, cost: int, fill: Color = CardBattleConstants.C_COST_BADGE, label_color: Color = CardBattleConstants.C_TEXT_LT) -> void:
 	var x: int = int(floor(r.position.x))
 	var y: int = int(floor(r.position.y))
 	var w: int = maxi(1, int(floor(r.size.x)))
 	var h: int = maxi(1, int(floor(r.size.y)))
 	_view.draw_rect(r, fill)
-	_view.draw_rect(r, C_BLACK, false, 1.0)
-	var fs: int = clampi(mini(w, h) - 4, FONT_MIN, 12)
+	_view.draw_rect(r, CardBattleConstants.C_BLACK, false, 1.0)
+	var fs: int = clampi(mini(w, h) - 4, CardBattleConstants.FONT_MIN, 12)
 	var s: String = str(cost)
 	var f: Font = _fnt()
 	var tw: float = f.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
@@ -2344,29 +1913,29 @@ func _draw_arrow(from: Vector2, to: Vector2, color: Color) -> void:
 
 func _draw_toast() -> void:
 	if _toast_timer <= 0.0: return
-	var ty: float = (float(H) - TOAST_H) * 0.5
-	var tr := Rect2(TOAST_X, ty, TOAST_W, TOAST_H)
-	_view.draw_rect(tr, C_GRAVE_BG)
-	_str_in_rect_center(_toast_text, tr, 14, C_TEXT_LT)
+	var ty: float = (float(CardBattleConstants.H) - CardBattleConstants.TOAST_H) * 0.5
+	var tr := Rect2(CardBattleConstants.TOAST_X, ty, CardBattleConstants.TOAST_W, CardBattleConstants.TOAST_H)
+	_view.draw_rect(tr, CardBattleConstants.C_GRAVE_BG)
+	_str_in_rect_center_fit(_toast_text, tr, 14, CardBattleConstants.C_TEXT_LT)
 
 
 func _draw_modal() -> void:
-	var mx: float = float(BOARD_X)
-	var mw: float = float(MODAL_PANEL_W)
-	var mh: float = float(H)
-	_view.draw_rect(Rect2(mx, 0.0, mw, mh), C_GRAVE_BG)
+	var mx: float = float(CardBattleConstants.BOARD_X)
+	var mw: float = float(CardBattleConstants.MODAL_PANEL_W)
+	var mh: float = float(CardBattleConstants.H)
+	_view.draw_rect(Rect2(mx, 0.0, mw, mh), CardBattleConstants.C_GRAVE_BG)
 	var title: String = "%s - %d cards" % [_modal_title, _modal_cards.size()]
-	_str(title, 183.0, 7.0, 10, C_TEXT_LT)
-	_str_r("CLOSE", 638.0, 6.0, 12, C_TEXT_LT)
-	var sx: float = MODAL_GRID_X0
-	var sy0: float = MODAL_GRID_Y0
+	_str(title, 183.0, 7.0, 10, CardBattleConstants.C_TEXT_LT)
+	_str_r("CLOSE", 638.0, 6.0, 12, CardBattleConstants.C_TEXT_LT)
+	var sx: float = CardBattleConstants.MODAL_GRID_X0
+	var sy0: float = CardBattleConstants.MODAL_GRID_Y0
 	for i in _modal_cards.size():
-		var row: int = i / MODAL_COLS
-		var col: int = i % MODAL_COLS
-		var cy: float = sy0 + float(row) * MODAL_ROW_H
-		if cy + float(HAND_CH) > mh:
+		var row: int = i / CardBattleConstants.MODAL_COLS
+		var col: int = i % CardBattleConstants.MODAL_COLS
+		var cy: float = sy0 + float(row) * CardBattleConstants.MODAL_ROW_H
+		if cy + float(CardBattleConstants.HAND_CH) > mh:
 			break
-		var cr := Rect2(sx + float(col) * MODAL_COL_W, cy, float(HAND_CW), float(HAND_CH))
+		var cr := Rect2(sx + float(col) * CardBattleConstants.MODAL_COL_W, cy, float(CardBattleConstants.HAND_CW), float(CardBattleConstants.HAND_CH))
 		_draw_hand_card(cr, _modal_cards[i], false, false)
 
 
@@ -2377,10 +1946,10 @@ func _ensure_battle_font() -> void:
 	if _battle_font != null:
 		return
 	var src: Resource = null
-	if ResourceLoader.exists(FONT_PATH_PRIMARY):
-		src = load(FONT_PATH_PRIMARY)
-	if src == null and ResourceLoader.exists(FONT_PATH_FALLBACK):
-		src = load(FONT_PATH_FALLBACK)
+	if ResourceLoader.exists(CardBattleConstants.FONT_PATH_PRIMARY):
+		src = load(CardBattleConstants.FONT_PATH_PRIMARY)
+	if src == null and ResourceLoader.exists(CardBattleConstants.FONT_PATH_FALLBACK):
+		src = load(CardBattleConstants.FONT_PATH_FALLBACK)
 	if src is FontFile:
 		var ff: FontFile = (src as FontFile).duplicate(true) as FontFile
 		ff.antialiasing = TextServer.FONT_ANTIALIASING_NONE
@@ -2415,22 +1984,22 @@ func _tx(x: float) -> int:
 
 
 func _fs(sz: int) -> int:
-	return maxi(sz, FONT_MIN)
+	return maxi(sz, CardBattleConstants.FONT_MIN)
 
 
-func _str(text: String, x: float, y: float, sz: int = 9, color: Color = C_TEXT) -> void:
+func _str(text: String, x: float, y: float, sz: int = 9, color: Color = CardBattleConstants.C_TEXT) -> void:
 	var fs: int = _fs(sz)
 	_view.draw_string(_fnt(), Vector2(_tx(x), _tx(y + float(fs))), text,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, fs, color)
 
-func _str_c(text: String, cx: float, cy: float, sz: int = 9, color: Color = C_TEXT) -> void:
+func _str_c(text: String, cx: float, cy: float, sz: int = 9, color: Color = CardBattleConstants.C_TEXT) -> void:
 	var f: Font = _fnt()
 	var fs: int = _fs(sz)
 	var tw: float = f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 	_view.draw_string(f, Vector2(_tx(cx - tw * 0.5), _tx(cy + float(fs) * 0.5)), text,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, fs, color)
 
-func _str_r(text: String, rx: float, y: float, sz: int = 9, color: Color = C_TEXT) -> void:
+func _str_r(text: String, rx: float, y: float, sz: int = 9, color: Color = CardBattleConstants.C_TEXT) -> void:
 	var f: Font = _fnt()
 	var fs: int = _fs(sz)
 	var tw: float = f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
@@ -2449,8 +2018,25 @@ func _str_in_rect_center(text: String, r: Rect2, sz: int, color: Color) -> void:
 		HORIZONTAL_ALIGNMENT_LEFT, -1, fs, color)
 
 
-## Right-aligned `atk/hp` (Figma bottom-right); hp red when damaged; both parts `#7C7C7C` when exhausted.
-func _str_r_atk_hp(atk_v: int, cur_hp: int, max_hp: int, rx: float, y: float, sz: int, exhausted: bool = false) -> void:
+## One line, ellipsis to stay inside `r` (toast / long labels).
+func _str_in_rect_center_fit(text: String, r: Rect2, sz: int, color: Color) -> void:
+	var f: Font = _fnt()
+	var fs: int = _fs(sz)
+	var max_w: float = maxf(8.0, r.size.x - 16.0)
+	var t: String = text
+	while t.length() > 2 and f.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > max_w:
+		t = t.left(t.length() - 1)
+	if t != text:
+		t = t.left(t.length() - 1) + "."
+	var tw: float = f.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	var cx: float = r.position.x + (r.size.x - tw) * 0.5
+	var baseline: float = r.position.y + r.size.y * 0.5 + float(fs) * 0.35
+	_view.draw_string(f, Vector2(_tx(cx), _tx(baseline)), t,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, fs, color)
+
+
+## Right-aligned `atk/hp` (Figma bottom-right). With `stat_base_*` set: green buff / red debuff or damage vs printed.
+func _str_r_atk_hp(atk_v: int, cur_hp: int, max_hp: int, rx: float, y: float, sz: int, exhausted: bool = false, stat_base_atk: int = -99999, stat_base_hp: int = -99999) -> void:
 	var f: Font = _fnt()
 	var fs: int = _fs(sz)
 	var part_a: String = str(atk_v) + "/"
@@ -2459,8 +2045,27 @@ func _str_r_atk_hp(atk_v: int, cur_hp: int, max_hp: int, rx: float, y: float, sz
 	var w2: float = f.get_string_size(part_b, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 	var x0: float = rx - (w1 + w2)
 	var baseline: float = y + float(fs)
-	var hp_col: Color = C_EXHAUST_TEXT if exhausted else (C_HP_RED if cur_hp < max_hp else C_TEXT)
-	var atk_col: Color = C_EXHAUST_TEXT if exhausted else C_TEXT
+	var hp_col: Color
+	var atk_col: Color
+	if exhausted:
+		atk_col = CardBattleConstants.C_EXHAUST_TEXT
+		hp_col = CardBattleConstants.C_EXHAUST_TEXT
+	elif stat_base_atk == -99999:
+		atk_col = CardBattleConstants.C_TEXT
+		hp_col = CardBattleConstants.C_HP_RED if cur_hp < max_hp else CardBattleConstants.C_TEXT
+	else:
+		if atk_v > stat_base_atk:
+			atk_col = CardBattleConstants.C_STAT_BUFF
+		elif atk_v < stat_base_atk:
+			atk_col = CardBattleConstants.C_HP_RED
+		else:
+			atk_col = CardBattleConstants.C_TEXT
+		if cur_hp > stat_base_hp:
+			hp_col = CardBattleConstants.C_STAT_BUFF
+		elif cur_hp < stat_base_hp:
+			hp_col = CardBattleConstants.C_HP_RED
+		else:
+			hp_col = CardBattleConstants.C_TEXT
 	_view.draw_string(f, Vector2(_tx(x0), _tx(baseline)), part_a, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, atk_col)
 	_view.draw_string(f, Vector2(_tx(x0 + w1), _tx(baseline)), part_b, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, hp_col)
 

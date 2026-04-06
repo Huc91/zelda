@@ -315,7 +315,7 @@ func enemy_summon_to_front(card: Dictionary) -> bool:
 func attack_phase() -> void:
 	if b.enemy_front.is_empty() and not b.enemy_rear.is_empty():
 		var mover: Dictionary = b.enemy_rear.pop_front()
-		mover["exhausted"] = false
+		mover["exhausted"] = mover.get("frozen", false)
 		b.enemy_front.append(mover)
 		b.ai_log_line("Enemy advances %s!" % mover["data"]["name"])
 		b.ai_queue_redraw()

@@ -56,9 +56,23 @@ static func _ensure_init() -> void:
 	for c in ALL_CARDS:
 		_map[c["id"]] = c
 
+# ── test decks ─────────────────
+const TEST_1 = [
+	"demon_080", "demon_081",
+	"demon_082", "demon_083",
+	"demon_084", "demon_085",
+	"demon_086", "demon_087",
+	"demon_088", "demon_089",
+	"demon_090", "demon_091",
+	"demon_092", "demon_093",
+	"demon_094", "demon_095",
+	"demon_096", "demon_097",
+	"demon_098", "demon_099",
+]
+
 
 # ── Player starter deck (20 cards, max 2 per id) ─────────────────
-const PLAYER_DECK = [
+const STARTER_DECK = [
 	"demon_001", "demon_001",
 	"demon_003", "demon_003",
 	"demon_018", "demon_018",
@@ -87,6 +101,9 @@ const ENEMY_DECK = [
 	"spell_001", "spell_001",
 	"spell_005", "spell_005",
 ]
+
+#SELECTED DECK to playtest
+const PLAYER_DECK = TEST_1
 
 # All Bloodungeon cards (js/cards.js) + tokens; skeletons use demon_124/125 — 046+ are the BD expansion.
 const ALL_CARDS = [
@@ -258,7 +275,7 @@ const ALL_CARDS = [
 	{"id": "demon_107", "name": "Cinder Hound", "type": "demon", "subtype": "fire", "cost": 2, "mana_value": 1, "atk": 3, "hp": 2, "rarity": "common", "ability": "haste_poisonous", "ability_desc": "Haste. Poisonous — kills any demon it damages.", "desc": "Ash in its lungs. Fire in its bite."},
 	{"id": "demon_108", "name": "Magma Golem", "type": "demon", "subtype": "fire", "cost": 3, "mana_value": 1, "atk": 2, "hp": 6, "rarity": "uncommon", "ability": "taunt", "ability_desc": "Taunt — enemies must attack this first.", "desc": "Hardened lava given purpose."},
 	{"id": "demon_109", "name": "Inferno Drake", "type": "demon", "subtype": "fire", "cost": 3, "mana_value": 1, "atk": 5, "hp": 2, "rarity": "rare", "ability": "haste", "ability_desc": "Haste — can attack immediately.", "desc": "Dives and burns before you can blink."},
-	{"id": "demon_110", "name": "Ember Phoenix", "type": "demon", "subtype": "fire", "cost": 4, "mana_value": 1, "atk": 4, "hp": 4, "rarity": "rare", "ability": "deathrattle_summon_zombie", "ability_desc": "Deathrattle: Summon a 2/2 Ash Wraith when destroyed.", "desc": "Death is not the end. It never was on this island."},
+	{"id": "demon_110", "name": "Ember Phoenix", "type": "demon", "subtype": "fire", "cost": 4, "mana_value": 1, "atk": 4, "hp": 4, "rarity": "rare", "ability": "deathrattle_summon_ash_wraith", "ability_desc": "Deathrattle: Summon a 2/2 Ash Wraith when destroyed.", "desc": "Death is not the end. It never was on this island."},
 	{"id": "demon_111", "name": "Volcano Lord", "type": "demon", "subtype": "fire", "cost": 4, "mana_value": 1, "atk": 5, "hp": 5, "rarity": "mythic", "ability": "battlecry_damage_player_2", "ability_desc": "Battlecry: Deal 2 damage to the enemy.", "desc": "\"The mountain speaks. You will not like what it says.\" — Magma King"},
 	{"id": "demon_112", "name": "Frost Rat", "type": "demon", "subtype": "beast", "cost": 1, "mana_value": 1, "atk": 1, "hp": 2, "rarity": "common", "ability": "poisonous", "ability_desc": "Poisonous — kills any demon it damages.", "desc": "Its bite freezes the blood solid."},
 	{"id": "demon_113", "name": "Blizzard Imp", "type": "demon", "subtype": "beast", "cost": 1, "mana_value": 1, "atk": 2, "hp": 1, "rarity": "common", "ability": "haste", "ability_desc": "Haste — can attack immediately.", "desc": "Moves through snow like it is not there."},
@@ -284,6 +301,7 @@ const ALL_CARDS = [
 	{"id": "spell_068", "name": "Thunder Ward", "type": "spell", "cost": 1, "mana_value": 1, "rarity": "uncommon", "effect": "buff_hp", "value": 3, "ability_desc": "Give a friendly demon +3 HP. Hardened by lightning strikes."},
 	# TOKENS (zelda battle)
 	{"id": "token_zombie", "name": "Zombie", "type": "demon", "subtype": "dark", "cost": 0, "mana_value": 1, "atk": 2, "hp": 2, "rarity": "common", "ability": "", "ability_desc": "", "desc": "A shuffling undead."},
+	{"id": "token_ash_wraith", "name": "Ash Wraith", "type": "demon", "subtype": "fire", "cost": 0, "mana_value": 1, "atk": 2, "hp": 2, "rarity": "common", "ability": "", "ability_desc": "", "desc": "Born from the phoenix's last breath."},
 	{"id": "token_imp", "name": "Imp", "type": "demon", "subtype": "dark", "cost": 0, "mana_value": 1, "atk": 1, "hp": 1, "rarity": "common", "ability": "haste", "ability_desc": "Haste.", "desc": "A tiny demon."},
 	# Zelda legacy skeletons (IDs moved; bloodungeon 046+ are expansion cards)
 	{"id": "demon_124", "name": "Skeleton", "type": "demon", "subtype": "neutral", "cost": 1, "mana_value": 1, "atk": 1, "hp": 1, "rarity": "common", "ability": "", "ability_desc": "", "desc": "A rookie in the infernal army."},

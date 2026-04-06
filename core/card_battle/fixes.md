@@ -1,0 +1,13 @@
+- Phoenix spawns a zombie. effect state a different token. Change card name to more thematic?
+- The goddmand toast. I can't seet wat the enemy does, the toast stay there during the enemy turn. Should be:
+  player press end turn, toast appears. 3 secs wait. Toast disappears. Enemy start turn and do actions.
+- Arsenal mini card is shorter...just put the card there do not change it.
+- Text in the box of the toast for arsenal is long, do not break on lines and goes out of the box.
+- I have to press end turn again after i put a card in arsenal, end turn automatically after i have arsenalized a card, if i alredy pressed end turn.
+- To long card titles on zoomed card do not break on new line.
+- If is select a card and click on direct attack as a target the card do not attack
+- If a card has buffed stat show it in green, if damaged or debuffed ahowe it in red.
+- Drag need to be a little bit less sensible, i need to drag a little bit more to activate dragging, just a tiny little bit.
+- Remove border based on rarity from card, all mini same border: #7F6F01 for border
+- Mini have #fff as fill. Incorrect demon need to have #F4E4D9 for fill if is active, spells have fill #A1B467. Disabled is ok as color like the current implemented one.
+- Advatange text, black 8px font size.

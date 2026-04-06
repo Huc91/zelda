@@ -42,12 +42,15 @@ const HAND_Y   := 465
 const HAND_H   := H - HAND_Y             # 111
 
 # Board rows  (absolute Y in the 576-px frame)
+# Specular sides: each side’s *_front is the vanguard toward the midline (meeting line);
+# *_rear is the back line (enemy toward top, player toward bottom). `enemy_front` / `enemy_rear`
+# arrays attach to these Ys — combat “attack their front first” = their vanguard row.
 const ROW_H       := 110
-const EFFRONT_Y   := 53
-const EFREAR_Y    := 173
+const EFREAR_Y    := 53                  # enemy back line (top of board)
+const EFFRONT_Y   := 173                 # enemy vanguard — adjacent to midline / player front
 const BOARD_DIV_Y := 288                 # board midline (50% of 576); 4px bar is centered on this Y
-const PFFRONT_Y   := 293
-const PFREAR_Y    := 411
+const PFFRONT_Y   := 293                 # player vanguard — adjacent to midline / enemy front
+const PFREAR_Y    := 411                 # player back line (near hand)
 
 # Card sizes  (Figma card: 79 × 110; art 64×64 @ y+15; hand cost 20×19 bottom)
 const MINI_W   := 79
@@ -60,7 +63,7 @@ const HAND_CH  := 110
 const HAND_COST_W := 20
 const HAND_COST_H := 19
 const HAND_ROW_PAD := 8.0              # flex row, justify-content: flex-start (from board left)
-const MAX_ROW  := 3
+const MAX_ROW  := 4
 
 # Contextual actions (Figma "card selected" — outline + buttons to the right of mini card)
 const CTX_OUTLINE_W := 83
@@ -251,10 +254,14 @@ var _drag_card:     Dictionary = {}
 var _drag_hand_idx: int = -1
 var _drag_pos:      Vector2 = Vector2.ZERO
 
-## Click = contextual MOVE/EFF on this front minion; drag past threshold = attack aim (arrow)
+## Context menu: `_ctx_idx` indexes `player_front` or `player_rear` depending on `_ctx_is_front`.
+## Front minion: drag past threshold = attack aim (arrow). Rear: click toggles context only.
 var _ctx_idx: int = -1
+var _ctx_is_front: bool = true
 var _atk_drag_idx: int = -1
 var _atk_drag_start: Vector2 = Vector2.ZERO
+var _rear_pick_idx: int = -1
+var _rear_pick_start: Vector2 = Vector2.ZERO
 
 var _toast_text:  String = ""
 var _toast_timer: float  = 0.0
@@ -265,6 +272,7 @@ var _modal_title: String = ""
 
 var _view: _View
 var _battle_font: Font
+var _ai_runner: CardBattleAIRunner
 signal battle_ended(player_won: bool)
 
 
@@ -283,6 +291,7 @@ func setup(p_first: bool, p_enemy: Node) -> void:
 	_view.mouse_filter = Control.MOUSE_FILTER_STOP
 	_view.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	add_child(_view)
+	_ai_runner = CardBattleAIRunner.new(self)
 	_start_battle()
 
 
@@ -292,7 +301,7 @@ func setup(p_first: bool, p_enemy: Node) -> void:
 func _start_battle() -> void:
 	player_deck = CardDB.starter_deck()
 	enemy_deck  = CardDB.enemy_deck()
-	_ai_type    = _detect_ai_type()
+	_ai_type    = _ai_runner.detect_ai_type_from_deck(enemy_deck)
 	if not _draw_mandatory_refresh(player_hand, player_deck, STARTING_HAND, true): return
 	if not _draw_mandatory_refresh(enemy_hand, enemy_deck, STARTING_HAND, false): return
 	_log("Battle started!")
@@ -378,7 +387,9 @@ func _start_player_turn() -> void:
 	_mode              = Mode.IDLE
 	_sel_idx           = -1
 	_ctx_idx           = -1
+	_ctx_is_front      = true
 	_atk_drag_idx      = -1
+	_rear_pick_idx     = -1
 	_pending_card      = {}
 	for d in player_front: d["exhausted"] = false; d["attacked"] = 0
 	for d in player_rear:  d["exhausted"] = false; d["attacked"] = 0
@@ -394,7 +405,9 @@ func _finish_end_player_turn() -> void:
 	_mode          = Mode.IDLE
 	_sel_idx       = -1
 	_ctx_idx       = -1
+	_ctx_is_front  = true
 	_atk_drag_idx  = -1
+	_rear_pick_idx = -1
 	_pending_card  = {}
 	_pitched_this_turn.shuffle()
 	for c in _pitched_this_turn: player_deck.append(c)
@@ -422,7 +435,9 @@ func _handle_end_turn_click() -> void:
 	if player_arsenal.is_empty() and not _stashed_this_turn and not player_hand.is_empty():
 		_mode = Mode.CHOOSE_ARSENAL
 		_ctx_idx = -1
+		_ctx_is_front = true
 		_atk_drag_idx = -1
+		_rear_pick_idx = -1
 		_sel_idx = -1
 		_show_toast("Arsenal: hand card or End to skip")
 		_log("Arsenal — click a hand card to stash, or End Turn to skip.")
@@ -452,14 +467,14 @@ func _start_enemy_turn() -> void:
 	_view.queue_redraw()
 	await get_tree().create_timer(0.4, true).timeout
 	if _ended: return
-	await _ai_play_phase()
+	await _ai_runner.play_phase()
 	if _ended: return
-	await _ai_attack_phase()
+	await _ai_runner.attack_phase()
 	if _ended: return
 	_enemy_pitched_this_turn.shuffle()
 	for c in _enemy_pitched_this_turn: enemy_deck.append(c)
 	_enemy_pitched_this_turn.clear()
-	_ai_stash_arsenal_at_turn_end()
+	_ai_runner.stash_arsenal_at_turn_end()
 	_animating = false
 	if not _ended: _start_player_turn()
 
@@ -989,64 +1004,71 @@ func _check_game_over() -> bool:
 
 
 # ══════════════════════════════════════════════════════════════════
-# AI
+# AI  (logic in `card_battle_ai_runner.gd`; thin facades for the runner)
 # ══════════════════════════════════════════════════════════════════
-func _detect_ai_type() -> String:
-	var aggro := 0; var ctrl := 0
-	for card in enemy_deck:
-		var cost: int = card.get("cost", 0); var ab: String = card.get("ability", "")
-		if cost <= 2: aggro += 1
-		if cost >= 4: ctrl  += 1
-		if "haste" in ab: aggro += 1
-		if "battlecry_destroy" in ab or "battlecry_aoe" in ab: ctrl += 2
-	if aggro > ctrl + 4: return "aggro"
-	if ctrl  > aggro + 3: return "control"
-	return "midrange"
+func ai_is_battle_ended() -> bool:
+	return _ended
 
 
-func _ai_play_phase() -> void:
-	var safety := 0
-	while safety < 40 and not _ended:
-		safety += 1
-		if _ai_try_play_from_arsenal():
-			_view.queue_redraw()
-			await get_tree().create_timer(0.45, true).timeout
-			if _ended: return
-			if await _check_game_over(): return
-			continue
-		var best_i := -1
-		var best_score := -1
-		for i in enemy_hand.size():
-			var c: Dictionary = enemy_hand[i]
-			if c.get("cost", 0) > enemy_mana: continue
-			if c["type"] == "demon" and enemy_front.size() >= MAX_ROW and enemy_rear.size() >= MAX_ROW: continue
-			var score := _ai_card_score(c)
-			if score > best_score: best_score = score; best_i = i
-		if best_i >= 0:
-			var card: Dictionary = enemy_hand[best_i]
-			enemy_mana -= card.get("cost", 0)
-			enemy_hand.remove_at(best_i)
-			if card["type"] == "demon":
-				var ab: String = card.get("ability", "")
-				var to_front := true
-				if _ai_type == "control" and not ("taunt" in ab) and not ("haste" in ab):
-					to_front = enemy_front.size() > 0
-				_summon(card, false, to_front)
-				_log("Enemy plays %s!" % card["name"])
-			else:
-				_resolve_spell(card, false); enemy_gy.append(card)
-				_log("Enemy casts %s!" % card["name"])
-			_view.queue_redraw()
-			await get_tree().create_timer(0.45, true).timeout
-			if _ended: return
-			if await _check_game_over(): return
-			continue
-		if enemy_hand.is_empty(): break
-		var pi := _ai_pick_pitch_index()
-		if pi < 0: break
-		_enemy_pitch_card(pi)
-		_view.queue_redraw()
-		await get_tree().create_timer(0.28, true).timeout
+func ai_queue_redraw() -> void:
+	_view.queue_redraw()
+
+
+func ai_check_game_over_co() -> bool:
+	return await _check_game_over()
+
+
+func ai_enemy_summon(card: Dictionary, to_front: bool) -> void:
+	_summon(card, false, to_front)
+
+
+func ai_enemy_resolve_spell(card: Dictionary) -> void:
+	_resolve_spell(card, false)
+
+
+func ai_enemy_pitch_idx(i: int) -> void:
+	_enemy_pitch_card(i)
+
+
+func ai_log_line(s: String) -> void:
+	_log(s)
+
+
+func ai_enemy_stashed_this_turn() -> bool:
+	return _enemy_stashed_this_turn
+
+
+func ai_set_enemy_stashed(v: bool) -> void:
+	_enemy_stashed_this_turn = v
+
+
+func ai_get_ai_type() -> String:
+	return _ai_type
+
+
+func ai_keyword(ability: String, keyword: String) -> bool:
+	return _kwrd(ability, keyword)
+
+
+func ai_deal_damage_to_player(n: int) -> void:
+	_deal_damage_to_player(n)
+
+
+func ai_find_taunt(board: Array) -> int:
+	return _find_taunt(board)
+
+
+func ai_do_combat(a_board: Array, a_idx: int, a_is_player: bool, a_is_front: bool,
+		d_board: Array, d_idx: int, d_is_front: bool) -> void:
+	_do_combat(a_board, a_idx, a_is_player, a_is_front, d_board, d_idx, d_is_front)
+
+
+func ai_find_weakest(board: Array) -> int:
+	return _find_weakest(board)
+
+
+func ai_find_strongest(board: Array) -> int:
+	return _find_strongest(board)
 
 
 func _enemy_pitch_card(i: int) -> void:
@@ -1057,154 +1079,6 @@ func _enemy_pitch_card(i: int) -> void:
 	_enemy_pitched_this_turn.append(card)
 	enemy_hand.remove_at(i)
 	_log("Enemy pitches %s (+%d mana)" % [card["name"], mv])
-
-
-func _ai_pick_pitch_index() -> int:
-	if enemy_hand.is_empty(): return -1
-	var worst_i := 0
-	var worst_s := _ai_card_score(enemy_hand[0])
-	for i in range(1, enemy_hand.size()):
-		var s := _ai_card_score(enemy_hand[i])
-		if s < worst_s:
-			worst_s = s
-			worst_i = i
-	return worst_i
-
-
-## Stash lowest-scored card before the enemy hand is discarded next enemy turn.
-func _ai_stash_arsenal_at_turn_end() -> void:
-	if not enemy_arsenal.is_empty() or _enemy_stashed_this_turn or enemy_hand.is_empty():
-		return
-	var si: int = _ai_pick_pitch_index()
-	if si < 0: return
-	var card: Dictionary = enemy_hand[si]
-	enemy_hand.remove_at(si)
-	enemy_arsenal = card
-	_enemy_stashed_this_turn = true
-	_log("Enemy stashes %s (Arsenal)" % card["name"])
-
-
-## Play from Arsenal when it beats or ties the best playable card in hand.
-func _ai_try_play_from_arsenal() -> bool:
-	if enemy_arsenal.is_empty():
-		return false
-	var ac: Dictionary = enemy_arsenal
-	if ac.get("cost", 0) > enemy_mana:
-		return false
-	if ac.get("type", "") == "demon":
-		if enemy_front.size() >= MAX_ROW and enemy_rear.size() >= MAX_ROW:
-			return false
-	var a_score: int = _ai_card_score(ac)
-	var best_hand: int = -1
-	for i in enemy_hand.size():
-		var c: Dictionary = enemy_hand[i]
-		if c.get("cost", 0) > enemy_mana: continue
-		if c["type"] == "demon" and enemy_front.size() >= MAX_ROW and enemy_rear.size() >= MAX_ROW: continue
-		var s: int = _ai_card_score(c)
-		if s > best_hand:
-			best_hand = s
-	if a_score < best_hand:
-		return false
-	enemy_arsenal = {}
-	enemy_mana -= ac.get("cost", 0)
-	if ac["type"] == "demon":
-		var ab: String = ac.get("ability", "")
-		var to_front: bool = true
-		if _ai_type == "control" and not ("taunt" in ab) and not ("haste" in ab):
-			to_front = enemy_front.size() > 0
-		_summon(ac, false, to_front)
-		_log("Enemy plays %s (Arsenal)!" % ac["name"])
-	else:
-		_resolve_spell(ac, false)
-		enemy_gy.append(ac)
-		_log("Enemy casts %s (Arsenal)!" % ac["name"])
-	return true
-
-
-func _ai_card_score(card: Dictionary) -> int:
-	var cost: int = card.get("cost", 0); var ab: String = card.get("ability", "")
-	var score := cost * 2
-	match _ai_type:
-		"aggro":
-			if "haste" in ab: score += 5
-			if card.get("atk", 0) >= 3: score += 2
-		"control":
-			if "battlecry_destroy" in ab or "battlecry_aoe" in ab: score += 6
-			if "taunt" in ab: score += 3
-		_: score += card.get("atk", 0) + card.get("hp", 0)
-	return score
-
-
-func _ai_attack_phase() -> void:
-	if enemy_front.is_empty() and not enemy_rear.is_empty():
-		var mover: Dictionary = enemy_rear.pop_front()
-		mover["exhausted"] = false; enemy_front.append(mover)
-		_log("Enemy advances %s!" % mover["data"]["name"])
-		_view.queue_redraw()
-		await get_tree().create_timer(0.3, true).timeout
-		if _ended: return
-
-	var attackers := enemy_front.duplicate()
-	for attacker in attackers:
-		if _ended: return
-		if not enemy_front.has(attacker): continue
-		if attacker["exhausted"]: continue
-		var a_idx: int = enemy_front.find(attacker)
-		if a_idx < 0: continue
-		attacker["attacked"] += 1
-		var max_atk: int = 2 if attacker.get("double_attack", false) else 1
-		attacker["exhausted"] = attacker["attacked"] >= max_atk
-		_ai_do_attack(a_idx)
-		_view.queue_redraw()
-		if await _check_game_over(): return
-		await get_tree().create_timer(0.35, true).timeout
-		if _ended: return
-		if not attacker["exhausted"] and enemy_front.has(attacker):
-			a_idx = enemy_front.find(attacker)
-			if a_idx >= 0:
-				attacker["attacked"] += 1; attacker["exhausted"] = true
-				_ai_do_attack(a_idx); _view.queue_redraw()
-				if await _check_game_over(): return
-				await get_tree().create_timer(0.35, true).timeout
-				if _ended: return
-
-
-func _ai_do_attack(a_idx: int) -> void:
-	if a_idx >= enemy_front.size(): return
-	var att: Dictionary = enemy_front[a_idx]; var nm: String = att["data"]["name"]
-	if att.get("unblockable", false):
-		_deal_damage_to_player(att["atk"])
-		if att.get("lifesteal", false): enemy_hp = mini(enemy_hp + att["atk"], STARTING_HP)
-		_log("%s pierces face for %d!" % [nm, att["atk"]]); return
-	var taunt_idx := _find_taunt(player_front)
-	if taunt_idx >= 0:
-		_log("%s → taunt %s!" % [nm, player_front[taunt_idx]["data"]["name"]])
-		_do_combat(enemy_front, a_idx, false, true, player_front, taunt_idx, true); return
-	if not player_front.is_empty():
-		var t := _ai_pick_target(player_front)
-		_log("%s → %s!" % [nm, player_front[t]["data"]["name"]])
-		_do_combat(enemy_front, a_idx, false, true, player_front, t, true); return
-	if _ai_type == "aggro" or player_rear.is_empty():
-		_deal_damage_to_player(att["atk"])
-		if att.get("lifesteal", false): enemy_hp = mini(enemy_hp + att["atk"], STARTING_HP)
-		_log("%s attacks face for %d!" % [nm, att["atk"]])
-	else:
-		var t := _ai_pick_target(player_rear)
-		_log("%s → rear %s!" % [nm, player_rear[t]["data"]["name"]])
-		_do_combat(enemy_front, a_idx, false, true, player_rear, t, false)
-
-
-func _ai_pick_target(board: Array) -> int:
-	if board.is_empty(): return -1
-	match _ai_type:
-		"aggro":   return _find_weakest(board)
-		"control": return _find_strongest(board)
-		_:
-			if not enemy_front.is_empty():
-				var atk_pow: int = enemy_front[0]["atk"]
-				for i in board.size():
-					if board[i]["hp"] <= atk_pow: return i
-			return _find_strongest(board)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1269,7 +1143,9 @@ func _on_input(event: InputEvent) -> void:
 	if mb.pressed and _modal_open and pos.x >= float(BOARD_X):
 		_modal_open = false
 		_ctx_idx = -1
+		_ctx_is_front = true
 		_atk_drag_idx = -1
+		_rear_pick_idx = -1
 		_view.queue_redraw()
 		_view.accept_event()
 		return
@@ -1356,16 +1232,16 @@ func _on_left_press(pos: Vector2) -> void:
 
 	# Sidebar: grave / deck → modal
 	if _side_grave_rect(true).has_point(pos):
-		_mode = Mode.IDLE; _sel_idx = -1; _ctx_idx = -1; _atk_drag_idx = -1
+		_mode = Mode.IDLE; _sel_idx = -1; _ctx_idx = -1; _ctx_is_front = true; _atk_drag_idx = -1; _rear_pick_idx = -1
 		_open_modal(enemy_gy, "Enemy Graveyard"); return
 	if _side_grave_rect(false).has_point(pos):
-		_mode = Mode.IDLE; _sel_idx = -1; _ctx_idx = -1; _atk_drag_idx = -1
+		_mode = Mode.IDLE; _sel_idx = -1; _ctx_idx = -1; _ctx_is_front = true; _atk_drag_idx = -1; _rear_pick_idx = -1
 		_open_modal(player_gy, "Your Graveyard"); return
 	if _side_deck_rect(true).has_point(pos):
-		_mode = Mode.IDLE; _sel_idx = -1; _ctx_idx = -1; _atk_drag_idx = -1
+		_mode = Mode.IDLE; _sel_idx = -1; _ctx_idx = -1; _ctx_is_front = true; _atk_drag_idx = -1; _rear_pick_idx = -1
 		var s := enemy_deck.duplicate(); s.shuffle(); _open_modal(s, "Enemy Deck (random)"); return
 	if _side_deck_rect(false).has_point(pos):
-		_mode = Mode.IDLE; _sel_idx = -1; _ctx_idx = -1; _atk_drag_idx = -1
+		_mode = Mode.IDLE; _sel_idx = -1; _ctx_idx = -1; _ctx_is_front = true; _atk_drag_idx = -1; _rear_pick_idx = -1
 		var s := player_deck.duplicate(); s.shuffle(); _open_modal(s, "Your Deck (random)"); return
 
 	if not is_player_turn or _animating: return
@@ -1373,7 +1249,9 @@ func _on_left_press(pos: Vector2) -> void:
 	# Buttons
 	if _end_btn_rect().has_point(pos):
 		_ctx_idx = -1
+		_ctx_is_front = true
 		_atk_drag_idx = -1
+		_rear_pick_idx = -1
 		_handle_end_turn_click()
 		return
 
@@ -1381,33 +1259,43 @@ func _on_left_press(pos: Vector2) -> void:
 	if _mode == Mode.CHOOSE_ROW:
 		if _row_drop_rect(true).has_point(pos):  _place_pending(true);  return
 		if _row_drop_rect(false).has_point(pos): _place_pending(false); return
-		_mode = Mode.IDLE; _pending_card = {}; _ctx_idx = -1; _atk_drag_idx = -1
+		_mode = Mode.IDLE; _pending_card = {}; _ctx_idx = -1; _ctx_is_front = true; _atk_drag_idx = -1; _rear_pick_idx = -1
 		_view.queue_redraw(); return
 
-	# Context menu: MOVE / EFF. (click minion first — no attack arrow)
-	if _ctx_idx >= 0 and _ctx_idx < player_front.size():
-		var cr_ctx := _mini_rect(player_front, PFFRONT_Y, _ctx_idx)
-		var d_ctx: Dictionary = player_front[_ctx_idx]
-		var ab_ctx: String = d_ctx["data"].get("ability", "")
-		var can_move_btn: bool = is_player_turn and not _moved_this_turn and not _animating
-		var can_eff_btn: bool = is_player_turn and not _animating and not d_ctx.get("exhausted", false) \
-			and _has_exhaust_activation(ab_ctx)
-		if can_move_btn and _context_move_btn_rect(cr_ctx).has_point(pos):
-			_on_move_demon(_ctx_idx, true)
+	# Context menu: MOVE / EFF. (selected front or rear minion)
+	if _ctx_idx >= 0:
+		var ctx_row: Array = player_front if _ctx_is_front else player_rear
+		var ctx_y: int = PFFRONT_Y if _ctx_is_front else PFREAR_Y
+		if _ctx_idx >= ctx_row.size():
 			_ctx_idx = -1
-			return
-		if can_eff_btn:
-			var er_hit: Rect2 = _context_eff_btn_rect(cr_ctx) if can_move_btn else _context_move_btn_rect(cr_ctx)
-			if er_hit.has_point(pos):
-				_on_exhaust_effect(_ctx_idx)
+			_ctx_is_front = true
+		else:
+			var cr_ctx := _mini_rect(ctx_row, ctx_y, _ctx_idx)
+			var d_ctx: Dictionary = ctx_row[_ctx_idx]
+			var ab_ctx: String = d_ctx["data"].get("ability", "")
+			var can_move_btn: bool = is_player_turn and not _moved_this_turn and not _animating
+			var can_eff_btn: bool = is_player_turn and not _animating and not d_ctx.get("exhausted", false) \
+				and _has_exhaust_activation(ab_ctx)
+			if can_move_btn and _context_move_btn_rect(cr_ctx).has_point(pos):
+				_on_move_demon(_ctx_idx, _ctx_is_front)
 				_ctx_idx = -1
+				_ctx_is_front = true
 				return
+			if can_eff_btn:
+				var er_hit: Rect2 = _context_eff_btn_rect(cr_ctx) if can_move_btn else _context_move_btn_rect(cr_ctx)
+				if er_hit.has_point(pos):
+					_on_exhaust_effect(_ctx_idx, _ctx_is_front)
+					_ctx_idx = -1
+					_ctx_is_front = true
+					return
 
 	# Hand → start drag (clears attack prep / menu)
 	for i in player_hand.size():
 		if _hand_rect(i).has_point(pos):
 			_ctx_idx = -1
+			_ctx_is_front = true
 			_atk_drag_idx = -1
+			_rear_pick_idx = -1
 			_mode = Mode.IDLE
 			_sel_idx = -1
 			_drag_active = true
@@ -1420,7 +1308,9 @@ func _on_left_press(pos: Vector2) -> void:
 	# Arsenal click → play
 	if not player_arsenal.is_empty() and _player_arsenal_rect().has_point(pos):
 		_ctx_idx = -1
+		_ctx_is_front = true
 		_atk_drag_idx = -1
+		_rear_pick_idx = -1
 		_on_arsenal_play()
 		return
 
@@ -1429,14 +1319,26 @@ func _on_left_press(pos: Vector2) -> void:
 		if _mini_rect(player_front, PFFRONT_Y, i).has_point(pos):
 			if _mode == Mode.ATTACKING and i != _sel_idx:
 				return
+			_rear_pick_idx = -1
 			_atk_drag_idx = i
 			_atk_drag_start = pos
 			_view.queue_redraw()
 			return
 
+	# Player rear minion: click/release toggles context (MOVE/EFF.); no attack drag from rear
+	for i in player_rear.size():
+		if _mini_rect(player_rear, PFREAR_Y, i).has_point(pos):
+			_atk_drag_idx = -1
+			_rear_pick_idx = i
+			_rear_pick_start = pos
+			_view.queue_redraw()
+			return
+
 	# Click elsewhere: dismiss context menu / cancel attack prep
 	_ctx_idx = -1
+	_ctx_is_front = true
 	_atk_drag_idx = -1
+	_rear_pick_idx = -1
 
 
 func _on_drag_drop(pos: Vector2) -> void:
@@ -1505,20 +1407,37 @@ func _on_drag_drop(pos: Vector2) -> void:
 func _on_left_release(pos: Vector2) -> void:
 	if _ended or not is_player_turn or _animating:
 		_atk_drag_idx = -1
+		_rear_pick_idx = -1
 		return
 	# Drop-to-attack: release completes targeting
 	if _mode == Mode.ATTACKING and _sel_idx >= 0 and _sel_idx < player_front.size():
 		_resolve_attack_at(pos)
 		_ctx_idx = -1
+		_ctx_is_front = true
 		return
-	# Click (no drag past threshold) on minion → toggle / open context menu
+	# Rear minion: short click toggles context menu
+	if _rear_pick_idx >= 0 and _rear_pick_idx < player_rear.size():
+		var dist_r: float = pos.distance_to(_rear_pick_start)
+		if dist_r <= ATTACK_DRAG_THRESH:
+			if _ctx_idx == _rear_pick_idx and not _ctx_is_front:
+				_ctx_idx = -1
+				_ctx_is_front = true
+			else:
+				_ctx_idx = _rear_pick_idx
+				_ctx_is_front = false
+		_rear_pick_idx = -1
+		_view.queue_redraw()
+		return
+	# Front minion: short click toggles context; long drag handled in _tick → ATTACKING
 	if _atk_drag_idx >= 0 and _atk_drag_idx < player_front.size():
 		var dist: float = pos.distance_to(_atk_drag_start)
 		if dist <= ATTACK_DRAG_THRESH:
-			if _ctx_idx == _atk_drag_idx:
+			if _ctx_idx == _atk_drag_idx and _ctx_is_front:
 				_ctx_idx = -1
+				_ctx_is_front = true
 			else:
 				_ctx_idx = _atk_drag_idx
+				_ctx_is_front = true
 		_atk_drag_idx = -1
 		_view.queue_redraw()
 
@@ -1543,6 +1462,8 @@ func _resolve_attack_at(pos: Vector2) -> void:
 			return
 	_mode = Mode.IDLE
 	_sel_idx = -1
+	_ctx_idx = -1
+	_ctx_is_front = true
 	_view.queue_redraw()
 
 
@@ -1555,6 +1476,8 @@ func _pitch_card(i: int) -> void:
 	_mode = Mode.IDLE
 	_sel_idx = -1
 	_ctx_idx = -1
+	_ctx_is_front = true
+	_rear_pick_idx = -1
 	_log("Pitched %s (+%d mana)" % [card["name"], mv])
 	_view.queue_redraw()
 	_check_auto_lose_no_resources(true)
@@ -1588,6 +1511,7 @@ func _on_attack_face() -> void:
 	_mode = Mode.IDLE
 	_sel_idx = -1
 	_ctx_idx = -1
+	_ctx_is_front = true
 	_view.queue_redraw()
 	_check_game_over()
 
@@ -1609,6 +1533,7 @@ func _on_attack_demon(d_idx: int, d_is_front: bool) -> void:
 	_mode = Mode.IDLE
 	_sel_idx = -1
 	_ctx_idx = -1
+	_ctx_is_front = true
 	_view.queue_redraw()
 	_check_game_over()
 
@@ -1640,6 +1565,7 @@ func _on_stash(i: int) -> void:
 func _on_move_demon(i: int, from_front: bool) -> void:
 	_sel_idx = -1
 	_ctx_idx = -1
+	_ctx_is_front = true
 	if from_front:
 		if i >= player_front.size(): return
 		if player_rear.size() >= MAX_ROW: _log("Rear full!"); _mode = Mode.IDLE; _view.queue_redraw(); return
@@ -1653,9 +1579,10 @@ func _on_move_demon(i: int, from_front: bool) -> void:
 	_moved_this_turn = true; _mode = Mode.IDLE; _view.queue_redraw()
 
 
-func _on_exhaust_effect(front_idx: int) -> void:
-	if front_idx < 0 or front_idx >= player_front.size(): return
-	var d: Dictionary = player_front[front_idx]
+func _on_exhaust_effect(idx: int, from_front: bool) -> void:
+	var row: Array = player_front if from_front else player_rear
+	if idx < 0 or idx >= row.size(): return
+	var d: Dictionary = row[idx]
 	if d.get("exhausted", false): return
 	var ab: String = d["data"].get("ability", "")
 	if not _has_exhaust_activation(ab): return
@@ -1664,6 +1591,7 @@ func _on_exhaust_effect(front_idx: int) -> void:
 	_mode = Mode.IDLE
 	_sel_idx = -1
 	_ctx_idx = -1
+	_ctx_is_front = true
 	_view.queue_redraw()
 
 
@@ -1919,6 +1847,8 @@ func _tick(delta: float) -> void:
 					var d_try: Dictionary = player_front[_atk_drag_idx]
 					if not d_try.get("exhausted", false):
 						_ctx_idx = -1
+						_ctx_is_front = true
+						_rear_pick_idx = -1
 						_mode = Mode.ATTACKING
 						_sel_idx = _atk_drag_idx
 						_atk_drag_idx = -1
@@ -2061,31 +1991,35 @@ func _draw_board() -> void:
 		var tgt := _mode == Mode.ATTACKING and enemy_front.is_empty()
 		_draw_mini_card(_mini_rect(enemy_rear, EFREAR_Y, i), enemy_rear[i], tgt, false)
 	for i in player_front.size():
-		var sel: bool = (_ctx_idx == i) or (_mode == Mode.ATTACKING and _sel_idx == i)
+		var sel: bool = (_ctx_idx == i and _ctx_is_front) or (_mode == Mode.ATTACKING and _sel_idx == i)
 		_draw_mini_card(_mini_rect(player_front, PFFRONT_Y, i), player_front[i], false, sel)
 	for i in player_rear.size():
-		_draw_mini_card(_mini_rect(player_rear, PFREAR_Y, i), player_rear[i], false, false)
+		var sel_rear: bool = _ctx_idx == i and not _ctx_is_front
+		_draw_mini_card(_mini_rect(player_rear, PFREAR_Y, i), player_rear[i], false, sel_rear)
 
 	# Click minion: green outline + MOVE / EFF. only (no attack arrow)
-	if _ctx_idx >= 0 and _ctx_idx < player_front.size():
-		var cr_ctx := _mini_rect(player_front, PFFRONT_Y, _ctx_idx)
-		var d_ctx: Dictionary = player_front[_ctx_idx]
-		var ab_ctx: String = d_ctx["data"].get("ability", "")
-		var ol_ctx := _selection_outline_rect(cr_ctx)
-		_view.draw_rect(ol_ctx, Color(0.25, 0.88, 0.32), false, 2.0)
-		var can_move_c: bool = is_player_turn and not _moved_this_turn and not _animating
-		var can_eff_c: bool = is_player_turn and not _animating and not d_ctx.get("exhausted", false) \
-			and _has_exhaust_activation(ab_ctx)
-		if can_move_c:
-			var mr_c := _context_move_btn_rect(cr_ctx)
-			_view.draw_rect(mr_c, Color(0.22, 0.26, 0.18))
-			_view.draw_rect(mr_c, C_DIV, false, 1.0)
-			_str_c("MOVE", mr_c.get_center().x, mr_c.get_center().y - 4.0, 8, C_TEXT)
-		if can_eff_c:
-			var er_c: Rect2 = _context_eff_btn_rect(cr_ctx) if can_move_c else _context_move_btn_rect(cr_ctx)
-			_view.draw_rect(er_c, Color(0.22, 0.26, 0.18))
-			_view.draw_rect(er_c, C_DIV, false, 1.0)
-			_str_c("EFF.", er_c.get_center().x, er_c.get_center().y - 4.0, 8, C_TEXT)
+	if _ctx_idx >= 0:
+		var ctx_row2: Array = player_front if _ctx_is_front else player_rear
+		var ctx_y2: int = PFFRONT_Y if _ctx_is_front else PFREAR_Y
+		if _ctx_idx < ctx_row2.size():
+			var cr_ctx := _mini_rect(ctx_row2, ctx_y2, _ctx_idx)
+			var d_ctx: Dictionary = ctx_row2[_ctx_idx]
+			var ab_ctx: String = d_ctx["data"].get("ability", "")
+			var ol_ctx := _selection_outline_rect(cr_ctx)
+			_view.draw_rect(ol_ctx, Color(0.25, 0.88, 0.32), false, 2.0)
+			var can_move_c: bool = is_player_turn and not _moved_this_turn and not _animating
+			var can_eff_c: bool = is_player_turn and not _animating and not d_ctx.get("exhausted", false) \
+				and _has_exhaust_activation(ab_ctx)
+			if can_move_c:
+				var mr_c := _context_move_btn_rect(cr_ctx)
+				_view.draw_rect(mr_c, Color(0.22, 0.26, 0.18))
+				_view.draw_rect(mr_c, C_DIV, false, 1.0)
+				_str_c("MOVE", mr_c.get_center().x, mr_c.get_center().y - 4.0, 8, C_TEXT)
+			if can_eff_c:
+				var er_c: Rect2 = _context_eff_btn_rect(cr_ctx) if can_move_c else _context_move_btn_rect(cr_ctx)
+				_view.draw_rect(er_c, Color(0.22, 0.26, 0.18))
+				_view.draw_rect(er_c, C_DIV, false, 1.0)
+				_str_c("EFF.", er_c.get_center().x, er_c.get_center().y - 4.0, 8, C_TEXT)
 
 	# Attack mode: outline always; arrow + type-adv preview only while dragging aim (LMB + past threshold)
 	if _mode == Mode.ATTACKING and _sel_idx >= 0 and _sel_idx < player_front.size():

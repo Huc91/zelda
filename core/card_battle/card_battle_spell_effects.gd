@@ -171,6 +171,9 @@ static func resolve(b: CardBattle, card: Dictionary, is_player: bool) -> void:
 			if all_e.is_empty():
 				b._check_auto_lose_no_resources(is_player)
 				return
+			if is_player:
+				b._begin_choose_enemy_to_freeze(str(card.get("name", "Spell")))
+				return
 			var hi: Dictionary = all_e[0]
 			for dd in all_e:
 				if dd["atk"] > hi["atk"]: hi = dd

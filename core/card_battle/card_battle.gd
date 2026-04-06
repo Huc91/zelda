@@ -50,11 +50,13 @@ var is_player_turn := false
 var _animating     := false
 var _ended         := false
 
-enum Mode { IDLE, CHOOSE_ROW, ATTACKING, CHOOSE_ARSENAL }
+enum Mode { IDLE, CHOOSE_ROW, ATTACKING, CHOOSE_ARSENAL, CHOOSE_ENEMY_TARGET }
 var _mode          := Mode.IDLE
 var _pending_card:  Dictionary = {}
 var _pending_hand_idx := -1
 var _sel_idx          := -1
+## Log label while player must click an enemy minion to freeze (Frost Mage, Frost Bolt, etc.).
+var _freeze_target_source_name: String = ""
 
 var _battle_log:  Array = []
 var _log_scroll:  int   = 0
@@ -256,8 +258,8 @@ func _finish_end_player_turn() -> void:
 
 func _handle_end_turn_click() -> void:
 	if not is_player_turn or _animating or _ended: return
-	if _mode == Mode.ATTACKING or _mode == Mode.CHOOSE_ROW:
-		_log("Finish that action first (attack / row).")
+	if _mode == Mode.ATTACKING or _mode == Mode.CHOOSE_ROW or _mode == Mode.CHOOSE_ENEMY_TARGET:
+		_log("Finish that action first (attack / row / freeze target).")
 		return
 	if _mode == Mode.CHOOSE_ARSENAL:
 		_pending_finish_after_arsenal = false
@@ -366,6 +368,46 @@ func _apply_freeze(d: Dictionary) -> void:
 	d["exhausted"] = true
 
 
+func _begin_choose_enemy_to_freeze(source_name: String) -> void:
+	_freeze_target_source_name = source_name
+	_mode = Mode.CHOOSE_ENEMY_TARGET
+	_ctx_idx = -1
+	_ctx_is_front = true
+	_atk_drag_idx = -1
+	_rear_pick_idx = -1
+	_sel_idx = -1
+	_show_toast("Choose enemy to freeze")
+	_log("%s — click an enemy minion." % source_name)
+	_view.queue_redraw()
+
+
+func _finish_choose_enemy_target_idle() -> void:
+	_mode = Mode.IDLE
+	_freeze_target_source_name = ""
+
+
+func _complete_choose_enemy_freeze(target: Dictionary) -> void:
+	_apply_freeze(target)
+	_log("%s freezes %s!" % [_freeze_target_source_name, str(target["data"].get("name", "?"))])
+	_finish_choose_enemy_target_idle()
+	_check_auto_lose_no_resources(true)
+	_check_game_over()
+	_view.queue_redraw()
+
+
+func _ai_freeze_highest_atk_on_player_board() -> void:
+	var all_e: Array = []
+	for o in player_front: all_e.append(o)
+	for o in player_rear: all_e.append(o)
+	if all_e.is_empty():
+		return
+	var hi: Dictionary = all_e[0]
+	for o in all_e:
+		if o["atk"] > hi["atk"]:
+			hi = o
+	_apply_freeze(hi)
+
+
 func _begin_turn_refresh_exhaustion_for_side(is_player_side: bool) -> void:
 	var pf: Array = player_front if is_player_side else enemy_front
 	var pr: Array = player_rear  if is_player_side else enemy_rear
@@ -412,6 +454,15 @@ func _summon(card: Dictionary, is_player: bool, to_front: bool) -> void:
 		var tot: int = player_front.size() + player_rear.size() + enemy_front.size() + enemy_rear.size()
 		d["atk"] = tot
 		d["hp"] = tot
+	if "battlecry_freeze_target" in ab:
+		if is_player:
+			if enemy_front.is_empty() and enemy_rear.is_empty():
+				_log("No enemy to freeze.")
+			else:
+				_begin_choose_enemy_to_freeze(str(card.get("name", "?")))
+			_check_auto_lose_no_resources(is_player)
+			return
+		_ai_freeze_highest_atk_on_player_board()
 	_resolve_battlecry(d, is_player)
 
 
@@ -483,16 +534,6 @@ func _resolve_battlecry(d: Dictionary, is_player: bool) -> void:
 	elif "battlecry_freeze_all" in ab:
 		for o in of_: _apply_freeze(o)
 		for o in or_: _apply_freeze(o)
-	elif "battlecry_freeze_target" in ab:
-		var all_e: Array = []
-		for o in of_: all_e.append(o)
-		for o in or_: all_e.append(o)
-		if not all_e.is_empty():
-			var hi: Dictionary = all_e[0]
-			for o in all_e:
-				if o["atk"] > hi["atk"]:
-					hi = o
-			_apply_freeze(hi)
 	_check_auto_lose_no_resources(is_player)
 
 
@@ -862,6 +903,11 @@ func _update_hover() -> void:
 
 
 func _on_right_click(pos: Vector2) -> void:
+	if _mode == Mode.CHOOSE_ENEMY_TARGET:
+		_finish_choose_enemy_target_idle()
+		_log("Freeze cancelled.")
+		_view.queue_redraw()
+		return
 	if not is_player_turn or _animating or _ended: return
 	for i in player_hand.size():
 		if CardBattleLayout.hand_rect(i, player_hand.size()).has_point(pos): _pitch_card(i); return
@@ -888,6 +934,21 @@ func _on_left_press(pos: Vector2) -> void:
 		var s := player_deck.duplicate(); s.shuffle(); _open_modal(s, "Your Deck (random)"); return
 
 	if not is_player_turn or _animating: return
+
+	# Targeting: Frost Mage / Frost Bolt — click enemy minion (elsewhere cancels)
+	if _mode == Mode.CHOOSE_ENEMY_TARGET:
+		for i in enemy_front.size():
+			if CardBattleLayout.mini_rect(enemy_front, CardBattleConstants.EFFRONT_Y, i).has_point(pos):
+				_complete_choose_enemy_freeze(enemy_front[i])
+				return
+		for i in enemy_rear.size():
+			if CardBattleLayout.mini_rect(enemy_rear, CardBattleConstants.EFREAR_Y, i).has_point(pos):
+				_complete_choose_enemy_freeze(enemy_rear[i])
+				return
+		_log("Freeze cancelled.")
+		_finish_choose_enemy_target_idle()
+		_view.queue_redraw()
+		return
 
 	# Buttons
 	if CardBattleLayout.end_btn_rect().has_point(pos):
@@ -990,6 +1051,10 @@ func _on_drag_drop(pos: Vector2) -> void:
 	var hand_idx := _drag_hand_idx
 
 	if not is_player_turn or _animating or _ended: _view.queue_redraw(); return
+	if _mode == Mode.CHOOSE_ENEMY_TARGET:
+		_log("Choose freeze target first (or right-click to cancel).")
+		_view.queue_redraw()
+		return
 
 	# Drop on player info → pitch
 	if CardBattleLayout.pinfo_rect().has_point(pos):
@@ -1047,6 +1112,10 @@ func _on_drag_drop(pos: Vector2) -> void:
 
 func _on_left_release(pos: Vector2) -> void:
 	if _ended or not is_player_turn or _animating:
+		_atk_drag_idx = -1
+		_rear_pick_idx = -1
+		return
+	if _mode == Mode.CHOOSE_ENEMY_TARGET:
 		_atk_drag_idx = -1
 		_rear_pick_idx = -1
 		return
@@ -1434,7 +1503,7 @@ func _tick(delta: float) -> void:
 	if changed: _view.queue_redraw()
 	# Drag past threshold on a front minion → attack aim (arrow); exhausted minions skip
 	if _atk_drag_idx >= 0 and not _drag_active and is_player_turn and not _animating and not _ended \
-			and _mode != Mode.CHOOSE_ROW and _mode != Mode.CHOOSE_ARSENAL:
+			and _mode != Mode.CHOOSE_ROW and _mode != Mode.CHOOSE_ARSENAL and _mode != Mode.CHOOSE_ENEMY_TARGET:
 		if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 			if _mouse_pos.distance_to(_atk_drag_start) > CardBattleConstants.ATTACK_DRAG_THRESH:
 				if _atk_drag_idx < player_front.size():
@@ -1490,6 +1559,11 @@ func _on_draw() -> void:
 	if _mode == Mode.CHOOSE_ARSENAL:
 		var az: Rect2 = CardBattleLayout.player_arsenal_rect()
 		_view.draw_rect(az, Color(0.25, 0.85, 0.35), false, 2.0)
+
+	if _mode == Mode.CHOOSE_ENEMY_TARGET:
+		var br := Rect2(float(CardBattleConstants.BOARD_X), float(CardBattleConstants.EFFRONT_Y) - 4.0,
+			float(CardBattleConstants.BOARD_W), float(CardBattleConstants.EFREAR_Y) + CardBattleConstants.ROW_H - float(CardBattleConstants.EFFRONT_Y) + 8.0)
+		_view.draw_rect(br, Color(0.25, 0.55, 1.0), false, 2.0)
 
 	if _toast_timer > 0.0: _draw_toast()
 	if _modal_open:        _draw_modal()
@@ -1578,12 +1652,13 @@ func _draw_board() -> void:
 		_str_c("— empty —", float(CardBattleConstants.BOARD_X) + float(CardBattleConstants.BOARD_W) * 0.5,
 			float(CardBattleConstants.PFREAR_Y) + CardBattleConstants.ROW_H * 0.5 - 4.0,  7, CardBattleConstants.C_BOARD_EMPTY_TEXT)
 
+	var ef_tgt: bool = _mode == Mode.ATTACKING or _mode == Mode.CHOOSE_ENEMY_TARGET
 	for i in enemy_front.size():
 		_draw_mini_card(CardBattleLayout.mini_rect(enemy_front, CardBattleConstants.EFFRONT_Y, i), enemy_front[i],
-			_mode == Mode.ATTACKING, false)
+			ef_tgt, false)
 	for i in enemy_rear.size():
-		var tgt := _mode == Mode.ATTACKING and enemy_front.is_empty()
-		_draw_mini_card(CardBattleLayout.mini_rect(enemy_rear, CardBattleConstants.EFREAR_Y, i), enemy_rear[i], tgt, false)
+		var er_tgt: bool = (_mode == Mode.ATTACKING and enemy_front.is_empty()) or _mode == Mode.CHOOSE_ENEMY_TARGET
+		_draw_mini_card(CardBattleLayout.mini_rect(enemy_rear, CardBattleConstants.EFREAR_Y, i), enemy_rear[i], er_tgt, false)
 	for i in player_front.size():
 		var sel: bool = (_ctx_idx == i and _ctx_is_front) or (_mode == Mode.ATTACKING and _sel_idx == i)
 		_draw_mini_card(CardBattleLayout.mini_rect(player_front, CardBattleConstants.PFFRONT_Y, i), player_front[i], false, sel)

@@ -1,7 +1,7 @@
 extends Control
 
 const STARTING_MAP: String = "res://data/maps/overworld.tscn"
-const STARTING_ENTRANCE := Vector2i(116, 78)
+const STARTING_ENTRANCE := Vector2i(116, 80)
 
 @onready var screen = $Screen
 @onready var player = preload("res://data/actors/player/player.tscn").instantiate()

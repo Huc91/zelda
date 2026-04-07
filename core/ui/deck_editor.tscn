@@ -1,0 +1,15 @@
+[gd_scene load_steps=2 format=3 uid="uid://deckeditor01"]
+
+[ext_resource type="Script" path="res://core/ui/deck_editor.gd" id="1_de"]
+
+[node name="DeckEditor" type="Control"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+process_mode = 3
+script = ExtResource("1_de")

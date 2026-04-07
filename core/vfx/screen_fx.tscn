@@ -72,4 +72,5 @@ offset_right = 640.0
 offset_bottom = 576.0
 size_flags_horizontal = 3
 size_flags_vertical = 3
+mouse_filter = 2
 color = Color(1, 1, 1, 0)

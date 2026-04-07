@@ -137,7 +137,7 @@ func setup(p_first: bool, p_enemy: Node) -> void:
 # BATTLE FLOW
 # ══════════════════════════════════════════════════════════════════
 func _start_battle() -> void:
-	player_deck = CardDB.starter_deck()
+	player_deck = CardDB.deck_from_card_ids(Global.get_battle_deck_card_ids())
 	enemy_deck  = CardDB.enemy_deck()
 	_ai_type    = _ai_runner.detect_ai_type_from_deck(enemy_deck)
 	if not _draw_mandatory_refresh(player_hand, player_deck, CardBattleConstants.STARTING_HAND, true): return

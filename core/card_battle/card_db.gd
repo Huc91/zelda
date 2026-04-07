@@ -13,6 +13,14 @@ static func starter_deck() -> Array:
 	return _build(PLAYER_DECK)
 
 
+## Shuffled runtime deck from card id list. Falls back to [method starter_deck] if ids are illegal.
+static func deck_from_card_ids(ids: Array) -> Array:
+	if not deck_ids_legal(ids):
+		push_warning("Deck ids illegal; using starter deck.")
+		return starter_deck()
+	return _build(ids.duplicate())
+
+
 static func enemy_deck() -> Array:
 	return _build(ENEMY_DECK)
 
@@ -55,6 +63,20 @@ static func _ensure_init() -> void:
 	_ready_flag = true
 	for c in ALL_CARDS:
 		_map[c["id"]] = c
+
+
+## Sorted card ids usable in collection / deck builder (excludes tokens).
+static func all_collectible_ids() -> Array[String]:
+	_ensure_init()
+	var out: Array[String] = []
+	for c in ALL_CARDS:
+		var id: String = str(c.get("id", ""))
+		if id.is_empty() or id.begins_with("token_"):
+			continue
+		out.append(id)
+	out.sort()
+	return out
+
 
 # ── test decks ─────────────────
 const TEST_1 = [

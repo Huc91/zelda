@@ -50,10 +50,24 @@ var is_player_turn := false
 var _animating     := false
 var _ended         := false
 
-enum Mode { IDLE, CHOOSE_ROW, ATTACKING, CHOOSE_ARSENAL, CHOOSE_ENEMY_TARGET }
+enum Mode { IDLE, CHOOSE_ROW, ATTACKING, CHOOSE_ARSENAL, CHOOSE_ENEMY_TARGET, CHOOSE_PAY_MANA }
 var _mode          := Mode.IDLE
 var _pending_card:  Dictionary = {}
 var _pending_hand_idx := -1
+## Pay for a card: pitch other hand cards until `player_mana` ≥ cost, then auto-play `_pay_card_id`.
+var _pay_card_id: String = ""
+var _pay_cost: int = 0
+var _pay_to_front: bool = true
+var _pay_from_arsenal: bool = false
+## Visual-only: animation time for mana-pay "stack" vortex on the board.
+var _pay_stack_t: float = 0.0
+## Modal: "" = browse grave/deck; "chaos_pick" = select Regalia/Obscura to summon Chaos King.
+var _modal_kind: String = ""
+var _chaos_hand_idx: int = -1
+var _chaos_to_front: bool = true
+var _chaos_from_arsenal: bool = false
+## Selected indices in `player_gy` for Chaos King cost (exactly 3 Regalia + 3 Obscura).
+var _chaos_selected: Dictionary = {}
 var _sel_idx          := -1
 ## Log label while player must click an enemy minion to freeze (Frost Mage, Frost Bolt, etc.).
 var _freeze_target_source_name: String = ""
@@ -143,6 +157,8 @@ func _draw_mandatory_refresh(hand: Array, deck: Array, n: int, is_player_deck: b
 	for _i in n:
 		if deck.is_empty():
 			break
+		if hand.size() >= CardBattleConstants.MAX_HAND:
+			break
 		hand.append(deck.pop_front())
 	_check_auto_lose_no_resources(is_player_deck)
 	return not _ended
@@ -184,10 +200,14 @@ func _schedule_empty_resources_loss(is_player_side: bool) -> void:
 func _draw_n(hand: Array, deck: Array, n: int) -> void:
 	for _i in n:
 		if deck.is_empty(): return
+		if hand.size() >= CardBattleConstants.MAX_HAND:
+			return
 		hand.append(deck.pop_front())
 
 
 func _draw_one(hand: Array, deck: Array) -> void:
+	if hand.size() >= CardBattleConstants.MAX_HAND:
+		return
 	if not deck.is_empty(): hand.append(deck.pop_front())
 	if hand == player_hand: _check_osiris_combo_win()
 
@@ -217,7 +237,7 @@ func _start_player_turn() -> void:
 	_pending_card      = {}
 	_begin_turn_refresh_exhaustion_for_side(true)
 	_apply_start_of_turn_board_effects(true)
-	_log("--- Your turn %d — %d mana (pitch hand for more) ---" % [player_turn_num, player_mana])
+	_log("--- Your turn %d — %d mana (play cards; pitch only to pay costs) ---" % [player_turn_num, player_mana])
 	_show_toast("Your Turn")
 	_view.queue_redraw()
 
@@ -225,6 +245,10 @@ func _start_player_turn() -> void:
 ## End Turn button: optional Arsenal stash first (see _handle_end_turn_click).
 func _finish_end_player_turn() -> void:
 	if not is_player_turn or _animating or _ended: return
+	if _mode == Mode.CHOOSE_PAY_MANA:
+		_cancel_pay_mana()
+	if _modal_kind == "chaos_pick":
+		_cancel_chaos_summon()
 	_apply_end_of_turn_board_effects(true)
 	_thaw_frozen_minions_for_side(true)
 	is_player_turn = false
@@ -235,9 +259,11 @@ func _finish_end_player_turn() -> void:
 	_atk_drag_idx  = -1
 	_rear_pick_idx = -1
 	_pending_card  = {}
+	## Pitched for mana only: bottom of deck in random order — never graveyard.
 	_pitched_this_turn.shuffle()
 	for c in _pitched_this_turn: player_deck.append(c)
 	_pitched_this_turn.clear()
+	## Leftover hand (not played, not stashed to Arsenal): graveyard — not deck.
 	for c in player_hand: player_gy.append(c)
 	player_hand.clear()
 	if not _draw_mandatory_refresh(player_hand, player_deck, CardBattleConstants.STARTING_HAND, true):
@@ -258,6 +284,12 @@ func _finish_end_player_turn() -> void:
 
 func _handle_end_turn_click() -> void:
 	if not is_player_turn or _animating or _ended: return
+	if _mode == Mode.CHOOSE_PAY_MANA:
+		_log("Esc cancels paying mana, or keep pitching.")
+		return
+	if _modal_kind == "chaos_pick":
+		_log("Esc or CLOSE cancels Chaos King — or press SUMMON when ready.")
+		return
 	if _mode == Mode.ATTACKING or _mode == Mode.CHOOSE_ROW or _mode == Mode.CHOOSE_ENEMY_TARGET:
 		_log("Finish that action first (attack / row / freeze target).")
 		return
@@ -290,6 +322,7 @@ func _start_enemy_turn() -> void:
 	enemy_turn_num += 1
 	enemy_mana      = 0
 	_enemy_stashed_this_turn = false
+	## Previous turn’s unplayed hand — graveyard (pitched cards already left hand earlier).
 	for c in enemy_hand: enemy_gy.append(c)
 	enemy_hand.clear()
 	if not _draw_mandatory_refresh(enemy_hand, enemy_deck, CardBattleConstants.STARTING_HAND, false):
@@ -303,6 +336,7 @@ func _start_enemy_turn() -> void:
 	if _ended: return
 	await _ai_runner.attack_phase()
 	if _ended: return
+	## Pitched for mana only: bottom of deck in random order — never graveyard.
 	_enemy_pitched_this_turn.shuffle()
 	for c in _enemy_pitched_this_turn: enemy_deck.append(c)
 	_enemy_pitched_this_turn.clear()
@@ -541,6 +575,19 @@ func _resolve_battlecry(d: Dictionary, is_player: bool) -> void:
 	elif "battlecry_freeze_all" in ab:
 		for o in of_: _apply_freeze(o)
 		for o in or_: _apply_freeze(o)
+	elif "chaos_dragon" in ab:
+		if is_player:
+			var eg: int = enemy_gy.size()
+			var cdmg: int = eg * 2
+			if cdmg > 0:
+				_deal_damage_to_enemy(cdmg)
+			_log("Chaos King: %d to enemy (%d cards in their graveyard)." % [cdmg, eg])
+		else:
+			var pg: int = player_gy.size()
+			var pdmg: int = pg * 2
+			if pdmg > 0:
+				_deal_damage_to_player(pdmg)
+			_log("Enemy Chaos King: %d to you (%d in your graveyard)." % [pdmg, pg])
 	_check_auto_lose_no_resources(is_player)
 
 
@@ -571,6 +618,333 @@ func _check_osiris_combo_win() -> void:
 	for pid in PIECES:
 		if not have.get(pid, false): return
 	_schedule_instant_win("The Osiris fragments reunite in your hand. You win.")
+
+
+func _is_chaos_king_card(card: Dictionary) -> bool:
+	return "chaos_dragon" in str(card.get("ability", ""))
+
+
+func _find_hand_idx_by_id(id: String) -> int:
+	for i in player_hand.size():
+		if str(player_hand[i].get("id", "")) == id:
+			return i
+	return -1
+
+
+func _cancel_pay_mana() -> void:
+	if _mode != Mode.CHOOSE_PAY_MANA:
+		return
+	_mode = Mode.IDLE
+	_pay_card_id = ""
+	_pay_cost = 0
+	_pay_from_arsenal = false
+	_pay_stack_t = 0.0
+	_log("Cancelled paying mana.")
+	_view.queue_redraw()
+
+
+func _cancel_chaos_summon() -> void:
+	_modal_open = false
+	_modal_kind = ""
+	_modal_cards.clear()
+	_chaos_selected.clear()
+	_chaos_hand_idx = -1
+	_chaos_from_arsenal = false
+	_log("Chaos King summon cancelled.")
+	_view.queue_redraw()
+
+
+func _try_finish_pay_mana() -> void:
+	if _mode != Mode.CHOOSE_PAY_MANA:
+		return
+	if player_mana < _pay_cost:
+		return
+	if _pay_from_arsenal:
+		if player_arsenal.is_empty() or str(player_arsenal.get("id", "")) != _pay_card_id:
+			_cancel_pay_mana()
+			return
+		var acard: Dictionary = player_arsenal.duplicate(true)
+		player_mana -= _pay_cost
+		player_arsenal = {}
+		_pay_from_arsenal = false
+		_mode = Mode.IDLE
+		_pay_card_id = ""
+		_pay_cost = 0
+		if str(acard.get("type", "")) == "demon":
+			var aab: String = str(acard.get("ability", ""))
+			if "taunt" in aab:
+				_summon(acard, true, true)
+				## Demon goes to GY only on death.
+				_log("Arsenal: %s to front!" % acard.get("name", "?"))
+			else:
+				_pending_card = acard
+				_pending_hand_idx = -1
+				_mode = Mode.CHOOSE_ROW
+				_log("Choose row for %s." % acard.get("name", "?"))
+		else:
+			_resolve_spell(acard, true)
+			player_gy.append(acard)
+			_log("Arsenal: %s!" % acard.get("name", "?"))
+		_pay_stack_t = 0.0
+		_view.queue_redraw()
+		_check_game_over()
+		return
+	var idx: int = _find_hand_idx_by_id(_pay_card_id)
+	if idx < 0 or idx >= player_hand.size():
+		_cancel_pay_mana()
+		return
+	var card: Dictionary = player_hand[idx]
+	player_mana -= _pay_cost
+	player_hand.remove_at(idx)
+	if str(card.get("type", "")) == "demon":
+		_summon(card, true, _pay_to_front)
+		## Demons go to GY only on death — not on summon.
+	else:
+		_resolve_spell(card, true)
+		player_gy.append(card)
+	_mode = Mode.IDLE
+	_pay_card_id = ""
+	_pay_cost = 0
+	_log("Played %s." % str(card.get("name", "?")))
+	_pay_stack_t = 0.0
+	_view.queue_redraw()
+	_check_game_over()
+
+
+func _begin_pay_mana(card: Dictionary, hand_idx: int, to_front: bool) -> void:
+	_mode = Mode.CHOOSE_PAY_MANA
+	_pay_from_arsenal = false
+	_pay_card_id = str(card.get("id", ""))
+	_pay_cost = int(card.get("cost", 0))
+	_pay_to_front = to_front
+	_pay_stack_t = 0.0
+	_show_toast("Pitch until you can pay — Esc cancels")
+	_log("Need %d mana — right-click hand cards to pitch, or Esc to cancel." % _pay_cost)
+	_view.queue_redraw()
+
+
+func _pay_stack_card() -> Dictionary:
+	if _mode != Mode.CHOOSE_PAY_MANA or _pay_card_id.is_empty():
+		return {}
+	if _pay_from_arsenal:
+		if player_arsenal.is_empty() or str(player_arsenal.get("id", "")) != _pay_card_id:
+			return {}
+		return player_arsenal
+	var pix: int = _find_hand_idx_by_id(_pay_card_id)
+	if pix < 0 or pix >= player_hand.size():
+		return {}
+	return player_hand[pix]
+
+
+func _pay_stack_preview_rect() -> Rect2:
+	var rr: Rect2 = CardBattleLayout.row_drop_rect(_pay_to_front)
+	var cw: float = float(CardBattleConstants.MINI_W)
+	var ch: float = float(CardBattleConstants.MINI_H)
+	var cx: float = rr.position.x + (rr.size.x - cw) * 0.5
+	var cy: float = rr.position.y + (rr.size.y - ch) * 0.5
+	return Rect2(cx, cy, cw, ch)
+
+
+func _draw_pay_stack_vortex(center: Vector2) -> void:
+	var t: float = _pay_stack_t
+	var n: int = 14
+	var i: int = 0
+	while i < n:
+		var ang: float = t * 2.8 + float(i) * TAU / float(n)
+		var rad: float = 40.0 + float((i * 2) % 5)
+		var p: Vector2 = center + Vector2(cos(ang), sin(ang)) * rad
+		var al: float = 0.35 + 0.4 * sin(t * 5.0 + float(i) * 0.7)
+		_view.draw_circle(Vector2(float(_tx(p.x)), float(_tx(p.y))), 2.0,
+			_opaque_rgb_fade(Color(0.42, 0.22, 0.78), al))
+		i += 1
+	i = 0
+	while i < n:
+		var ang2: float = -t * 2.2 + float(i) * TAU / float(n) + 0.4
+		var rad2: float = 52.0 + float((i * 3) % 4)
+		var p2: Vector2 = center + Vector2(cos(ang2), sin(ang2)) * rad2
+		var al2: float = 0.22 + 0.38 * sin(t * 4.2 + float(i))
+		_view.draw_circle(Vector2(float(_tx(p2.x)), float(_tx(p2.y))), 1.5,
+			_opaque_rgb_fade(Color(0.55, 0.88, 1.0), al2))
+		i += 1
+
+
+func _draw_pay_stack_pending() -> void:
+	var c: Dictionary = _pay_stack_card()
+	if c.is_empty():
+		return
+	var r: Rect2 = _pay_stack_preview_rect()
+	var ctr: Vector2 = r.get_center()
+	_draw_pay_stack_vortex(ctr)
+	_draw_hand_card(r, c, false, false)
+	var ol: Rect2 = CardBattleLayout.selection_outline_rect(r)
+	_view.draw_rect(ol, Color(0.72, 0.52, 0.98), false, 2.0)
+
+
+func _chaos_count_selected_lineage(lineage: String) -> int:
+	var n: int = 0
+	for k in _chaos_selected:
+		var ii: int = int(k)
+		if ii < 0 or ii >= player_gy.size():
+			continue
+		if str(player_gy[ii].get("subtype", "")) == lineage:
+			n += 1
+	return n
+
+
+func _chaos_summon_button_rect() -> Rect2:
+	return Rect2(
+		CardBattleConstants.MODAL_CHAOS_BTN_X,
+		CardBattleConstants.MODAL_CHAOS_BTN_Y,
+		CardBattleConstants.MODAL_CHAOS_BTN_W,
+		CardBattleConstants.MODAL_CHAOS_BTN_H
+	)
+
+
+func _chaos_toggle_gy_index(i: int) -> void:
+	if i < 0 or i >= player_gy.size():
+		return
+	var c: Dictionary = player_gy[i]
+	if str(c.get("type", "")) != "demon":
+		_log("Only demons can be banished for Chaos King.")
+		return
+	var st: String = str(c.get("subtype", ""))
+	if _chaos_selected.get(i, false):
+		_chaos_selected.erase(i)
+		_view.queue_redraw()
+		return
+	var nr: int = _chaos_count_selected_lineage("regalia")
+	var no: int = _chaos_count_selected_lineage("obscura")
+	if st == "regalia" and nr < 3:
+		_chaos_selected[i] = true
+	elif st == "obscura" and no < 3:
+		_chaos_selected[i] = true
+	else:
+		_log("Select up to 3 Regalia and 3 Obscura from your graveyard.")
+	_view.queue_redraw()
+
+
+func _handle_chaos_modal_click(pos: Vector2) -> bool:
+	if not _modal_open or _modal_kind != "chaos_pick":
+		return false
+	if _chaos_summon_button_rect().has_point(pos):
+		_complete_chaos_summon()
+		return true
+	# CLOSE (top-right)
+	if pos.x >= 600.0 and pos.y <= 22.0:
+		_cancel_chaos_summon()
+		return true
+	var hi: int = _modal_hover_index()
+	if hi >= 0 and hi < player_gy.size():
+		_chaos_toggle_gy_index(hi)
+		return true
+	return true
+
+
+func _complete_chaos_summon() -> void:
+	if _chaos_count_selected_lineage("regalia") != 3 or _chaos_count_selected_lineage("obscura") != 3:
+		_log("Select exactly 3 Regalia and 3 Obscura.")
+		return
+	var chao: Dictionary = {}
+	if _chaos_from_arsenal:
+		if player_arsenal.is_empty():
+			_cancel_chaos_summon()
+			return
+		chao = player_arsenal.duplicate(true)
+	else:
+		if _chaos_hand_idx < 0 or _chaos_hand_idx >= player_hand.size():
+			_cancel_chaos_summon()
+			return
+		chao = player_hand[_chaos_hand_idx]
+		if not _is_chaos_king_card(chao):
+			_cancel_chaos_summon()
+			return
+	var idxs: Array[int] = []
+	for k in _chaos_selected:
+		if _chaos_selected[k]:
+			idxs.append(int(k))
+	idxs.sort()
+	idxs.reverse()
+	for ii in idxs:
+		if ii >= 0 and ii < player_gy.size():
+			player_gy.remove_at(ii)
+	if _chaos_from_arsenal:
+		player_arsenal = {}
+	else:
+		var hix: int = _find_hand_idx_by_id(str(chao.get("id", "")))
+		if hix >= 0:
+			player_hand.remove_at(hix)
+	_modal_open = false
+	_modal_kind = ""
+	_modal_cards.clear()
+	_chaos_selected.clear()
+	_chaos_hand_idx = -1
+	_chaos_from_arsenal = false
+	var pf_room: bool = player_front.size() < CardBattleConstants.MAX_ROW
+	var pr_room: bool = player_rear.size() < CardBattleConstants.MAX_ROW
+	if not pf_room and not pr_room:
+		if player_hand.size() < CardBattleConstants.MAX_HAND:
+			player_hand.insert(0, chao)
+			_log("Board full — Chaos King returned to hand.")
+		else:
+			player_gy.append(chao)
+			_log("Board full and hand full — Chaos King discarded.")
+		_view.queue_redraw()
+		return
+	if _chaos_to_front and not pf_room and pr_room:
+		_chaos_to_front = false
+	elif not _chaos_to_front and not pr_room and pf_room:
+		_chaos_to_front = true
+	_summon(chao, true, _chaos_to_front)
+	## Demon goes to GY only on death.
+	_log("Chaos King Dragon enters the battlefield!")
+	_view.queue_redraw()
+	_check_game_over()
+
+
+func _begin_chaos_summon_hand(hand_idx: int, to_front: bool) -> void:
+	if hand_idx < 0 or hand_idx >= player_hand.size():
+		return
+	var card: Dictionary = player_hand[hand_idx]
+	if not _is_chaos_king_card(card):
+		return
+	var row: Array = player_front if to_front else player_rear
+	var other: Array = player_rear if to_front else player_front
+	if row.size() >= CardBattleConstants.MAX_ROW and other.size() >= CardBattleConstants.MAX_ROW:
+		_log("Board is full!")
+		return
+	_chaos_hand_idx = hand_idx
+	_chaos_to_front = to_front
+	_chaos_from_arsenal = false
+	_chaos_selected.clear()
+	_modal_kind = "chaos_pick"
+	_modal_title = "Banish 3 Regalia + 3 Obscura"
+	_modal_cards = player_gy.duplicate()
+	_modal_open = true
+	_show_toast("Select 6 cards, then SUMMON")
+	_log("Banish 3 Regalia and 3 Obscura from your graveyard to summon Chaos King.")
+	_view.queue_redraw()
+
+
+func _begin_chaos_summon_arsenal() -> void:
+	if player_arsenal.is_empty():
+		return
+	var card: Dictionary = player_arsenal
+	if not _is_chaos_king_card(card):
+		return
+	if player_front.size() >= CardBattleConstants.MAX_ROW and player_rear.size() >= CardBattleConstants.MAX_ROW:
+		_log("Board is full!")
+		return
+	_chaos_hand_idx = -1
+	_chaos_to_front = player_front.size() < CardBattleConstants.MAX_ROW
+	_chaos_from_arsenal = true
+	_chaos_selected.clear()
+	_modal_kind = "chaos_pick"
+	_modal_title = "Banish 3 Regalia + 3 Obscura"
+	_modal_cards = player_gy.duplicate()
+	_modal_open = true
+	_show_toast("Select 6 cards, then SUMMON")
+	_log("Banish 3 Regalia and 3 Obscura from your graveyard to summon Chaos King.")
+	_view.queue_redraw()
 
 
 func _refresh_demon_keywords(d: Dictionary) -> void:
@@ -647,7 +1021,8 @@ func _resolve_deathrattle(d: Dictionary, is_player: bool, is_front: bool) -> voi
 		_summon(CardDB.get_card("token_ash_wraith"), is_player, is_front)
 	elif "deathrattle_return_hand"   in ab:
 		var hand := player_hand if is_player else enemy_hand
-		hand.append(d["data"])
+		if hand.size() < CardBattleConstants.MAX_HAND:
+			hand.append(d["data"])
 	elif "deathrattle_buff_all"      in ab:
 		var pf := player_front if is_player else enemy_front
 		var pr := player_rear  if is_player else enemy_rear
@@ -808,6 +1183,20 @@ func _on_input(event: InputEvent) -> void:
 			_view.accept_event()
 		return
 
+	if event is InputEventKey:
+		var ek: InputEventKey = event as InputEventKey
+		if ek.pressed and not ek.echo and ek.keycode == KEY_ESCAPE:
+			if _mode == Mode.CHOOSE_PAY_MANA:
+				_cancel_pay_mana()
+				_view.queue_redraw()
+				_view.accept_event()
+				return
+			if _modal_kind == "chaos_pick":
+				_cancel_chaos_summon()
+				_view.queue_redraw()
+				_view.accept_event()
+				return
+
 	if not (event is InputEventMouseButton):
 		return
 	var mb: InputEventMouseButton = event as InputEventMouseButton
@@ -830,9 +1219,16 @@ func _on_input(event: InputEvent) -> void:
 			_view.accept_event()
 		return
 
-	# Modal: Figma — no dimmer; black panel is x≥176 only; close by clicking that panel (or CLOSE)
+	# Modal: Figma — black panel x≥176; browse closes on click. Chaos pick handles its own hits.
 	if mb.pressed and _modal_open and pos.x >= float(CardBattleConstants.BOARD_X):
+		if _modal_kind == "chaos_pick":
+			_handle_chaos_modal_click(pos)
+			_view.queue_redraw()
+			_view.accept_event()
+			return
 		_modal_open = false
+		_modal_kind = ""
+		_modal_cards.clear()
 		_ctx_idx = -1
 		_ctx_is_front = true
 		_atk_drag_idx = -1
@@ -916,8 +1312,17 @@ func _on_right_click(pos: Vector2) -> void:
 		_view.queue_redraw()
 		return
 	if not is_player_turn or _animating or _ended: return
+	if _mode != Mode.CHOOSE_PAY_MANA: return
 	for i in player_hand.size():
-		if CardBattleLayout.hand_rect(i, player_hand.size()).has_point(pos): _pitch_card(i); return
+		if CardBattleLayout.hand_rect(i, player_hand.size()).has_point(pos):
+			if str(player_hand[i].get("id", "")) == _pay_card_id:
+				_log("Pitch a different card — not the one you are casting.")
+				_view.queue_redraw()
+				return
+			_pitch_card(i)
+			_try_finish_pay_mana()
+			_view.queue_redraw()
+			return
 
 
 func _on_left_press(pos: Vector2) -> void:
@@ -926,17 +1331,17 @@ func _on_left_press(pos: Vector2) -> void:
 	if _modal_open and pos.x < float(CardBattleConstants.BOARD_X):
 		return
 
-	# Sidebar: grave / deck → modal
-	if CardBattleLayout.side_grave_rect(true).has_point(pos):
+	# Sidebar: grave / deck → modal (blocked while paying mana — finish pitching first)
+	if _mode != Mode.CHOOSE_PAY_MANA and CardBattleLayout.side_grave_rect(true).has_point(pos):
 		_mode = Mode.IDLE; _sel_idx = -1; _ctx_idx = -1; _ctx_is_front = true; _atk_drag_idx = -1; _rear_pick_idx = -1
 		_open_modal(enemy_gy, "Enemy Graveyard"); return
-	if CardBattleLayout.side_grave_rect(false).has_point(pos):
+	if _mode != Mode.CHOOSE_PAY_MANA and CardBattleLayout.side_grave_rect(false).has_point(pos):
 		_mode = Mode.IDLE; _sel_idx = -1; _ctx_idx = -1; _ctx_is_front = true; _atk_drag_idx = -1; _rear_pick_idx = -1
 		_open_modal(player_gy, "Your Graveyard"); return
-	if CardBattleLayout.side_deck_rect(true).has_point(pos):
+	if _mode != Mode.CHOOSE_PAY_MANA and CardBattleLayout.side_deck_rect(true).has_point(pos):
 		_mode = Mode.IDLE; _sel_idx = -1; _ctx_idx = -1; _ctx_is_front = true; _atk_drag_idx = -1; _rear_pick_idx = -1
 		var s := enemy_deck.duplicate(); s.shuffle(); _open_modal(s, "Enemy Deck (random)"); return
-	if CardBattleLayout.side_deck_rect(false).has_point(pos):
+	if _mode != Mode.CHOOSE_PAY_MANA and CardBattleLayout.side_deck_rect(false).has_point(pos):
 		_mode = Mode.IDLE; _sel_idx = -1; _ctx_idx = -1; _ctx_is_front = true; _atk_drag_idx = -1; _rear_pick_idx = -1
 		var s := player_deck.duplicate(); s.shuffle(); _open_modal(s, "Your Deck (random)"); return
 
@@ -1003,11 +1408,15 @@ func _on_left_press(pos: Vector2) -> void:
 	# Hand → start drag (clears attack prep / menu)
 	for i in player_hand.size():
 		if CardBattleLayout.hand_rect(i, player_hand.size()).has_point(pos):
+			if _mode == Mode.CHOOSE_PAY_MANA and str(player_hand[i].get("id", "")) == _pay_card_id:
+				_view.queue_redraw()
+				return
 			_ctx_idx = -1
 			_ctx_is_front = true
 			_atk_drag_idx = -1
 			_rear_pick_idx = -1
-			_mode = Mode.IDLE
+			if _mode != Mode.CHOOSE_PAY_MANA:
+				_mode = Mode.IDLE
 			_sel_idx = -1
 			_drag_active = true
 			_drag_card = player_hand[i]
@@ -1054,8 +1463,8 @@ func _on_left_press(pos: Vector2) -> void:
 
 func _on_drag_drop(pos: Vector2) -> void:
 	if _drag_card.is_empty(): return
-	var card     := _drag_card
-	var hand_idx := _drag_hand_idx
+	var card: Dictionary = _drag_card
+	var hand_idx: int = _drag_hand_idx
 
 	if not is_player_turn or _animating or _ended: _view.queue_redraw(); return
 	if _mode == Mode.CHOOSE_ENEMY_TARGET:
@@ -1063,58 +1472,94 @@ func _on_drag_drop(pos: Vector2) -> void:
 		_view.queue_redraw()
 		return
 
-	# Drop on player info → pitch
+	if _mode == Mode.CHOOSE_PAY_MANA:
+		if CardBattleLayout.pinfo_rect().has_point(pos):
+			if hand_idx >= 0 and hand_idx < player_hand.size():
+				if str(player_hand[hand_idx].get("id", "")) == _pay_card_id:
+					_log("Pitch a different card to add mana.")
+				else:
+					_pitch_card(hand_idx)
+					_try_finish_pay_mana()
+			_view.queue_redraw()
+			return
+		var pfront: bool = CardBattleLayout.row_drop_rect(true).has_point(pos)
+		var prear: bool = CardBattleLayout.row_drop_rect(false).has_point(pos)
+		if pfront or prear:
+			if hand_idx >= 0 and str(card.get("id", "")) == _pay_card_id and player_mana >= _pay_cost:
+				_pay_to_front = pfront
+				_try_finish_pay_mana()
+		_view.queue_redraw()
+		return
+
 	if CardBattleLayout.pinfo_rect().has_point(pos):
-		if hand_idx >= 0 and hand_idx < player_hand.size(): _pitch_card(hand_idx)
+		if _mode == Mode.CHOOSE_PAY_MANA and hand_idx >= 0 and hand_idx < player_hand.size():
+			_pitch_card(hand_idx)
+			_try_finish_pay_mana()
 		_view.queue_redraw(); return
 
-	# Drop on arsenal
 	if CardBattleLayout.player_arsenal_rect().has_point(pos):
 		if hand_idx >= 0 and not _stashed_this_turn and player_arsenal.is_empty():
 			await _on_stash(hand_idx)
 		_view.queue_redraw(); return
 
-	# Cost check
-	if card.get("cost", 0) > player_mana:
-		_log("Not enough mana!"); _view.queue_redraw(); return
+	var on_front: bool = CardBattleLayout.row_drop_rect(true).has_point(pos)
+	var on_rear: bool = CardBattleLayout.row_drop_rect(false).has_point(pos)
+	if not on_front and not on_rear:
+		if _mode == Mode.CHOOSE_ARSENAL and hand_idx >= 0 and hand_idx < player_hand.size() \
+				and not _stashed_this_turn and player_arsenal.is_empty():
+			if CardBattleLayout.hand_rect(hand_idx, player_hand.size()).has_point(pos):
+				await _on_stash(hand_idx)
+		_view.queue_redraw(); return
 
-	# Drop on front row
-	if CardBattleLayout.row_drop_rect(true).has_point(pos):
-		if _mode == Mode.CHOOSE_ARSENAL:
-			_pending_finish_after_arsenal = false
-			_mode = Mode.IDLE
-		if card["type"] == "demon":
-			if hand_idx >= 0: player_hand.remove_at(hand_idx)
-			player_mana -= card.get("cost", 0)
-			_summon(card, true, true); player_gy.append(card)
-			_log("Played %s to front!" % card["name"])
-		else:
-			if hand_idx >= 0: player_hand.remove_at(hand_idx)
-			player_mana -= card.get("cost", 0)
-			_resolve_spell(card, true); player_gy.append(card)
-			_log("Cast %s!" % card["name"])
-		_view.queue_redraw(); _check_game_over(); return
+	var to_front: bool = on_front
+	if not on_front and on_rear:
+		to_front = false
 
-	# Drop on rear row
-	if CardBattleLayout.row_drop_rect(false).has_point(pos):
-		if _mode == Mode.CHOOSE_ARSENAL:
-			_pending_finish_after_arsenal = false
-			_mode = Mode.IDLE
-		if card["type"] == "demon":
-			var ab: String = card.get("ability", "")
-			if "taunt" in ab: _log("Taunt must go to front!"); _view.queue_redraw(); return
-			if hand_idx >= 0: player_hand.remove_at(hand_idx)
-			player_mana -= card.get("cost", 0)
-			_summon(card, true, false); player_gy.append(card)
-			_log("Played %s to rear!" % card["name"])
-		_view.queue_redraw(); _check_game_over(); return
+	if str(card.get("type", "")) == "demon" and _is_chaos_king_card(card):
+		if hand_idx < 0 or hand_idx >= player_hand.size():
+			_view.queue_redraw(); return
+		var abx: String = str(card.get("ability", ""))
+		if not to_front and "taunt" in abx:
+			_log("Taunt must go to front!")
+			_view.queue_redraw(); return
+		_begin_chaos_summon_hand(hand_idx, to_front)
+		_view.queue_redraw(); return
 
-	# End-of-turn Arsenal: release on same hand card → stash it (tap-to-stash)
-	if _mode == Mode.CHOOSE_ARSENAL and hand_idx >= 0 and hand_idx < player_hand.size() \
-			and not _stashed_this_turn and player_arsenal.is_empty():
-		if CardBattleLayout.hand_rect(hand_idx, player_hand.size()).has_point(pos):
-			await _on_stash(hand_idx)
-	_view.queue_redraw()
+	var cost: int = int(card.get("cost", 0))
+	if cost > player_mana:
+		if cost > 10:
+			_log("Cost exceeds max mana (10).")
+			_view.queue_redraw(); return
+		if str(card.get("type", "")) == "demon":
+			var abz: String = str(card.get("ability", ""))
+			if not to_front and "taunt" in abz:
+				_log("Taunt must go to front!")
+				_view.queue_redraw(); return
+		if hand_idx < 0 or hand_idx >= player_hand.size():
+			_view.queue_redraw(); return
+		_begin_pay_mana(card, hand_idx, to_front)
+		_view.queue_redraw(); return
+
+	if _mode == Mode.CHOOSE_ARSENAL:
+		_pending_finish_after_arsenal = false
+		_mode = Mode.IDLE
+	if str(card.get("type", "")) == "demon":
+		var abq: String = str(card.get("ability", ""))
+		if not to_front and "taunt" in abq:
+			_log("Taunt must go to front!")
+			_view.queue_redraw(); return
+		if hand_idx >= 0: player_hand.remove_at(hand_idx)
+		player_mana -= cost
+		_summon(card, true, to_front)
+		## Demon goes to GY only on death.
+		_log("Played %s to %s!" % [card.get("name", "?"), "front" if to_front else "rear"])
+	else:
+		if hand_idx >= 0: player_hand.remove_at(hand_idx)
+		player_mana -= cost
+		_resolve_spell(card, true)
+		player_gy.append(card)
+		_log("Cast %s!" % card.get("name", "?"))
+	_view.queue_redraw(); _check_game_over()
 
 
 func _on_left_release(pos: Vector2) -> void:
@@ -1209,9 +1654,10 @@ func _pitch_card(i: int) -> void:
 		_pending_finish_after_arsenal = false
 	var card: Dictionary = player_hand[i]
 	var mv: int = card.get("mana_value", 1)
-	player_mana += mv
+	player_mana = mini(player_mana + mv, 10)
 	_pitched_this_turn.append(card); player_hand.remove_at(i)
-	_mode = Mode.IDLE
+	if _mode != Mode.CHOOSE_PAY_MANA:
+		_mode = Mode.IDLE
 	_sel_idx = -1
 	_ctx_idx = -1
 	_ctx_is_front = true
@@ -1229,7 +1675,8 @@ func _place_pending(to_front: bool) -> void:
 	player_mana -= _pending_card.get("cost", 0)
 	if _pending_hand_idx >= 0 and _pending_hand_idx < player_hand.size():
 		player_hand.remove_at(_pending_hand_idx)
-	_summon(_pending_card, true, to_front); player_gy.append(_pending_card)
+	_summon(_pending_card, true, to_front)
+	## Demon goes to GY only on death.
 	_log("Played %s (%s)" % [_pending_card["name"], "front" if to_front else "rear"])
 	_pending_card = {}; _pending_hand_idx = -1; _mode = Mode.IDLE
 	_view.queue_redraw(); _check_game_over()
@@ -1278,19 +1725,45 @@ func _on_attack_demon(d_idx: int, d_is_front: bool) -> void:
 
 func _on_arsenal_play() -> void:
 	if player_arsenal.is_empty(): return
-	var card := player_arsenal
-	if card.get("cost", 0) > player_mana: _log("Not enough mana!"); _view.queue_redraw(); return
+	var card: Dictionary = player_arsenal
+	if _is_chaos_king_card(card):
+		_begin_chaos_summon_arsenal()
+		_view.queue_redraw()
+		return
+	var cst: int = int(card.get("cost", 0))
+	if cst > player_mana:
+		if cst > 10:
+			_log("Cost exceeds max mana (10).")
+			_view.queue_redraw(); return
+		_mode = Mode.CHOOSE_PAY_MANA
+		_pay_from_arsenal = true
+		_pay_card_id = str(card.get("id", ""))
+		_pay_cost = cst
+		_pay_to_front = true
+		_pay_stack_t = 0.0
+		_show_toast("Pitch until you can pay — Esc cancels")
+		_log("Need %d mana — right-click hand cards to pitch, or Esc to cancel." % cst)
+		_view.queue_redraw(); return
 	player_arsenal = {}
-	if card["type"] == "demon":
-		var ab: String = card.get("ability", "")
+	if str(card.get("type", "")) == "demon":
+		var ab: String = str(card.get("ability", ""))
 		if "taunt" in ab:
-			player_mana -= card.get("cost", 0); _summon(card, true, true); player_gy.append(card)
-			_log("Arsenal: %s to front!" % card["name"]); _view.queue_redraw()
+			player_mana -= cst
+			_summon(card, true, true)
+			## Demon goes to GY only on death.
+			_log("Arsenal: %s to front!" % card.get("name", "?"))
+			_view.queue_redraw(); _check_game_over()
 		else:
-			_pending_card = card; _pending_hand_idx = -1; _mode = Mode.CHOOSE_ROW; _view.queue_redraw()
+			_pending_card = card
+			_pending_hand_idx = -1
+			_mode = Mode.CHOOSE_ROW
+			_view.queue_redraw()
 	else:
-		player_mana -= card.get("cost", 0); _resolve_spell(card, true); player_gy.append(card)
-		_log("Arsenal: %s!" % card["name"]); _view.queue_redraw(); _check_game_over()
+		player_mana -= cst
+		_resolve_spell(card, true)
+		player_gy.append(card)
+		_log("Arsenal: %s!" % card.get("name", "?"))
+		_view.queue_redraw(); _check_game_over()
 
 
 func _on_stash(i: int) -> void:
@@ -1344,7 +1817,12 @@ func _show_toast(text: String) -> void:
 	_toast_timer = CardBattleConstants.TOAST_DUR
 
 func _open_modal(cards: Array, title: String) -> void:
-	_modal_open = true; _modal_cards = cards; _modal_title = title; _view.queue_redraw()
+	_modal_kind = ""
+	_modal_open = true
+	## Copy — never assign `player_gy` / `enemy_gy` by reference; `_modal_cards.clear()` would empty the real zone.
+	_modal_cards = cards.duplicate()
+	_modal_title = title
+	_view.queue_redraw()
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1509,10 +1987,14 @@ func _tick(delta: float) -> void:
 		var p: Dictionary = _particles[i]; p["pos"] += p["vel"] * delta; p["alpha"] -= delta * 1.6
 		if p["alpha"] <= 0.0: _particles.remove_at(i)
 		changed = true
+	if _mode == Mode.CHOOSE_PAY_MANA:
+		_pay_stack_t += delta
+		changed = true
 	if changed: _view.queue_redraw()
 	# Drag past threshold on a front minion → attack aim (arrow); exhausted minions skip
 	if _atk_drag_idx >= 0 and not _drag_active and is_player_turn and not _animating and not _ended \
-			and _mode != Mode.CHOOSE_ROW and _mode != Mode.CHOOSE_ARSENAL and _mode != Mode.CHOOSE_ENEMY_TARGET:
+			and _mode != Mode.CHOOSE_ROW and _mode != Mode.CHOOSE_ARSENAL and _mode != Mode.CHOOSE_ENEMY_TARGET \
+			and _mode != Mode.CHOOSE_PAY_MANA:
 		if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 			if _mouse_pos.distance_to(_atk_drag_start) > CardBattleConstants.ATTACK_DRAG_THRESH:
 				if _atk_drag_idx < player_front.size():
@@ -1543,6 +2025,8 @@ func _on_draw() -> void:
 
 	_draw_left_panel()
 	_draw_board()
+	if _mode == Mode.CHOOSE_PAY_MANA:
+		_draw_pay_stack_pending()
 	_draw_right_sidebar()
 	_draw_hand()
 	_draw_chrome()
@@ -1734,11 +2218,14 @@ func _draw_board() -> void:
 # DRAWING — right sidebar
 # ══════════════════════════════════════════════════════════════════
 func _draw_right_sidebar() -> void:
+	var ars_vis: Dictionary = player_arsenal
+	if _mode == Mode.CHOOSE_PAY_MANA and _pay_from_arsenal and not player_arsenal.is_empty():
+		ars_vis = {}
 	_draw_side_sec(0, "GRAVE",   enemy_gy.size(),    {})
 	_draw_side_sec(1, "ARSENAL", -1,                 enemy_arsenal)
 	_draw_side_sec(2, "DECK",    enemy_deck.size(),  {})
 	_draw_side_sec(3, "DECK",    player_deck.size(), {})
-	_draw_side_sec(4, "ARSENAL", -1,                 player_arsenal)
+	_draw_side_sec(4, "ARSENAL", -1,                 ars_vis)
 	_draw_side_sec(5, "GRAVE",   player_gy.size(),   {})
 
 
@@ -1817,12 +2304,19 @@ func _draw_hand() -> void:
 		_str("(empty hand)", CardBattleConstants.HAND_ROW_PAD,
 			float(CardBattleConstants.HAND_Y) + (float(CardBattleConstants.HAND_CH) - 8.0) * 0.5, 8, CardBattleConstants.C_MUTED)
 		return
+	var drew_any: bool = false
 	for i in player_hand.size():
+		if _mode == Mode.CHOOSE_PAY_MANA and str(player_hand[i].get("id", "")) == _pay_card_id:
+			continue
 		if _drag_active and _drag_hand_idx == i: continue
+		drew_any = true
 		var r    := CardBattleLayout.hand_rect(i, player_hand.size())
 		var card: Dictionary = player_hand[i]
-		var gray: bool = card.get("cost", 0) > player_mana
+		var gray: bool = card.get("cost", 0) > player_mana or _is_chaos_king_card(card)
 		_draw_hand_card(r, card, false, gray)
+	if not drew_any and _mode == Mode.CHOOSE_PAY_MANA:
+		_str_c("Pitch to pay", float(CardBattleConstants.HAND_ROW_PAD) + 12.0,
+			float(CardBattleConstants.HAND_Y) + float(CardBattleConstants.HAND_CH) * 0.5 - 4.0, 8, CardBattleConstants.C_MUTED)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1995,10 +2489,23 @@ func _draw_arrow(from: Vector2, to: Vector2, color: Color) -> void:
 
 func _draw_toast() -> void:
 	if _toast_timer <= 0.0: return
-	var ty: float = (float(CardBattleConstants.H) - CardBattleConstants.TOAST_H) * 0.5
-	var tr := Rect2(CardBattleConstants.TOAST_X, ty, CardBattleConstants.TOAST_W, CardBattleConstants.TOAST_H)
+	var tr := Rect2(float(CardBattleConstants.COMM_X), float(CardBattleConstants.COMM_Y),
+		float(CardBattleConstants.COMM_W), float(CardBattleConstants.COMM_H))
 	_view.draw_rect(tr, CardBattleConstants.C_GRAVE_BG)
-	_str_in_rect_center_fit(_toast_text, tr, 14, CardBattleConstants.C_TEXT_LT)
+	var pad: float = 4.0
+	var max_w: float = maxf(8.0, tr.size.x - pad * 2.0)
+	var fs: int = _fs(CardBattleConstants.COMM_FONT)
+	var f: Font = _fnt()
+	var lines: Array[String] = _wrap_log_lines(_toast_text, max_w, CardBattleConstants.COMM_FONT)
+	var line_h: float = float(fs) + 2.0
+	var cy: float = tr.position.y + pad + float(fs)
+	var bottom: float = tr.position.y + tr.size.y - pad
+	for line in lines:
+		if cy > bottom:
+			break
+		_view.draw_string(f, Vector2(_tx(tr.position.x + pad), _tx(cy)), line,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, fs, CardBattleConstants.C_TEXT_LT)
+		cy += line_h
 
 
 func _draw_modal() -> void:
@@ -2009,6 +2516,13 @@ func _draw_modal() -> void:
 	var title: String = "%s - %d cards" % [_modal_title, _modal_cards.size()]
 	_str(title, 183.0, 7.0, 10, CardBattleConstants.C_TEXT_LT)
 	_str_r("CLOSE", 638.0, 6.0, 12, CardBattleConstants.C_TEXT_LT)
+	if _modal_kind == "chaos_pick":
+		var nr: int = _chaos_count_selected_lineage("regalia")
+		var no: int = _chaos_count_selected_lineage("obscura")
+		_str("R:%d/3  O:%d/3" % [nr, no], 320.0, 7.0, 9, CardBattleConstants.C_TEXT_LT)
+		var sbr: Rect2 = _chaos_summon_button_rect()
+		_view.draw_rect(sbr, Color(0.35, 0.55, 0.28), false, 2.0)
+		_str_in_rect_center("SUMMON", sbr, 10, CardBattleConstants.C_TEXT_LT)
 	var sx: float = CardBattleConstants.MODAL_GRID_X0
 	var sy0: float = CardBattleConstants.MODAL_GRID_Y0
 	for i in _modal_cards.size():
@@ -2018,7 +2532,8 @@ func _draw_modal() -> void:
 		if cy + float(CardBattleConstants.HAND_CH) > mh:
 			break
 		var cr := Rect2(sx + float(col) * CardBattleConstants.MODAL_COL_W, cy, float(CardBattleConstants.HAND_CW), float(CardBattleConstants.HAND_CH))
-		_draw_hand_card(cr, _modal_cards[i], false, false)
+		var sel: bool = _modal_kind == "chaos_pick" and _chaos_selected.get(i, false)
+		_draw_hand_card(cr, _modal_cards[i], sel, false)
 
 
 # ══════════════════════════════════════════════════════════════════

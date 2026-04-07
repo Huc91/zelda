@@ -228,8 +228,12 @@ static func resolve(b: CardBattle, card: Dictionary, is_player: bool) -> void:
 			var bounced: Dictionary = rrow[ri]
 			rrow.remove_at(ri)
 			var card_back: Dictionary = bounced["data"].duplicate(true)
-			if is_player: b.enemy_hand.append(card_back)
-			else:         b.player_hand.append(card_back)
+			if is_player:
+				if b.enemy_hand.size() < CardBattleConstants.MAX_HAND:
+					b.enemy_hand.append(card_back)
+			else:
+				if b.player_hand.size() < CardBattleConstants.MAX_HAND:
+					b.player_hand.append(card_back)
 		"steal_demon":
 			var sti: int = b._find_weakest(of_)
 			var srow2: Array = of_
@@ -261,9 +265,14 @@ static func resolve(b: CardBattle, card: Dictionary, is_player: bool) -> void:
 				b._check_auto_lose_no_resources(is_player)
 				return
 			var top: Dictionary = gy_local.pop_back()
+			if own_hand.size() >= CardBattleConstants.MAX_HAND:
+				gy_local.append(top)
+				return
 			own_hand.append(top)
 		"resurrect_all":
 			for i in range(gy_local.size() - 1, -1, -1):
+				if own_hand.size() >= CardBattleConstants.MAX_HAND:
+					break
 				var rc: Dictionary = gy_local[i]
 				if rc.get("type", "") == "demon":
 					own_hand.append(rc)

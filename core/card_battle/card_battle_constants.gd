@@ -62,13 +62,18 @@ const SIDE_BAND_H: Array = [53.0, 110.0, 110.0, 110.0, 110.0, 52.0]
 const STARTING_HP: int = 15
 const LOW_LIFE_THRESHOLD: int = maxi(3, (STARTING_HP * 5) / 15)
 const STARTING_HAND: int = 5
+## Maximum cards in hand (player and enemy). Draws and effects stop adding once full.
+const MAX_HAND: int = 6
 const FONT_MIN: int      = 8
 const LOG_LINE_H: int    = 10
 const LOG_VISIBLE: int   = 8
 const TOAST_DUR: float   = 2.2
-const TOAST_X: float = 151.0
-const TOAST_W: float = 338.0
-const TOAST_H: float = 110.0
+## Communications / toast text box (Figma)
+const COMM_X: int = 489
+const COMM_Y: int = 523
+const COMM_W: int = 52
+const COMM_H: int = 47
+const COMM_FONT: int = 8
 ## Drag hand / attack-aim requires this many pixels before drag or attack mode (slightly less sensitive).
 const ATTACK_DRAG_THRESH: float = 12.0
 ## After player ends turn: show interstitial banner, then AI (see `fixes.md`).
@@ -100,6 +105,11 @@ const MODAL_GRID_Y0: float = 30.0
 const MODAL_COL_W: float   = 87.0
 const MODAL_ROW_H: float   = 118.0
 const MODAL_COLS: int      = 5
+## Chaos King special summon — confirm button (board panel, pixel coords).
+const MODAL_CHAOS_BTN_X: float = 360.0
+const MODAL_CHAOS_BTN_Y: float = 528.0
+const MODAL_CHAOS_BTN_W: float = 140.0
+const MODAL_CHAOS_BTN_H: float = 26.0
 
 ## Rock–paper–scissors: attacker lineage → defender lineage it beats. Neutra has no entry.
 const TYPE_ADV: Dictionary = {

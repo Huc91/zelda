@@ -70,6 +70,12 @@ const TEST_1 = [
 	"demon_098", "demon_099",
 ]
 
+const CHAOS_KING = [
+	"demon_044", "demon_044",
+	"demon_013", "demon_017", "demon_024", "demon_062", "demon_063", "demon_067", "demon_072", "demon_118", "demon_119",
+	"demon_001", "demon_004", "demon_007", "demon_011", "demon_015", "demon_016", "demon_018", "demon_025", "demon_030",
+]
+
 
 # ── Player starter deck (20 cards, max 2 per id) ─────────────────
 const STARTER_DECK = [
@@ -103,7 +109,7 @@ const ENEMY_DECK = [
 ]
 
 #SELECTED DECK to playtest
-const PLAYER_DECK = TEST_1
+const PLAYER_DECK = CHAOS_KING
 
 # All Bloodungeon cards (js/cards.js) + tokens; skeletons use demon_124/125 — 046+ are the BD expansion.
 const ALL_CARDS = [

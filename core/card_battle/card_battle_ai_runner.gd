@@ -37,7 +37,10 @@ func play_phase() -> void:
 		var best_i: int = pick_best_play_index()
 		if best_i >= 0:
 			var card: Dictionary = b.enemy_hand[best_i]
-			b.enemy_mana -= card.get("cost", 0)
+			var play_cost_h: int = int(card.get("cost", 0))
+			if str(card.get("type", "")) == "spell":
+				play_cost_h += b.ai_spell_tax_for_enemy()
+			b.enemy_mana -= play_cost_h
 			b.enemy_hand.remove_at(best_i)
 			if card["type"] == "demon":
 				var to_front: bool = enemy_summon_to_front(card)
@@ -90,7 +93,10 @@ func try_play_from_arsenal() -> bool:
 	if a_pri < best_hand_pri:
 		return false
 	b.enemy_arsenal = {}
-	b.enemy_mana -= ac.get("cost", 0)
+	var play_cost_a: int = int(ac.get("cost", 0))
+	if str(ac.get("type", "")) == "spell":
+		play_cost_a += b.ai_spell_tax_for_enemy()
+	b.enemy_mana -= play_cost_a
 	if ac["type"] == "demon":
 		var to_front: bool = enemy_summon_to_front(ac)
 		b.ai_enemy_summon(ac, to_front)
@@ -103,7 +109,10 @@ func try_play_from_arsenal() -> bool:
 
 
 func is_enemy_card_playable(card: Dictionary) -> bool:
-	if card.get("cost", 0) > b.enemy_mana:
+	var cst: int = int(card.get("cost", 0))
+	if str(card.get("type", "")) == "spell":
+		cst += b.ai_spell_tax_for_enemy()
+	if cst > b.enemy_mana:
 		return false
 	if card.get("type", "") == "demon":
 		return b.enemy_front.size() < CardBattleConstants.MAX_ROW \
@@ -358,6 +367,7 @@ func do_attack(a_idx: int) -> void:
 		b.ai_deal_damage_to_player(att["atk"])
 		if att.get("lifesteal", false):
 			b.enemy_hp = mini(b.enemy_hp + att["atk"], CardBattleConstants.STARTING_HP)
+		b.ai_face_attack_followup(att)
 		b.ai_log_line("%s pierces face for %d!" % [nm, att["atk"]])
 		return
 	var taunt_idx: int = b.ai_find_taunt(b.player_front)
@@ -374,6 +384,7 @@ func do_attack(a_idx: int) -> void:
 		b.ai_deal_damage_to_player(att["atk"])
 		if att.get("lifesteal", false):
 			b.enemy_hp = mini(b.enemy_hp + att["atk"], CardBattleConstants.STARTING_HP)
+		b.ai_face_attack_followup(att)
 		b.ai_log_line("%s attacks face for %d!" % [nm, att["atk"]])
 	else:
 		var t2: int = pick_target(b.player_rear)

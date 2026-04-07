@@ -209,7 +209,17 @@ func _draw_one(hand: Array, deck: Array) -> void:
 	if hand.size() >= CardBattleConstants.MAX_HAND:
 		return
 	if not deck.is_empty(): hand.append(deck.pop_front())
-	if hand == player_hand: _check_osiris_combo_win()
+	if hand == player_hand:
+		_check_osiris_combo_win()
+		for row in [player_front, player_rear]:
+			for obs in row:
+				if "draw_pings" in str(obs["data"].get("ability", "")):
+					_deal_damage_to_enemy(1)
+	elif hand == enemy_hand:
+		for row in [enemy_front, enemy_rear]:
+			for obs in row:
+				if "draw_pings" in str(obs["data"].get("ability", "")):
+					_deal_damage_to_player(1)
 
 
 func _log(s: String) -> void:
@@ -236,6 +246,7 @@ func _start_player_turn() -> void:
 	_rear_pick_idx     = -1
 	_pending_card      = {}
 	_begin_turn_refresh_exhaustion_for_side(true)
+	_refresh_mimic_minions_and_front_atk_auras()
 	_apply_start_of_turn_board_effects(true)
 	_log("--- Your turn %d — %d mana (play cards; pitch only to pay costs) ---" % [player_turn_num, player_mana])
 	_show_toast("Your Turn")
@@ -329,6 +340,7 @@ func _start_enemy_turn() -> void:
 		_animating = false
 		return
 	_begin_turn_refresh_exhaustion_for_side(false)
+	_refresh_mimic_minions_and_front_atk_auras()
 	_apply_start_of_turn_board_effects(false)
 	_log("--- Enemy turn %d ---" % enemy_turn_num)
 	_view.queue_redraw()
@@ -389,7 +401,7 @@ func _apply_end_of_turn_board_effects(is_player: bool) -> void:
 			var ab: String = str(d["data"].get("ability", ""))
 			if not _kwrd(ab, "taunt_regen"):
 				continue
-			var mx: int = int(d["data"].get("hp", 1))
+			var mx: int = int(d.get("hp_intrinsic", int(d["data"].get("hp", 1)))) + int(d.get("hp_aura_bonus", 0))
 			if d["hp"] >= mx:
 				continue
 			d["hp"] = mini(d["hp"] + 1, mx)
@@ -464,6 +476,32 @@ func _thaw_frozen_minions_for_side(is_player_side: bool) -> void:
 				d["exhausted"] = false
 
 
+## Iron Warden: spells cost +1 per Warden on the opponent's board.
+func _spell_tax_against_caster(is_player_caster: bool) -> int:
+	var rows: Array = [enemy_front, enemy_rear] if is_player_caster else [player_front, player_rear]
+	var n: int = 0
+	for row in rows:
+		for d in row:
+			if "tax_spells" in str(d["data"].get("ability", "")):
+				n += 1
+	return n
+
+
+func _battlecry_auto_reposition_ally(d: Dictionary, pf: Array, pr: Array) -> void:
+	if pf.size() >= 2 and pr.size() < CardBattleConstants.MAX_ROW:
+		for i in range(pf.size()):
+			if pf[i] != d:
+				pr.append(pf[i])
+				pf.remove_at(i)
+				return
+	if pr.size() >= 1 and pf.size() < CardBattleConstants.MAX_ROW:
+		for i in range(pr.size()):
+			if pr[i] != d:
+				pf.append(pr[i])
+				pr.remove_at(i)
+				return
+
+
 # ══════════════════════════════════════════════════════════════════
 # CARD PLAY
 # ══════════════════════════════════════════════════════════════════
@@ -488,6 +526,8 @@ func _summon(card: Dictionary, is_player: bool, to_front: bool) -> void:
 		var tot: int = player_front.size() + player_rear.size() + enemy_front.size() + enemy_rear.size()
 		d["atk"] = tot
 		d["hp"] = tot
+		d["atk_intrinsic"] = tot
+		d["hp_intrinsic"] = tot
 	if "battlecry_freeze_target" in ab:
 		if is_player:
 			if enemy_front.is_empty() and enemy_rear.is_empty():
@@ -495,17 +535,25 @@ func _summon(card: Dictionary, is_player: bool, to_front: bool) -> void:
 			else:
 				_begin_choose_enemy_to_freeze(str(card.get("name", "?")))
 			_check_auto_lose_no_resources(is_player)
+			_refresh_mimic_minions_and_front_atk_auras()
 			return
 		_ai_freeze_highest_atk_on_player_board()
 	_resolve_battlecry(d, is_player)
+	_refresh_mimic_minions_and_front_atk_auras()
 
 
 func _make_board_demon(card: Dictionary) -> Dictionary:
 	var ab: String = card.get("ability", "")
+	var a0: int = int(card.get("atk", 0))
+	var h0: int = int(card.get("hp", 1))
 	return {
 		"data"         : card,
-		"hp"           : card.get("hp",  1),
-		"atk"          : card.get("atk", 0),
+		"hp"           : h0,
+		"hp_intrinsic" : h0,
+		"hp_aura_bonus": 0,
+		"atk"          : a0,
+		"atk_intrinsic": a0,
+		"rage_stacks"  : 0,
 		"exhausted"    : not _kwrd(ab, "haste"),
 		"attacked"     : 0,
 		"divine_active": _kwrd(ab, "divine_shield"),
@@ -543,15 +591,19 @@ func _resolve_battlecry(d: Dictionary, is_player: bool) -> void:
 		for o in or_.duplicate(): _hit_demon(o, 2, false)
 		_process_deaths(of_, not is_player, true); _process_deaths(or_, not is_player, false)
 	elif "battlecry_buff_all_atk"      in ab:
-		for ally in pf: if ally != d: ally["atk"] += 1
-		for ally in pr: ally["atk"] += 1
+		for ally in pf:
+			if ally != d:
+				ally["atk_intrinsic"] = ally.get("atk_intrinsic", int(ally["data"].get("atk", 0))) + 1
+		for ally in pr:
+			if ally != d:
+				ally["atk_intrinsic"] = ally.get("atk_intrinsic", int(ally["data"].get("atk", 0))) + 1
 	elif "battlecry_buff_beast"       in ab:
 		for ally in pf:
 			if ally != d and ally["data"].get("subtype", "") == "terresta":
-				ally["atk"] += 1
+				ally["atk_intrinsic"] = ally.get("atk_intrinsic", int(ally["data"].get("atk", 0))) + 1
 		for ally in pr:
 			if ally != d and ally["data"].get("subtype", "") == "terresta":
-				ally["atk"] += 1
+				ally["atk_intrinsic"] = ally.get("atk_intrinsic", int(ally["data"].get("atk", 0))) + 1
 	elif "battlecry_destroy_strongest" in ab:
 		var all_o := of_.duplicate(); all_o.append_array(or_)
 		if not all_o.is_empty():
@@ -575,6 +627,86 @@ func _resolve_battlecry(d: Dictionary, is_player: bool) -> void:
 	elif "battlecry_freeze_all" in ab:
 		for o in of_: _apply_freeze(o)
 		for o in or_: _apply_freeze(o)
+	elif "battlecry_rear_strike" in ab:
+		var nrear: int = or_.size()
+		if nrear > 0:
+			if is_player: _deal_damage_to_enemy(nrear)
+			else: _deal_damage_to_player(nrear)
+	elif "battlecry_equalize_hp" in ab:
+		player_hp = 8
+		enemy_hp = 8
+	elif "battlecry_destroy_weak" in ab:
+		var killed: bool = false
+		for o in of_.duplicate():
+			if o["hp"] <= 3:
+				o["hp"] = 0
+				_process_deaths(of_, not is_player, true)
+				killed = true
+				break
+		if not killed:
+			for o in or_.duplicate():
+				if o["hp"] <= 3:
+					o["hp"] = 0
+					_process_deaths(or_, not is_player, false)
+					break
+	elif "battlecry_discard_enemy" in ab:
+		var opp_hand: Array = enemy_hand if is_player else player_hand
+		var opp_gy: Array = enemy_gy if is_player else player_gy
+		if not opp_hand.is_empty():
+			var dc0: Dictionary = opp_hand[0]
+			opp_hand.remove_at(0)
+			opp_gy.append(dc0)
+	elif "battlecry_damage_random_2" in ab:
+		var pool: Array = []
+		for o in of_.duplicate():
+			pool.append({"row": of_, "d": o, "front": true})
+		for o in or_.duplicate():
+			pool.append({"row": or_, "d": o, "front": false})
+		if not pool.is_empty():
+			var z: Dictionary = pool[randi() % pool.size()]
+			_hit_demon(z["d"], 2, false)
+			_process_deaths(z["row"], not is_player, z["front"])
+	elif "battlecry_aoe_rear_2" in ab:
+		for o in or_.duplicate():
+			_hit_demon(o, 2, false)
+		_process_deaths(or_, not is_player, false)
+	elif "battlecry_face_per_spell_gy" in ab:
+		var gya: Array = player_gy if is_player else enemy_gy
+		var sns: int = 0
+		for c in gya:
+			if str(c.get("type", "")) == "spell":
+				sns += 1
+		if sns > 0:
+			if is_player: _deal_damage_to_enemy(sns)
+			else: _deal_damage_to_player(sns)
+	elif "battlecry_aoe_per_spell" in ab:
+		var gyb: Array = player_gy if is_player else enemy_gy
+		var snb: int = 0
+		for c in gyb:
+			if str(c.get("type", "")) == "spell":
+				snb += 1
+		if snb > 0:
+			for _rep in snb:
+				for o in of_.duplicate(): _hit_demon(o, 1, false)
+				for o in or_.duplicate(): _hit_demon(o, 1, false)
+			_process_deaths(of_, not is_player, true)
+			_process_deaths(or_, not is_player, false)
+	elif "battlecry_replay_spell" in ab:
+		var gyc: Array = player_gy if is_player else enemy_gy
+		var rep: Dictionary = {}
+		for ii in range(gyc.size() - 1, -1, -1):
+			if str(gyc[ii].get("type", "")) == "spell":
+				rep = gyc[ii]
+				break
+		if not rep.is_empty():
+			_log("Echo: replays %s." % str(rep.get("name", "spell")))
+			_resolve_spell(rep.duplicate(true), is_player)
+	elif "battlecry_reposition_enemy" in ab:
+		if not of_.is_empty() and or_.size() < CardBattleConstants.MAX_ROW:
+			var mvv: Dictionary = of_.pop_at(0)
+			or_.append(mvv)
+	elif "battlecry_reposition_ally" in ab:
+		_battlecry_auto_reposition_ally(d, pf, pr)
 	elif "chaos_dragon" in ab:
 		if is_player:
 			var eg: int = enemy_gy.size()
@@ -715,7 +847,8 @@ func _begin_pay_mana(card: Dictionary, hand_idx: int, to_front: bool) -> void:
 	_mode = Mode.CHOOSE_PAY_MANA
 	_pay_from_arsenal = false
 	_pay_card_id = str(card.get("id", ""))
-	_pay_cost = int(card.get("cost", 0))
+	var base_cost: int = int(card.get("cost", 0))
+	_pay_cost = base_cost + (_spell_tax_against_caster(true) if str(card.get("type", "")) == "spell" else 0)
 	_pay_to_front = to_front
 	_pay_stack_t = 0.0
 	_show_toast("Pitch until you can pay — Esc cancels")
@@ -958,8 +1091,154 @@ func _refresh_demon_keywords(d: Dictionary) -> void:
 	d["divine_active"] = _kwrd(ab, "divine_shield")
 
 
+## Mimic totals, Blood Banner (+1 ATK to other front), Iron Sigil (+2 HP to other front), Warlord (other front haste).
+func _refresh_mimic_minions_and_front_atk_auras() -> void:
+	var tot: int = player_front.size() + player_rear.size() + enemy_front.size() + enemy_rear.size()
+	for side in [true, false]:
+		var pf: Array = player_front if side else enemy_front
+		var pr: Array = player_rear if side else enemy_rear
+		for d in pf:
+			var abm: String = str(d["data"].get("ability", ""))
+			if "mimic_board_count" in abm:
+				d["atk_intrinsic"] = tot
+				d["hp_intrinsic"] = tot
+		for d in pr:
+			var abm2: String = str(d["data"].get("ability", ""))
+			if "mimic_board_count" in abm2:
+				d["atk_intrinsic"] = tot
+				d["hp_intrinsic"] = tot
+		for i in range(pf.size()):
+			var d: Dictionary = pf[i]
+			var atk_b: int = 0
+			for j in range(pf.size()):
+				if i == j:
+					continue
+				if "aura_front_atk_1" in str(pf[j]["data"].get("ability", "")):
+					atk_b += 1
+			var hp_b: int = 0
+			for j in range(pf.size()):
+				if i == j:
+					continue
+				if "aura_front_hp_2" in str(pf[j]["data"].get("ability", "")):
+					hp_b += 2
+			var old_hp_aura: int = int(d.get("hp_aura_bonus", 0))
+			d["hp_aura_bonus"] = hp_b
+			var hpin: int = int(d.get("hp_intrinsic", int(d["data"].get("hp", 1))))
+			var max_hp: int = hpin + hp_b
+			if hp_b != old_hp_aura:
+				d["hp"] += hp_b - old_hp_aura
+			d["hp"] = mini(int(d["hp"]), max_hp)
+			d["hp"] = maxi(int(d["hp"]), 1)
+			var rgs: int = int(d.get("rage_stacks", 0))
+			var aintr: int = int(d.get("atk_intrinsic", int(d["data"].get("atk", 0))))
+			d["atk"] = aintr + atk_b + rgs
+			var warlord_haste: bool = false
+			for j in range(pf.size()):
+				if i == j:
+					continue
+				if "aura_front_haste" in str(pf[j]["data"].get("ability", "")):
+					warlord_haste = true
+					break
+			if warlord_haste and not d.get("frozen", false):
+				d["exhausted"] = false
+		for d in pr:
+			var rgs2: int = int(d.get("rage_stacks", 0))
+			var aintr2: int = int(d.get("atk_intrinsic", int(d["data"].get("atk", 0))))
+			d["atk"] = aintr2 + rgs2
+	_view.queue_redraw()
+
+
+func _process_global_death_triggers(_dead: Dictionary, dead_owner_is_player: bool) -> void:
+	for row in [player_front, player_rear]:
+		for obs in row:
+			if "any_death_drain" in str(obs["data"].get("ability", "")):
+				_deal_damage_to_enemy(1)
+	for row in [enemy_front, enemy_rear]:
+		for obs in row:
+			if "any_death_drain" in str(obs["data"].get("ability", "")):
+				_deal_damage_to_player(1)
+	for row in [player_front, player_rear, enemy_front, enemy_rear]:
+		for obs in row:
+			if "feed_on_death" in str(obs["data"].get("ability", "")):
+				obs["atk_intrinsic"] = obs.get("atk_intrinsic", int(obs["data"].get("atk", 0))) + 1
+				obs["hp_intrinsic"] = obs.get("hp_intrinsic", int(obs["data"].get("hp", 1))) + 1
+				obs["hp"] = int(obs["hp"]) + 1
+	if dead_owner_is_player:
+		for row in [player_front, player_rear]:
+			for obs in row:
+				if "ally_death_mana" in str(obs["data"].get("ability", "")):
+					player_mana = mini(player_mana + 1, 10)
+	else:
+		for row in [enemy_front, enemy_rear]:
+			for obs in row:
+				if "ally_death_mana" in str(obs["data"].get("ability", "")):
+					enemy_mana = mini(enemy_mana + 1, 10)
+	for row in [player_front, player_rear]:
+		for obs in row:
+			if "any_death_draw" in str(obs["data"].get("ability", "")):
+				_draw_one(player_hand, player_deck)
+	for row in [enemy_front, enemy_rear]:
+		for obs in row:
+			if "any_death_draw" in str(obs["data"].get("ability", "")):
+				_draw_one(enemy_hand, enemy_deck)
+	if dead_owner_is_player:
+		var nlg: int = 0
+		for row in [player_front, player_rear]:
+			for obs in row:
+				if "ally_death_lifegain" in str(obs["data"].get("ability", "")):
+					nlg += 1
+		if nlg > 0:
+			player_hp = mini(player_hp + nlg, CardBattleConstants.STARTING_HP)
+	else:
+		var nlg2: int = 0
+		for row in [enemy_front, enemy_rear]:
+			for obs in row:
+				if "ally_death_lifegain" in str(obs["data"].get("ability", "")):
+					nlg2 += 1
+		if nlg2 > 0:
+			enemy_hp = mini(enemy_hp + nlg2, CardBattleConstants.STARTING_HP)
+
+
+func _apply_after_spell_cast(is_player: bool) -> void:
+	var pf: Array = player_front if is_player else enemy_front
+	var pr: Array = player_rear if is_player else enemy_rear
+	var of_: Array = enemy_front if is_player else player_front
+	var or_: Array = enemy_rear if is_player else player_rear
+	for row in [pf, pr]:
+		for d in row:
+			var ab: String = str(d["data"].get("ability", ""))
+			if "spell_lifegain" in ab:
+				if is_player:
+					player_hp = mini(player_hp + 1, CardBattleConstants.STARTING_HP)
+				else:
+					enemy_hp = mini(enemy_hp + 1, CardBattleConstants.STARTING_HP)
+			if "spell_aoe" in ab:
+				for o in of_.duplicate():
+					_hit_demon(o, 1, false)
+				for o in or_.duplicate():
+					_hit_demon(o, 1, false)
+				_process_deaths(of_, not is_player, true)
+				_process_deaths(or_, not is_player, false)
+
+
+func _face_attack_followup(att: Dictionary, attacker_is_player: bool) -> void:
+	var ab: String = str(att["data"].get("ability", ""))
+	if "haste_face_draw" in ab:
+		if attacker_is_player:
+			_draw_one(player_hand, player_deck)
+		else:
+			_draw_one(enemy_hand, enemy_deck)
+	if "haste_face_mana" in ab:
+		if attacker_is_player:
+			player_mana = mini(player_mana + 1, 10)
+		else:
+			enemy_mana = mini(enemy_mana + 1, 10)
+
+
 func _resolve_spell(card: Dictionary, is_player: bool) -> void:
 	CardBattleSpellEffects.resolve(self, card, is_player)
+	_apply_after_spell_cast(is_player)
+	_refresh_mimic_minions_and_front_atk_auras()
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -992,7 +1271,8 @@ func _do_combat(a_board: Array, a_idx: int, a_is_player: bool, a_is_front: bool,
 func _hit_demon(d: Dictionary, dmg: int, source_poi: bool) -> void:
 	if dmg <= 0: return
 	if d.get("divine_active", false): d["divine_active"] = false; return
-	if d.get("rage", false): d["atk"] += 1
+	if d.get("rage", false):
+		d["rage_stacks"] = int(d.get("rage_stacks", 0)) + 1
 	d["hp"] -= dmg
 	if source_poi: d["hp"] = 0
 
@@ -1003,7 +1283,9 @@ func _process_deaths(board: Array, is_player: bool, is_front: bool) -> void:
 			var dead: Dictionary = board[i]
 			_spawn_death_fx(CardBattleLayout.board_world_pos(_get_row(is_player, is_front), is_player, is_front, i))
 			board.remove_at(i)
+			_process_global_death_triggers(dead, is_player)
 			_resolve_deathrattle(dead, is_player, is_front)
+	_refresh_mimic_minions_and_front_atk_auras()
 	_check_auto_lose_no_resources(is_player)
 	_view.queue_redraw()
 
@@ -1026,8 +1308,14 @@ func _resolve_deathrattle(d: Dictionary, is_player: bool, is_front: bool) -> voi
 	elif "deathrattle_buff_all"      in ab:
 		var pf := player_front if is_player else enemy_front
 		var pr := player_rear  if is_player else enemy_rear
-		for ally in pf: ally["atk"] += 1; ally["hp"] += 1
-		for ally in pr: ally["atk"] += 1; ally["hp"] += 1
+		for ally in pf:
+			ally["atk_intrinsic"] = ally.get("atk_intrinsic", int(ally["data"].get("atk", 0))) + 1
+			ally["hp_intrinsic"] = ally.get("hp_intrinsic", int(ally["data"].get("hp", 1))) + 1
+			ally["hp"] += 1
+		for ally in pr:
+			ally["atk_intrinsic"] = ally.get("atk_intrinsic", int(ally["data"].get("atk", 0))) + 1
+			ally["hp_intrinsic"] = ally.get("hp_intrinsic", int(ally["data"].get("hp", 1))) + 1
+			ally["hp"] += 1
 	elif "deathrattle_summon_2_imps" in ab:
 		_summon(CardDB.get_card("token_imp"), is_player, is_front)
 		_summon(CardDB.get_card("token_imp"), is_player, is_front)
@@ -1114,6 +1402,14 @@ func ai_get_ai_type() -> String:
 
 func ai_keyword(ability: String, keyword: String) -> bool:
 	return _kwrd(ability, keyword)
+
+
+func ai_spell_tax_for_enemy() -> int:
+	return _spell_tax_against_caster(false)
+
+
+func ai_face_attack_followup(att: Dictionary) -> void:
+	_face_attack_followup(att, false)
 
 
 func ai_deal_damage_to_player(n: int) -> void:
@@ -1526,7 +1822,9 @@ func _on_drag_drop(pos: Vector2) -> void:
 		_view.queue_redraw(); return
 
 	var cost: int = int(card.get("cost", 0))
-	if cost > player_mana:
+	var spell_tax: int = _spell_tax_against_caster(true) if str(card.get("type", "")) == "spell" else 0
+	var total_cost: int = cost + spell_tax
+	if total_cost > player_mana:
 		if cost > 10:
 			_log("Cost exceeds max mana (10).")
 			_view.queue_redraw(); return
@@ -1549,13 +1847,13 @@ func _on_drag_drop(pos: Vector2) -> void:
 			_log("Taunt must go to front!")
 			_view.queue_redraw(); return
 		if hand_idx >= 0: player_hand.remove_at(hand_idx)
-		player_mana -= cost
+		player_mana -= total_cost
 		_summon(card, true, to_front)
 		## Demon goes to GY only on death.
 		_log("Played %s to %s!" % [card.get("name", "?"), "front" if to_front else "rear"])
 	else:
 		if hand_idx >= 0: player_hand.remove_at(hand_idx)
-		player_mana -= cost
+		player_mana -= total_cost
 		_resolve_spell(card, true)
 		player_gy.append(card)
 		_log("Cast %s!" % card.get("name", "?"))
@@ -1692,6 +1990,7 @@ func _on_attack_face() -> void:
 	att["exhausted"] = att["attacked"] >= (2 if att.get("double_attack", false) else 1)
 	_deal_damage_to_enemy(att["atk"])
 	if att.get("lifesteal", false): player_hp = mini(player_hp + att["atk"], CardBattleConstants.STARTING_HP)
+	_face_attack_followup(att, true)
 	_log("%s attacks face for %d!" % [att["data"]["name"], att["atk"]])
 	_mode = Mode.IDLE
 	_sel_idx = -1
@@ -1731,24 +2030,26 @@ func _on_arsenal_play() -> void:
 		_view.queue_redraw()
 		return
 	var cst: int = int(card.get("cost", 0))
-	if cst > player_mana:
+	var taxa: int = _spell_tax_against_caster(true) if str(card.get("type", "")) == "spell" else 0
+	var total_cst: int = cst + taxa
+	if total_cst > player_mana:
 		if cst > 10:
 			_log("Cost exceeds max mana (10).")
 			_view.queue_redraw(); return
 		_mode = Mode.CHOOSE_PAY_MANA
 		_pay_from_arsenal = true
 		_pay_card_id = str(card.get("id", ""))
-		_pay_cost = cst
+		_pay_cost = total_cst
 		_pay_to_front = true
 		_pay_stack_t = 0.0
 		_show_toast("Pitch until you can pay — Esc cancels")
-		_log("Need %d mana — right-click hand cards to pitch, or Esc to cancel." % cst)
+		_log("Need %d mana — right-click hand cards to pitch, or Esc to cancel." % total_cst)
 		_view.queue_redraw(); return
 	player_arsenal = {}
 	if str(card.get("type", "")) == "demon":
 		var ab: String = str(card.get("ability", ""))
 		if "taunt" in ab:
-			player_mana -= cst
+			player_mana -= total_cst
 			_summon(card, true, true)
 			## Demon goes to GY only on death.
 			_log("Arsenal: %s to front!" % card.get("name", "?"))
@@ -1759,7 +2060,7 @@ func _on_arsenal_play() -> void:
 			_mode = Mode.CHOOSE_ROW
 			_view.queue_redraw()
 	else:
-		player_mana -= cst
+		player_mana -= total_cst
 		_resolve_spell(card, true)
 		player_gy.append(card)
 		_log("Arsenal: %s!" % card.get("name", "?"))

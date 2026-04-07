@@ -35,8 +35,10 @@ static func resolve(b: CardBattle, card: Dictionary, is_player: bool) -> void:
 		"summon_imp":
 			b._summon(CardDB.get_card("token_imp"), is_player, true)
 		"buff_atk_all", "buff_atk_all_turn":
-			for dd in pf: dd["atk"] += val
-			for dd in pr: dd["atk"] += val
+			for dd in pf:
+				dd["atk_intrinsic"] = dd.get("atk_intrinsic", int(dd["data"].get("atk", 0))) + val
+			for dd in pr:
+				dd["atk_intrinsic"] = dd.get("atk_intrinsic", int(dd["data"].get("atk", 0))) + val
 		"destroy":
 			var ti: int = b._find_weakest(of_)
 			if ti >= 0:
@@ -50,11 +52,13 @@ static func resolve(b: CardBattle, card: Dictionary, is_player: bool) -> void:
 		"debuff_atk":
 			var ti2: int = b._find_strongest(of_)
 			if ti2 >= 0:
-				of_[ti2]["atk"] = maxi(0, of_[ti2]["atk"] - val)
+				var ddof: Dictionary = of_[ti2]
+				ddof["atk_intrinsic"] = maxi(0, ddof.get("atk_intrinsic", int(ddof["data"].get("atk", 0))) - val)
 			else:
 				ti2 = b._find_strongest(or_)
 				if ti2 >= 0:
-					or_[ti2]["atk"] = maxi(0, or_[ti2]["atk"] - val)
+					var ddor: Dictionary = or_[ti2]
+					ddor["atk_intrinsic"] = maxi(0, ddor.get("atk_intrinsic", int(ddor["data"].get("atk", 0))) - val)
 		"life_per_demon":
 			var gain: int = (pf.size() + pr.size()) * val
 			if is_player: b.player_hp = mini(b.player_hp + gain, CardBattleConstants.STARTING_HP)
@@ -70,18 +74,25 @@ static func resolve(b: CardBattle, card: Dictionary, is_player: bool) -> void:
 			for dd in pool:
 				if dd["hp"] < pick["hp"]: pick = dd
 			pick["hp"] += val
+			pick["hp_intrinsic"] = pick.get("hp_intrinsic", int(pick["data"].get("hp", 1))) + val
 		"buff_hp_all":
-			for dd in pf: dd["hp"] += val
-			for dd in pr: dd["hp"] += val
+			for dd in pf:
+				dd["hp"] += val
+				dd["hp_intrinsic"] = dd.get("hp_intrinsic", int(dd["data"].get("hp", 1))) + val
+			for dd in pr:
+				dd["hp"] += val
+				dd["hp_intrinsic"] = dd.get("hp_intrinsic", int(dd["data"].get("hp", 1))) + val
 		"cure_all_friendly":
 			for dd in pf: dd["hp"] += 1
 			for dd in pr: dd["hp"] += 1
 		"buff_all_stats":
 			for dd in pf:
-				dd["atk"] += val
+				dd["atk_intrinsic"] = dd.get("atk_intrinsic", int(dd["data"].get("atk", 0))) + val
+				dd["hp_intrinsic"] = dd.get("hp_intrinsic", int(dd["data"].get("hp", 1))) + val
 				dd["hp"] += val
 			for dd in pr:
-				dd["atk"] += val
+				dd["atk_intrinsic"] = dd.get("atk_intrinsic", int(dd["data"].get("atk", 0))) + val
+				dd["hp_intrinsic"] = dd.get("hp_intrinsic", int(dd["data"].get("hp", 1))) + val
 				dd["hp"] += val
 		"buff_target_stats":
 			if pf.is_empty() and pr.is_empty():
@@ -93,11 +104,14 @@ static func resolve(b: CardBattle, card: Dictionary, is_player: bool) -> void:
 			var best: Dictionary = pool2[0]
 			for dd in pool2:
 				if dd["atk"] > best["atk"]: best = dd
-			best["atk"] += val
+			best["atk_intrinsic"] = best.get("atk_intrinsic", int(best["data"].get("atk", 0))) + val
+			best["hp_intrinsic"] = best.get("hp_intrinsic", int(best["data"].get("hp", 1))) + val
 			best["hp"] += val
 		"debuff_atk_all":
-			for dd in of_: dd["atk"] = maxi(0, dd["atk"] - val)
-			for dd in or_: dd["atk"] = maxi(0, dd["atk"] - val)
+			for dd in of_:
+				dd["atk_intrinsic"] = maxi(0, dd.get("atk_intrinsic", int(dd["data"].get("atk", 0))) - val)
+			for dd in or_:
+				dd["atk_intrinsic"] = maxi(0, dd.get("atk_intrinsic", int(dd["data"].get("atk", 0))) - val)
 		"give_divine_shield":
 			if not pf.is_empty(): pf[0]["divine_active"] = true
 			elif not pr.is_empty(): pr[0]["divine_active"] = true
@@ -212,6 +226,9 @@ static func resolve(b: CardBattle, card: Dictionary, is_player: bool) -> void:
 				b._check_auto_lose_no_resources(is_player)
 				return
 			var vic: Dictionary = wrow[wi]
+			vic["atk_intrinsic"] = 1
+			vic["hp_intrinsic"] = 1
+			vic["rage_stacks"] = 0
 			vic["atk"] = 1
 			vic["hp"] = 1
 			vic["data"]["ability"] = ""

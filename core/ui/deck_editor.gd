@@ -46,9 +46,31 @@ var _rect_cancel: Rect2 = Rect2()
 var _rect_save: Rect2 = Rect2()
 var _rect_deck_list_area: Rect2 = Rect2()
 
+var _save_err_msg: String = ""
+var _save_err_t: float = 0.0
+
+
+func _process(delta: float) -> void:
+	if _save_err_t <= 0.0:
+		return
+	_save_err_t -= delta
+	if _save_err_t <= 0.0:
+		_save_err_msg = ""
+		set_process(false)
+		queue_redraw()
+
+
+func _show_save_error(msg: String) -> void:
+	_save_err_msg = msg
+	_save_err_t = 4.0
+	set_process(true)
+	queue_redraw()
+	push_warning("Deck save: %s" % msg)
+
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	set_process(false)
 	visible = false
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	z_index = 100
@@ -114,6 +136,9 @@ func open(deck_idx: int) -> void:
 	_deck_scroll = 0
 	_hover_zoom_id = ""
 	_hover_slot = -1
+	_save_err_msg = ""
+	_save_err_t = 0.0
+	set_process(false)
 	_apply_full_viewport_rect()
 	visible = true
 	queue_redraw()
@@ -140,7 +165,11 @@ func close_cancel() -> void:
 
 
 func close_save() -> void:
+	if _edit_ids.size() != CardDB.DECK_SIZE_MAX:
+		_show_save_error("Deck must have exactly %d cards (you have %d)." % [CardDB.DECK_SIZE_MAX, _edit_ids.size()])
+		return
 	if not CardDB.deck_ids_legal(_edit_ids):
+		_show_save_error("Invalid deck: max %d copies per card (or bad card id)." % CardDB.DECK_COPY_MAX)
 		return
 	Global.apply_deck_edit(_deck_index, _name_edit.text, _edit_ids)
 	visible = false
@@ -497,6 +526,9 @@ func _draw() -> void:
 	draw_rect(_rect_next, Color(0.88, 0.88, 0.92), false, 2.0)
 	_str_in_rect_center("< Prev", _rect_prev, 8, Color.WHITE)
 	_str_in_rect_center("Next >", _rect_next, 8, Color.WHITE)
+
+	if not _save_err_msg.is_empty():
+		_str(_save_err_msg, 8.0, fy - 14.0, 7, Color(1.0, 0.35, 0.35))
 
 
 func _str_in_rect_center(text: String, r: Rect2, sz: int, color: Color) -> void:

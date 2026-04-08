@@ -10,7 +10,7 @@ static func get_card(id: String) -> Dictionary:
 
 
 static func starter_deck() -> Array:
-	return _build(PLAYER_DECK)
+	return _build(STARTER_DECK)
 
 
 ## Shuffled runtime deck from card id list. Falls back to [method starter_deck] if ids are illegal.
@@ -34,7 +34,7 @@ const DECK_COPY_MAX := 2
 
 
 static func deck_ids_legal(ids: Array) -> bool:
-	if ids.size() > DECK_SIZE_MAX:
+	if ids.size() != DECK_SIZE_MAX:
 		return false
 	var counts: Dictionary = {}
 	for id in ids:
@@ -49,7 +49,7 @@ static func deck_ids_legal(ids: Array) -> bool:
 
 static func _build(ids: Array) -> Array:
 	_ensure_init()
-	assert(deck_ids_legal(ids), "Deck must be ≤%d cards and ≤%d copies per id." % [DECK_SIZE_MAX, DECK_COPY_MAX])
+	assert(deck_ids_legal(ids), "Deck must be exactly %d cards and ≤%d copies per id." % [DECK_SIZE_MAX, DECK_COPY_MAX])
 	var deck: Array = []
 	for id in ids:
 		if _map.has(id):
@@ -130,8 +130,8 @@ const ENEMY_DECK = [
 	"spell_005", "spell_005",
 ]
 
-#SELECTED DECK to playtest
-const PLAYER_DECK = CHAOS_KING
+## Dev / stress-test list (high variance; not used as default fallback — see [method starter_deck]).
+const PLAYTEST_DECK = CHAOS_KING
 
 # All Bloodungeon cards (js/cards.js) + tokens; skeletons use demon_124/125 — 046+ are the BD expansion.
 const ALL_CARDS = [
@@ -221,7 +221,7 @@ const ALL_CARDS = [
 	{"id": "demon_065", "name": "Star Prophet", "type": "demon", "subtype": "regalia", "cost": 2, "mana_value": 1, "atk": 1, "hp": 2, "rarity": "rare", "ability": "draw_pings", "ability_desc": "Whenever you draw a card, deal 1 damage to the enemy.", "desc": "Each revelation strikes like a blade."},
 	{"id": "demon_066", "name": "Holy Knight", "type": "demon", "subtype": "regalia", "cost": 4, "mana_value": 1, "atk": 3, "hp": 4, "rarity": "rare", "ability": "divine_shield", "ability_desc": "Divine Shield — absorbs the first hit.", "desc": "No blade has yet drawn its blood."},
 	{"id": "demon_067", "name": "Lightning Herald", "type": "demon", "subtype": "regalia", "cost": 1, "mana_value": 1, "atk": 1, "hp": 1, "rarity": "common", "ability": "haste", "ability_desc": "Haste.", "desc": "Arrives with the speed of thunder."},
-	{"id": "demon_068", "name": "Gleaming Drake", "type": "demon", "subtype": "regalia", "cost": 4, "mana_value": 1, "atk": 5, "hp": 5, "rarity": "uncommon", "ability": "battlecry_aoe_1", "ability_desc": "Battlecry: Deal 1 damage to all enemy demons.", "desc": "Its wingspan blots out lesser creatures."},
+	{"id": "demon_068", "name": "Gleaming Drake", "type": "demon", "subtype": "regalia", "cost": 4, "mana_value": 1, "atk": 5, "hp": 5, "rarity": "rare", "ability": "battlecry_aoe_1", "ability_desc": "Battlecry: Deal 1 damage to all enemy demons.", "desc": "Its wingspan blots out lesser creatures."},
 	{"id": "demon_069", "name": "Angelic Guardian", "type": "demon", "subtype": "regalia", "cost": 4, "mana_value": 1, "atk": 2, "hp": 6, "rarity": "rare", "ability": "taunt", "ability_desc": "Taunt.", "desc": "Will not yield."},
 	{"id": "demon_070", "name": "Seraph", "type": "demon", "subtype": "regalia", "cost": 4, "mana_value": 1, "atk": 3, "hp": 5, "rarity": "mythic", "ability": "divine_shield", "ability_desc": "Divine Shield — absorbs the first hit.", "desc": "Heaven's last line of defence."},
 	{"id": "demon_071", "name": "Ember Thief", "type": "demon", "subtype": "regalia", "cost": 1, "mana_value": 1, "atk": 1, "hp": 1, "rarity": "rare", "ability": "haste_face_mana", "ability_desc": "Haste. When this deals face damage, gain 1 mana.", "desc": "Steals breath with every strike."},
@@ -235,7 +235,7 @@ const ALL_CARDS = [
 	{"id": "demon_079", "name": "Phoenix", "type": "demon", "subtype": "terresta", "cost": 4, "mana_value": 1, "atk": 3, "hp": 3, "rarity": "rare", "ability": "deathrattle_return_hand", "ability_desc": "Deathrattle: Return this to your hand when destroyed.", "desc": "Rises from its own ashes."},
 	{"id": "demon_080", "name": "Lava Drake", "type": "demon", "subtype": "regalia", "cost": 3, "mana_value": 1, "atk": 3, "hp": 4, "rarity": "common", "ability": "lifesteal", "ability_desc": "Lifesteal.", "desc": "Drains life with burning claws."},
 	{"id": "demon_081", "name": "Fire Elemental", "type": "demon", "subtype": "obscura", "cost": 4, "mana_value": 1, "atk": 4, "hp": 5, "rarity": "mythic", "ability": "battlecry_aoe_2", "ability_desc": "Battlecry: Deal 2 damage to all enemy demons.", "desc": "A living inferno."},
-	{"id": "demon_082", "name": "Molten Giant", "type": "demon", "subtype": "regalia", "cost": 5, "mana_value": 1, "atk": 6, "hp": 5, "rarity": "uncommon", "ability": "battlecry_aoe_1", "ability_desc": "Battlecry: Deal 1 damage to all enemy demons.", "desc": "The ground cracks beneath its steps."},
+	{"id": "demon_082", "name": "Molten Giant", "type": "demon", "subtype": "regalia", "cost": 5, "mana_value": 1, "atk": 5, "hp": 5, "rarity": "rare", "ability": "battlecry_aoe_1", "ability_desc": "Battlecry: Deal 1 damage to all enemy demons.", "desc": "The ground cracks beneath its steps."},
 	{"id": "demon_083", "name": "Tidal Terror", "type": "demon", "subtype": "terresta", "cost": 4, "mana_value": 1, "atk": 5, "hp": 5, "rarity": "mythic", "ability": "battlecry_aoe_per_spell", "ability_desc": "Battlecry: Deal 1 damage to each enemy demon for each spell in your graveyard.", "desc": "The tide rises with every spell cast."},
 	{"id": "demon_084", "name": "Frost Mage", "type": "demon", "subtype": "regalia", "cost": 2, "mana_value": 1, "atk": 1, "hp": 3, "rarity": "uncommon", "ability": "battlecry_freeze_target", "ability_desc": "Battlecry: Exhaust (freeze) one enemy demon for a turn.", "desc": "A touch and the enemy slows."},
 	{"id": "demon_085", "name": "Ice Barrier", "type": "demon", "subtype": "terresta", "cost": 3, "mana_value": 1, "atk": 0, "hp": 6, "rarity": "rare", "ability": "divine_shield taunt", "ability_desc": "Divine Shield — absorbs the first hit. Taunt.", "desc": "An impenetrable wall of frost."},

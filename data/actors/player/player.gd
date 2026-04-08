@@ -37,11 +37,12 @@ func state_default() -> void:
 		_play_animation("Walk")
 		sprite.stop()
 	
-	# Handle item usage
-	if Input.is_action_just_pressed("b") && items.get("B"):
-		_use_item(items["B"].scene)
-	elif Input.is_action_just_pressed("a") && items.get("A"):
-		_use_item(items["A"].scene)
+	# Handle item usage (card battle uses the same key map; skip while battle UI is up).
+	if not Global.in_battle:
+		if Input.is_action_just_pressed("b") && items.get("B"):
+			_use_item(items["B"].scene)
+		elif Input.is_action_just_pressed("a") && items.get("A"):
+			_use_item(items["A"].scene)
 
 
 func state_swing() -> void:

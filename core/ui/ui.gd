@@ -54,6 +54,9 @@ func _process(_delta):
 			_open_deck_inventory()
 		return
 	if Input.is_action_just_pressed("pause"):
+		# ESC / pause is used by CardBattle to cancel pay / row / freeze — do not open inventory.
+		if Global.in_battle:
+			return
 		if deck_inventory.visible:
 			_close_deck_inventory()
 			return

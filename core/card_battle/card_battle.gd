@@ -7,6 +7,20 @@ class _View extends Control:
 	func _process(dt: float) -> void:       b._tick(dt)
 
 
+## Attack aim drawn above `_view` (hand, chrome, modal) via max z_index.
+class _ArrowOverlay extends Control:
+	var b: CardBattle
+	func _process(_dt: float) -> void:
+		if b == null or b._ended or not b.is_player_turn:
+			return
+		if b._mode == CardBattle.Mode.ATTACKING:
+			queue_redraw()
+	func _draw() -> void:
+		if b == null:
+			return
+		b._paint_attack_arrow_overlay(self)
+
+
 # Pixel-perfect layout / palette: `CardBattleConstants` (card_battle_constants.gd).
 # https://www.figma.com/design/iRJDqyetz1RTxvQOd1a7mU/test?node-id=1-3
 
@@ -61,6 +75,12 @@ var _pay_to_front: bool = true
 var _pay_from_arsenal: bool = false
 ## Visual-only: animation time for mana-pay "stack" vortex on the board.
 var _pay_stack_t: float = 0.0
+## Pay-stack preview: use drop point on the row instead of row center.
+var _pay_stack_use_drop_anchor: bool = false
+var _pay_stack_anchor: Vector2 = Vector2.ZERO
+## CHOOSE_ROW after paying from Arsenal: mana already spent; do not charge again on place.
+var _pending_skip_mana_on_place: bool = false
+var _choose_row_mana_refund: int = 0
 ## Modal: "" = browse grave/deck; "chaos_pick" = select Regalia/Obscura to summon Chaos King.
 var _modal_kind: String = ""
 var _chaos_hand_idx: int = -1
@@ -109,6 +129,7 @@ var _modal_cards: Array  = []
 var _modal_title: String = ""
 
 var _view: _View
+var _arrow_overlay: _ArrowOverlay
 var _battle_font: Font
 var _ai_runner: CardBattleAIRunner
 signal battle_ended(player_won: bool)
@@ -129,8 +150,42 @@ func setup(p_first: bool, p_enemy: Node) -> void:
 	_view.mouse_filter = Control.MOUSE_FILTER_STOP
 	_view.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	add_child(_view)
+	_arrow_overlay = _ArrowOverlay.new()
+	_arrow_overlay.b = self
+	_arrow_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_arrow_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_arrow_overlay.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_arrow_overlay.z_as_relative = false
+	_arrow_overlay.z_index = 4096
+	add_child(_arrow_overlay)
 	_ai_runner = CardBattleAIRunner.new(self)
 	_start_battle()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if _ended:
+		return
+	if not event.is_pressed() or event.is_echo():
+		return
+	var want_cancel: bool = event.is_action_pressed("pause")
+	if not want_cancel and event is InputEventKey:
+		var kk: InputEventKey = event as InputEventKey
+		want_cancel = kk.keycode == KEY_ESCAPE or kk.physical_keycode == KEY_ESCAPE
+	if not want_cancel:
+		return
+	if _mode == Mode.CHOOSE_PAY_MANA:
+		_cancel_pay_mana()
+	elif _modal_kind == "chaos_pick":
+		_cancel_chaos_summon()
+	elif _mode == Mode.CHOOSE_ROW:
+		_cancel_choose_row()
+	elif _mode == Mode.CHOOSE_ENEMY_TARGET:
+		_log("Freeze cancelled.")
+		_finish_choose_enemy_target_idle()
+	else:
+		return
+	get_viewport().set_input_as_handled()
+	_view.queue_redraw()
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -260,6 +315,11 @@ func _finish_end_player_turn() -> void:
 		_cancel_pay_mana()
 	if _modal_kind == "chaos_pick":
 		_cancel_chaos_summon()
+	## Return limbo cards before discarding hand / clearing pending (guards edge paths).
+	if _mode == Mode.CHOOSE_ROW:
+		_cancel_choose_row()
+	if _mode == Mode.CHOOSE_ENEMY_TARGET:
+		_finish_choose_enemy_target_idle()
 	_apply_end_of_turn_board_effects(true)
 	_thaw_frozen_minions_for_side(true)
 	is_player_turn = false
@@ -771,7 +831,29 @@ func _cancel_pay_mana() -> void:
 	_pay_cost = 0
 	_pay_from_arsenal = false
 	_pay_stack_t = 0.0
+	_pay_stack_use_drop_anchor = false
 	_log("Cancelled paying mana.")
+	_view.queue_redraw()
+
+
+func _cancel_choose_row() -> void:
+	if _mode != Mode.CHOOSE_ROW:
+		return
+	if _pending_card.is_empty():
+		_mode = Mode.IDLE
+		return
+	if _pending_skip_mana_on_place:
+		player_mana = mini(player_mana + _choose_row_mana_refund, 10)
+		_pending_skip_mana_on_place = false
+		_choose_row_mana_refund = 0
+	if _pending_hand_idx >= 0 and _pending_hand_idx <= player_hand.size():
+		player_hand.insert(_pending_hand_idx, _pending_card.duplicate(true))
+	else:
+		player_arsenal = _pending_card.duplicate(true)
+	_pending_card = {}
+	_pending_hand_idx = -1
+	_mode = Mode.IDLE
+	_log("Summon cancelled.")
 	_view.queue_redraw()
 
 
@@ -796,6 +878,7 @@ func _try_finish_pay_mana() -> void:
 			_cancel_pay_mana()
 			return
 		var acard: Dictionary = player_arsenal.duplicate(true)
+		var paid_mana: int = _pay_cost
 		player_mana -= _pay_cost
 		player_arsenal = {}
 		_pay_from_arsenal = false
@@ -809,6 +892,8 @@ func _try_finish_pay_mana() -> void:
 				## Demon goes to GY only on death.
 				_log("Arsenal: %s to front!" % acard.get("name", "?"))
 			else:
+				_pending_skip_mana_on_place = true
+				_choose_row_mana_refund = paid_mana
 				_pending_card = acard
 				_pending_hand_idx = -1
 				_mode = Mode.CHOOSE_ROW
@@ -818,6 +903,7 @@ func _try_finish_pay_mana() -> void:
 			player_gy.append(acard)
 			_log("Arsenal: %s!" % acard.get("name", "?"))
 		_pay_stack_t = 0.0
+		_pay_stack_use_drop_anchor = false
 		_view.queue_redraw()
 		_check_game_over()
 		return
@@ -839,11 +925,12 @@ func _try_finish_pay_mana() -> void:
 	_pay_cost = 0
 	_log("Played %s." % str(card.get("name", "?")))
 	_pay_stack_t = 0.0
+	_pay_stack_use_drop_anchor = false
 	_view.queue_redraw()
 	_check_game_over()
 
 
-func _begin_pay_mana(card: Dictionary, hand_idx: int, to_front: bool) -> void:
+func _begin_pay_mana(card: Dictionary, _hand_idx: int, to_front: bool, drop_pos: Vector2 = Vector2(-1.0e9, -1.0e9)) -> void:
 	_mode = Mode.CHOOSE_PAY_MANA
 	_pay_from_arsenal = false
 	_pay_card_id = str(card.get("id", ""))
@@ -851,6 +938,12 @@ func _begin_pay_mana(card: Dictionary, hand_idx: int, to_front: bool) -> void:
 	_pay_cost = base_cost + (_spell_tax_against_caster(true) if str(card.get("type", "")) == "spell" else 0)
 	_pay_to_front = to_front
 	_pay_stack_t = 0.0
+	var rr0: Rect2 = CardBattleLayout.row_drop_rect(to_front)
+	if rr0.has_point(drop_pos):
+		_pay_stack_anchor = drop_pos
+		_pay_stack_use_drop_anchor = true
+	else:
+		_pay_stack_use_drop_anchor = false
 	_show_toast("Pitch until you can pay — Esc cancels")
 	_log("Need %d mana — right-click hand cards to pitch, or Esc to cancel." % _pay_cost)
 	_view.queue_redraw()
@@ -873,8 +966,14 @@ func _pay_stack_preview_rect() -> Rect2:
 	var rr: Rect2 = CardBattleLayout.row_drop_rect(_pay_to_front)
 	var cw: float = float(CardBattleConstants.MINI_W)
 	var ch: float = float(CardBattleConstants.MINI_H)
-	var cx: float = rr.position.x + (rr.size.x - cw) * 0.5
-	var cy: float = rr.position.y + (rr.size.y - ch) * 0.5
+	var cx: float
+	var cy: float
+	if _pay_stack_use_drop_anchor:
+		cx = clampf(_pay_stack_anchor.x - cw * 0.5, rr.position.x, rr.position.x + rr.size.x - cw)
+		cy = clampf(_pay_stack_anchor.y - ch * 0.5, rr.position.y, rr.position.y + rr.size.y - ch)
+	else:
+		cx = rr.position.x + (rr.size.x - cw) * 0.5
+		cy = rr.position.y + (rr.size.y - ch) * 0.5
 	return Rect2(cx, cy, cw, ch)
 
 
@@ -1479,20 +1578,6 @@ func _on_input(event: InputEvent) -> void:
 			_view.accept_event()
 		return
 
-	if event is InputEventKey:
-		var ek: InputEventKey = event as InputEventKey
-		if ek.pressed and not ek.echo and ek.keycode == KEY_ESCAPE:
-			if _mode == Mode.CHOOSE_PAY_MANA:
-				_cancel_pay_mana()
-				_view.queue_redraw()
-				_view.accept_event()
-				return
-			if _modal_kind == "chaos_pick":
-				_cancel_chaos_summon()
-				_view.queue_redraw()
-				_view.accept_event()
-				return
-
 	if not (event is InputEventMouseButton):
 		return
 	var mb: InputEventMouseButton = event as InputEventMouseButton
@@ -1671,7 +1756,8 @@ func _on_left_press(pos: Vector2) -> void:
 	if _mode == Mode.CHOOSE_ROW:
 		if CardBattleLayout.row_drop_rect(true).has_point(pos):  _place_pending(true);  return
 		if CardBattleLayout.row_drop_rect(false).has_point(pos): _place_pending(false); return
-		_mode = Mode.IDLE; _pending_card = {}; _ctx_idx = -1; _ctx_is_front = true; _atk_drag_idx = -1; _rear_pick_idx = -1
+		_cancel_choose_row()
+		_ctx_idx = -1; _ctx_is_front = true; _atk_drag_idx = -1; _rear_pick_idx = -1
 		_view.queue_redraw(); return
 
 	# Context menu: MOVE / EFF. (selected front or rear minion)
@@ -1783,6 +1869,10 @@ func _on_drag_drop(pos: Vector2) -> void:
 		if pfront or prear:
 			if hand_idx >= 0 and str(card.get("id", "")) == _pay_card_id and player_mana >= _pay_cost:
 				_pay_to_front = pfront
+				var rr_pf: Rect2 = CardBattleLayout.row_drop_rect(pfront)
+				if rr_pf.has_point(pos):
+					_pay_stack_anchor = pos
+					_pay_stack_use_drop_anchor = true
 				_try_finish_pay_mana()
 		_view.queue_redraw()
 		return
@@ -1835,7 +1925,7 @@ func _on_drag_drop(pos: Vector2) -> void:
 				_view.queue_redraw(); return
 		if hand_idx < 0 or hand_idx >= player_hand.size():
 			_view.queue_redraw(); return
-		_begin_pay_mana(card, hand_idx, to_front)
+		_begin_pay_mana(card, hand_idx, to_front, pos)
 		_view.queue_redraw(); return
 
 	if _mode == Mode.CHOOSE_ARSENAL:
@@ -1970,7 +2060,10 @@ func _place_pending(to_front: bool) -> void:
 	var row := player_front if to_front else player_rear
 	if row.size() >= CardBattleConstants.MAX_ROW:
 		_log("%s row is full!" % ("Front" if to_front else "Rear")); _view.queue_redraw(); return
-	player_mana -= _pending_card.get("cost", 0)
+	if not _pending_skip_mana_on_place:
+		player_mana -= int(_pending_card.get("cost", 0))
+	_pending_skip_mana_on_place = false
+	_choose_row_mana_refund = 0
 	if _pending_hand_idx >= 0 and _pending_hand_idx < player_hand.size():
 		player_hand.remove_at(_pending_hand_idx)
 	_summon(_pending_card, true, to_front)
@@ -2363,6 +2456,24 @@ func _on_draw() -> void:
 	if _modal_open:        _draw_modal()
 
 
+func _paint_attack_arrow_overlay(ci: CanvasItem) -> void:
+	if _ended or not is_player_turn:
+		return
+	if _mode != Mode.ATTACKING or _sel_idx < 0 or _sel_idx >= player_front.size():
+		return
+	if not _atk_show_attack_arrow():
+		return
+	var start: Vector2 = CardBattleLayout.board_world_pos(_get_row(true, true), true, true, _sel_idx)
+	_draw_arrow_on(ci, start, _mouse_pos, CardBattleConstants.C_SEL)
+	if not _hover_card.is_empty() and _hover_state.has("data"):
+		var att_sub: String = player_front[_sel_idx]["data"].get("subtype", "")
+		var def_sub: String = _hover_card.get("subtype", "")
+		var bonus: int = _type_advantage(att_sub, def_sub)
+		if bonus > 0:
+			var mid: Vector2 = (start + _mouse_pos) * 0.5
+			_str_c_on(ci, "Type Adv +%d dmg" % bonus, mid.x, mid.y - 10.0, 8, CardBattleConstants.C_TEXT)
+
+
 func _draw_chrome() -> void:
 	# Figma 1:3 — verticals x=176 & rail x=CardBattleConstants.RAIL_LINE_X; horizontals y=167 & y=407; mid y=288 h=4
 	_view.draw_rect(Rect2(176.0, 0.0, 2.0, float(CardBattleConstants.H)), CardBattleConstants.C_CHROME_V)
@@ -2490,16 +2601,7 @@ func _draw_board() -> void:
 		var ol_atk := CardBattleLayout.selection_outline_rect(cr_atk)
 		_view.draw_rect(ol_atk, Color(0.25, 0.88, 0.32), false, 2.0)
 
-		var start := CardBattleLayout.board_world_pos(_get_row(true, true), true, true, _sel_idx)
-		if _atk_show_attack_arrow():
-			_draw_arrow(start, _mouse_pos, CardBattleConstants.C_SEL)
-			if not _hover_card.is_empty() and _hover_state.has("data"):
-				var att_sub: String = player_front[_sel_idx]["data"].get("subtype", "")
-				var def_sub: String = _hover_card.get("subtype", "")
-				var bonus := _type_advantage(att_sub, def_sub)
-				if bonus > 0:
-					var mid := (start + _mouse_pos) * 0.5
-					_str_c("Type Adv +%d dmg" % bonus, mid.x, mid.y - 10.0, 8, CardBattleConstants.C_TEXT)
+	# Arrow + type-adv hint: drawn in `_draw_attack_arrow_overlay` last so they sit above all UI.
 
 	# DIRECT ATTACK — always visible on your turn; enabled = face legal (Figma 17:183 / 17:184)
 	if is_player_turn and not _animating and not _ended:
@@ -2779,32 +2881,32 @@ func _draw_cost_badge(pos: Vector2, cost: int, px: int = 14) -> void:
 	_draw_cost_badge_rect(Rect2(pos.x, pos.y, float(px), float(px)), cost)
 
 
-func _draw_arrow(from: Vector2, to: Vector2, color: Color) -> void:
+func _draw_arrow_on(ci: CanvasItem, from: Vector2, to: Vector2, color: Color) -> void:
 	if (to - from).length() < 10.0: return
 	var norm := (to - from).normalized()
 	var perp := Vector2(-norm.y, norm.x)
-	_view.draw_line(from, to, color, 2.0)
-	_view.draw_line(to, to - norm * 10.0 + perp * 5.0, color, 2.0)
-	_view.draw_line(to, to - norm * 10.0 - perp * 5.0, color, 2.0)
+	ci.draw_line(from, to, color, 2.0)
+	ci.draw_line(to, to - norm * 10.0 + perp * 5.0, color, 2.0)
+	ci.draw_line(to, to - norm * 10.0 - perp * 5.0, color, 2.0)
 
 
 func _draw_toast() -> void:
 	if _toast_timer <= 0.0: return
-	var tr := Rect2(float(CardBattleConstants.COMM_X), float(CardBattleConstants.COMM_Y),
+	var toast_r := Rect2(float(CardBattleConstants.COMM_X), float(CardBattleConstants.COMM_Y),
 		float(CardBattleConstants.COMM_W), float(CardBattleConstants.COMM_H))
-	_view.draw_rect(tr, CardBattleConstants.C_GRAVE_BG)
+	_view.draw_rect(toast_r, CardBattleConstants.C_GRAVE_BG)
 	var pad: float = 4.0
-	var max_w: float = maxf(8.0, tr.size.x - pad * 2.0)
+	var max_w: float = maxf(8.0, toast_r.size.x - pad * 2.0)
 	var fs: int = _fs(CardBattleConstants.COMM_FONT)
 	var f: Font = _fnt()
 	var lines: Array[String] = _wrap_log_lines(_toast_text, max_w, CardBattleConstants.COMM_FONT)
 	var line_h: float = float(fs) + 2.0
-	var cy: float = tr.position.y + pad + float(fs)
-	var bottom: float = tr.position.y + tr.size.y - pad
+	var cy: float = toast_r.position.y + pad + float(fs)
+	var bottom: float = toast_r.position.y + toast_r.size.y - pad
 	for line in lines:
 		if cy > bottom:
 			break
-		_view.draw_string(f, Vector2(_tx(tr.position.x + pad), _tx(cy)), line,
+		_view.draw_string(f, Vector2(_tx(toast_r.position.x + pad), _tx(cy)), line,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, fs, CardBattleConstants.C_TEXT_LT)
 		cy += line_h
 
@@ -2891,10 +2993,14 @@ func _str(text: String, x: float, y: float, sz: int = 9, color: Color = CardBatt
 		HORIZONTAL_ALIGNMENT_LEFT, -1, fs, color)
 
 func _str_c(text: String, cx: float, cy: float, sz: int = 9, color: Color = CardBattleConstants.C_TEXT) -> void:
+	_str_c_on(_view, text, cx, cy, sz, color)
+
+
+func _str_c_on(ci: CanvasItem, text: String, cx: float, cy: float, sz: int = 9, color: Color = CardBattleConstants.C_TEXT) -> void:
 	var f: Font = _fnt()
 	var fs: int = _fs(sz)
 	var tw: float = f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-	_view.draw_string(f, Vector2(_tx(cx - tw * 0.5), _tx(cy + float(fs) * 0.5)), text,
+	ci.draw_string(f, Vector2(_tx(cx - tw * 0.5), _tx(cy + float(fs) * 0.5)), text,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, fs, color)
 
 func _str_r(text: String, rx: float, y: float, sz: int = 9, color: Color = CardBattleConstants.C_TEXT) -> void:

@@ -320,8 +320,11 @@ func _draw_hand_card(r: Rect2, card: Dictionary, selected: bool, grayed: bool) -
 	var art := Rect2(r.position.x + 8.0, r.position.y + CardBattleConstants.MINI_ART_TOP, CardBattleConstants.MINI_ART_SIZE, CardBattleConstants.MINI_ART_SIZE)
 	draw_rect(art, Color(art_bg.r * 0.84, art_bg.g * 0.84, art_bg.b * 0.84))
 	draw_rect(art, _mix_white(CardBattleConstants.C_MINI_BORDER, 0.35), false, 1.0)
+	var _art_tex_mini: Texture2D = CardArt.card_art_1x(str(card.get("id", "")), false)
+	if _art_tex_mini != null:
+		draw_texture_rect(_art_tex_mini, art, false)
 
-	if _mini_shows_effect_label(card):
+	if _mini_shows_effect_label(card) and _art_tex_mini == null:
 		var art_bot: float = r.position.y + CardBattleConstants.MINI_ART_TOP + CardBattleConstants.MINI_ART_SIZE
 		var fs_e: int = _fs(8)
 		_str("Effect", r.position.x + 5.0, art_bot - 2.0 - float(fs_e), 8, CardBattleConstants.C_TEXT)
@@ -353,56 +356,7 @@ func _list_plus_minus_rects(row_y: float) -> Array[Rect2]:
 
 func _draw_zoom(card: Dictionary) -> void:
 	var cr := Rect2(ZOOM_X, ZOOM_Y, ZOOM_W, ZOOM_H)
-	var is_dem: bool = card.get("type", "demon") == "demon"
-	draw_rect(cr, CardBattleConstants.C_DEMON_BG if is_dem else CardBattleConstants.C_SPELL_BG)
-	draw_rect(cr, CardBattleConstants.C_MINI_BORDER, false, 2.0)
-
-	var title: String = str(card.get("name", ""))
-	var f: Font = _fnt()
-	var fs: int = _fs(12)
-	var tshow: String = title
-	if tshow.length() > 22:
-		tshow = tshow.left(20) + "…"
-	draw_string(f, Vector2(_tx(cr.position.x + 6.0), _tx(cr.position.y + 6.0 + float(fs))), tshow,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, fs, CardBattleConstants.C_TEXT)
-
-	_draw_cost_badge_rect(Rect2(cr.position.x + cr.size.x - 22.0, cr.position.y + 2.0, 20.0, 19.0), card.get("cost", 0))
-
-	var art := Rect2(cr.position.x + 18.0, cr.position.y + 30.0, 128.0, 128.0)
-	var art_bg := CardBattleConstants.C_DEMON_BG if is_dem else CardBattleConstants.C_SPELL_BG
-	draw_rect(art, Color(art_bg.r * 0.80, art_bg.g * 0.80, art_bg.b * 0.80))
-	draw_rect(art, _mix_white(CardBattleConstants.C_MINI_BORDER, 0.28), false, 1.0)
-
-	var ab_desc: String = str(card.get("ability_desc", card.get("desc", "")))
-	if ab_desc != "":
-		_str_wrap_ml(ab_desc, cr.position.x + 6.0, cr.position.y + 162.0, cr.size.x - 12.0, 7, CardBattleConstants.C_TEXT)
-
-	if is_dem:
-		_str("DEMON - %s" % str(card.get("subtype", "neutra")).to_upper(),
-			cr.position.x + 7.0, cr.position.y + 216.0, 7, CardBattleConstants.C_MUTED)
-		var max_hp: int = card.get("hp", 1)
-		_str_r_atk_hp(card.get("atk", 0), card.get("hp", 1), max_hp,
-			cr.position.x + cr.size.x - 6.0, cr.position.y + 203.0, 12)
-	else:
-		_str_c("SPELL", cr.get_center().x, cr.position.y + 216.0, 7, Color(0.24, 0.40, 0.08))
-
-
-func _str_wrap_ml(text: String, x: float, y: float, max_w: float, sz: int, color: Color) -> void:
-	var f: Font = _fnt()
-	var fs: int = _fs(sz)
-	var line: String = ""
-	var cy: float = y + float(fs)
-	for word in text.split(" "):
-		var test: String = (line + " " + word).strip_edges()
-		if f.get_string_size(test, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x <= max_w:
-			line = test
-		else:
-			if line != "":
-				draw_string(f, Vector2(_tx(x), _tx(cy)), line, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, color)
-				cy += float(fs) + 2.0
-			line = word
-	if line != "":
-		draw_string(f, Vector2(_tx(x), _tx(cy)), line, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, color)
+	CardZoomDraw.draw(self, _fnt(), cr, card, {})
 
 
 func _page_count() -> int:

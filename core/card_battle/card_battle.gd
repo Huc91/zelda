@@ -2830,47 +2830,8 @@ func _draw_hand_card(r: Rect2, card: Dictionary, selected: bool, grayed: bool) -
 
 func _draw_zoomed_card(card: Dictionary, state: Dictionary) -> void:
 	# Figma 3:74 — x=8 y=172 w=165 h=230
-	var cr := Rect2(8.0, float(CardBattleConstants.ZOOM_Y), 165.0, 230.0)
-	var is_dem: bool = card.get("type", "demon") == "demon"
-	_view.draw_rect(cr, CardBattleConstants.C_DEMON_BG if is_dem else CardBattleConstants.C_SPELL_BG)
-	_view.draw_rect(cr, CardBattleConstants.C_MINI_BORDER, false, 2.0)
-
-	_str_wrap(card.get("name", ""), cr.position.x + 6.0, cr.position.y + 6.0,
-		cr.size.x - 14.0, 12, CardBattleConstants.C_TEXT)
-
-	# Mana badge — Figma 20×19 @ top-right (local ~143, 2)
-	_draw_cost_badge_rect(Rect2(cr.position.x + cr.size.x - 22.0, cr.position.y + 2.0, 20.0, 19.0),
-		card.get("cost", 0))
-
-	# Art area — below up-to-2-line title
-	var art := Rect2(cr.position.x + 18.0, cr.position.y + 30.0, 128.0, 128.0)
-	var art_bg := CardBattleConstants.C_DEMON_BG if is_dem else CardBattleConstants.C_SPELL_BG
-	_view.draw_rect(art, Color(art_bg.r * 0.80, art_bg.g * 0.80, art_bg.b * 0.80))
-	_view.draw_rect(art, _mix_white(CardBattleConstants.C_MINI_BORDER, 0.28), false, 1.0)
-	var _zoom_art: Texture2D = CardArt.card_art_2x(str(card.get("id", "")), card.get("foil", false))
-	if _zoom_art != null:
-		_view.draw_texture_rect(_zoom_art, art, false)
-
-	# Effect text — just below art
-	var ab_desc: String = card.get("ability_desc", card.get("desc", ""))
-	if ab_desc != "":
-		_str_wrap_ml(ab_desc, cr.position.x + 6.0, cr.position.y + 162.0,
-			cr.size.x - 12.0, 7, CardBattleConstants.C_TEXT)
-
-	# Type line (local 7,216)
-	if is_dem:
-		_str("DEMON - %s" % card.get("subtype", "neutra").to_upper(),
-			cr.position.x + 7.0, cr.position.y + 216.0, 7, CardBattleConstants.C_MUTED)
-	else:
-		_str_c("SPELL", cr.get_center().x, cr.position.y + 216.0, 7, Color(0.24, 0.40, 0.08))
-
-	# ATK/HP — Figma 12px bottom-right (no buff/debuff tint on zoom; minis only)
-	if is_dem:
-		var max_hp: int = card.get("hp", 1)
-		var cur_hp: int = state.get("hp", max_hp)
-		var atk_v: int = state.get("atk", card.get("atk", 0))
-		var exzoom: bool = state.get("exhausted", false) if not state.is_empty() else false
-		_str_r_atk_hp(atk_v, cur_hp, max_hp, cr.position.x + cr.size.x - 6.0, cr.position.y + 203.0, 12, exzoom)
+	var cr := Rect2(8.0, float(CardBattleConstants.ZOOM_Y), CardZoomDraw.ZOOM_W, CardZoomDraw.ZOOM_H)
+	CardZoomDraw.draw(_view, _fnt(), cr, card, state)
 
 
 func _draw_cost_badge_rect(r: Rect2, cost: int, fill: Color = CardBattleConstants.C_COST_BADGE, label_color: Color = CardBattleConstants.C_TEXT_LT) -> void:

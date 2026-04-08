@@ -8,17 +8,30 @@ signal finished
 # ── Layout (640 × 576) ──────────────────────────────────────────────
 const W: int = 640
 const H: int = 576
-const CARD_W: int = 79
-const CARD_H: int = 110
+## Same as battle zoom (CardZoomDraw): 165×230
+const CARD_W: int = int(CardZoomDraw.ZOOM_W)
+const CARD_H: int = int(CardZoomDraw.ZOOM_H)
 const CARD_GAP: int = 10
 const CARDS_TOTAL: int = 5
 const PACK_ART: Texture2D = preload("res://Group 80.png")
 
-# Positions for 5 revealed cards, centered horizontally
-const _ROW_Y: int = 210
-static func _card_x(i: int) -> int:
-	var total: int = CARDS_TOTAL * CARD_W + (CARDS_TOTAL - 1) * CARD_GAP
-	return (W - total) / 2 + i * (CARD_W + CARD_GAP)
+# Two rows: 3 + 2 battle zoom cards; fit in 576px height
+const _ROW1_Y: int = 48
+const _ROW2_Y: int = _ROW1_Y + CARD_H + 12
+
+
+static func _row_origin_x(count: int) -> float:
+	var total: float = float(count * CARD_W + maxi(0, count - 1) * CARD_GAP)
+	return (float(W) - total) * 0.5
+
+
+static func _card_rect(i: int) -> Rect2:
+	if i < 3:
+		var x0: float = _row_origin_x(3)
+		return Rect2(x0 + float(i * (CARD_W + CARD_GAP)), float(_ROW1_Y), float(CARD_W), float(CARD_H))
+	var x0b: float = _row_origin_x(2)
+	var j: int = i - 3
+	return Rect2(x0b + float(j * (CARD_W + CARD_GAP)), float(_ROW2_Y), float(CARD_W), float(CARD_H))
 
 # ── Colours ──────────────────────────────────────────────────────────
 const C_BG: Color        = Color(0.06, 0.04, 0.12, 0.97)
@@ -28,15 +41,6 @@ const C_FOIL_SHIMMER: Color = Color(0.9, 0.8, 0.2)
 const C_LEGENDARY_GLO: Color = Color(1.0, 0.35, 0.0)
 const C_MYTHIC_GLO: Color = Color(0.45, 0.22, 1.0)
 const FONT_PATH: String = "res://assets/fonts/Nudge Orb.ttf"
-
-# ── Rarity colours (matches CardBattleConstants) ─────────────────────
-const RARITY_COL: Dictionary = {
-	"common"   : Color("#7C7C7C"),
-	"uncommon" : Color("#0257F7"),
-	"rare"     : Color("#0257F7"),
-	"mythic"   : Color("#6844FC"),
-	"legendary": Color("#F83902"),
-}
 
 # ── State ────────────────────────────────────────────────────────────
 enum _State { IDLE, PACK_SHOW, OPENING, REVEAL, DONE }
@@ -122,8 +126,9 @@ func _tick_particles() -> void:
 
 
 func _spawn_particles(card_idx: int, is_foil: bool, is_legendary: bool, is_mythic: bool) -> void:
-	var cx: float = float(_card_x(card_idx)) + CARD_W * 0.5
-	var cy: float = float(_ROW_Y) + CARD_H * 0.5
+	var rr: Rect2 = _card_rect(card_idx)
+	var cx: float = rr.position.x + rr.size.x * 0.5
+	var cy: float = rr.position.y + rr.size.y * 0.5
 	var count: int = 40 if (is_legendary or is_mythic) else 20
 	for _i in count:
 		var angle: float = randf() * TAU
@@ -260,15 +265,18 @@ func _draw_pack() -> void:
 
 func _draw_cards() -> void:
 	for i in CARDS_TOTAL:
-		var cx: int = _card_x(i)
+		var base: Rect2 = _card_rect(i)
 		var sx: float = _card_scale_x[i]
-		var offset_x: float = CARD_W * (1.0 - sx) * 0.5
-		var r: Rect2 = Rect2(cx + offset_x, _ROW_Y, CARD_W * sx, CARD_H)
+		var dw: float = float(CARD_W) * sx
+		var dh: float = float(CARD_H) * sx
+		var offset_x: float = (float(CARD_W) - dw) * 0.5
+		var offset_y: float = (float(CARD_H) - dh) * 0.5
+		var r: Rect2 = Rect2(base.position.x + offset_x, base.position.y + offset_y, dw, dh)
 
 		if not _card_face_visible[i]:
 			_draw_card_back(r, sx)
 		else:
-			_draw_card_face(r, _pack_cards[i], sx)
+			CardZoomDraw.draw(_view, _font, r, _pack_cards[i], {})
 
 		# Particles
 		for p in _particle_lists[i]:
@@ -284,86 +292,6 @@ func _draw_card_back(r: Rect2, _sx: float) -> void:
 	var inner: Rect2 = r.grow(-6.0)
 	_view.draw_rect(inner, Color(0.25, 0.15, 0.45), false, 1.0)
 	_draw_str_c("?", r.get_center().x, r.get_center().y - 6.0, 14, Color(0.6, 0.4, 0.9))
-
-
-func _draw_card_face(r: Rect2, card: Dictionary, _sx: float) -> void:
-	var is_dem: bool = card.get("type", "demon") == "demon"
-	var rarity: String = card.get("rarity", "common")
-	var is_foil: bool = card.get("foil", false)
-
-	var bg_c: Color = Color(0.96, 0.89, 0.85) if is_dem else Color(0.63, 0.71, 0.40)
-	if is_foil:
-		# Slight golden tint for foil
-		bg_c = bg_c.lerp(Color(1.0, 0.92, 0.5), 0.25)
-	_view.draw_rect(r, bg_c)
-
-	var border_c: Color = RARITY_COL.get(rarity, Color(0.49, 0.43, 0.0))
-	if is_foil:
-		border_c = Color(1.0, 0.85, 0.1)
-	_view.draw_rect(r, border_c, false, 2.0)
-
-	if is_foil:
-		# Extra shimmer border (inner)
-		var fi: Rect2 = r.grow(-3.0)
-		_view.draw_rect(fi, Color(1.0, 0.95, 0.5, 0.6), false, 1.0)
-
-	var nm: String = card.get("name", "")
-	if nm.length() > 9:
-		nm = nm.left(9) + "."
-	_draw_str(nm, r.position.x + 4.0, r.position.y + 2.0, 8, Color(0.1, 0.05, 0.0))
-
-	# Art area
-	var art_r: Rect2 = Rect2(r.position.x + 6.0, r.position.y + 16.0, CARD_W - 12.0, 55.0)
-	var art_bg: Color = Color(bg_c.r * 0.84, bg_c.g * 0.84, bg_c.b * 0.84)
-	_view.draw_rect(art_r, art_bg)
-
-	var card_id: String = str(card.get("id", ""))
-	var art_tex: Texture2D = CardArt.card_art_2x(card_id, is_foil)
-	if art_tex != null:
-		_view.draw_texture_rect(art_tex, art_r, false)
-	else:
-		# No art: show type text
-		var type_str: String = card.get("subtype", card.get("type", "")).to_upper()
-		_draw_str_c(type_str, art_r.get_center().x, art_r.get_center().y - 5.0, 8, Color(0.3, 0.2, 0.1, 0.7))
-
-	# Foil shimmer overlay (always shown on foil cards, on top of art)
-	if is_foil:
-		for row in 5:
-			var sy: float = art_r.position.y + row * 11.0
-			var fc: Color = Color(1.0, 0.9, 0.3, 0.12)
-			_view.draw_rect(Rect2(art_r.position.x, sy, art_r.size.x, 5.0), fc)
-
-	# Rarity dot
-	_view.draw_circle(Vector2(r.position.x + CARD_W - 7.0, r.position.y + 8.0), 3.0, border_c)
-
-	# Stats area
-	var stats_y: float = r.position.y + 74.0
-	if is_dem:
-		var atk_str: String = str(card.get("atk", 0))
-		var hp_str: String = str(card.get("hp", 0))
-		_draw_str(atk_str, r.position.x + 4.0, stats_y, 8, Color(0.1, 0.05, 0.0))
-		_draw_str_r(hp_str, r.position.x + CARD_W - 4.0, stats_y, 8, Color(0.7, 0.0, 0.0))
-	else:
-		_draw_str_c("SPELL", r.get_center().x, stats_y, 8, Color(0.24, 0.40, 0.08))
-
-	# Ability
-	var ab: String = card.get("ability_desc", "")
-	if ab.length() > 0:
-		var short: String = ab.left(24)
-		if ab.length() > 24:
-			short += "..."
-		_draw_str_wrap(short, r.position.x + 3.0, r.position.y + 86.0, CARD_W - 6.0, 6, Color(0.1, 0.05, 0.0))
-
-	# Cost badge
-	var cost_r: Rect2 = Rect2(r.position.x, r.position.y + CARD_H - 19.0, 20.0, 19.0)
-	_view.draw_rect(cost_r, Color(0.24, 0.12, 0.08))
-	_draw_str_c(str(card.get("cost", 0)), cost_r.get_center().x, cost_r.position.y + 2.0, 10, Color.WHITE)
-
-	# FOIL badge
-	if is_foil:
-		var fb: Rect2 = Rect2(r.position.x + CARD_W - 30.0, r.position.y + CARD_H - 14.0, 28.0, 12.0)
-		_view.draw_rect(fb, Color(0.8, 0.65, 0.0))
-		_draw_str_c("FOIL", fb.get_center().x, fb.position.y + 1.0, 7, Color(0.05, 0.02, 0.0))
 
 
 func _draw_hint() -> void:
@@ -394,23 +322,3 @@ func _draw_str_r(text: String, rx: float, y: float, size: int, col: Color) -> vo
 		return
 	var tw: float = _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 	_view.draw_string(_font, Vector2(rx - tw, y + size), text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
-
-
-func _draw_str_wrap(text: String, x: float, y: float, max_w: float, size: int, col: Color) -> void:
-	if _font == null or text.is_empty():
-		return
-	# Simple word-wrap: split by space, add words until line overflows
-	var words: Array = text.split(" ")
-	var line: String = ""
-	var ly: float = y
-	for word in words:
-		var test: String = line + ("" if line.is_empty() else " ") + word
-		var tw: float = _font.get_string_size(test, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
-		if tw > max_w and not line.is_empty():
-			_draw_str(line, x, ly, size, col)
-			ly += float(size) + 2.0
-			line = word
-		else:
-			line = test
-	if not line.is_empty():
-		_draw_str(line, x, ly, size, col)

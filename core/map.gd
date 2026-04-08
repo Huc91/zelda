@@ -86,10 +86,42 @@ func on_step(actor: Actor) -> String:
 
 func slash(cell: Vector2i) -> void:
 	var data = get_cell_tile_data(Layer.DYNAMIC, cell)
-	
+
 	if data and data.get_custom_data("is_cuttable"):
 		var cut_fx = preload("res://core/vfx/grass_cut.tscn").instantiate()
-		
+
 		cut_fx.position = map_to_local(cell)
 		add_child(cut_fx)
 		erase_cell(Layer.DYNAMIC, cell)
+		_try_grass_drop(map_to_local(cell))
+
+
+func _try_grass_drop(world_pos: Vector2) -> void:
+	var roll: float = randf()
+	# 3% chance: rupie drop
+	if roll < 0.03:
+		var amount: int = randi_range(Global.RUPIES_GRASS_MIN, Global.RUPIES_GRASS_MAX)
+		Global.add_rupies(amount)
+		_spawn_drop_label(world_pos, "+%d R" % amount, Color(1.0, 0.9, 0.2))
+		return
+	# 0.5% chance: card drop
+	if roll < 0.035:
+		var ids: Array[String] = CardDB.all_collectible_ids()
+		if not ids.is_empty():
+			var dropped: String = ids[randi() % ids.size()]
+			Global.collect_card(dropped, false)
+			var card: Dictionary = CardDB.get_card(dropped)
+			_spawn_drop_label(world_pos, card.get("name", "Card") + "!", Color(0.4, 0.8, 1.0))
+
+
+func _spawn_drop_label(world_pos: Vector2, text: String, col: Color) -> void:
+	var lbl: Label = Label.new()
+	lbl.text = text
+	lbl.position = world_pos - Vector2(16, 16)
+	lbl.add_theme_color_override("font_color", col)
+	lbl.add_theme_font_size_override("font_size", 8)
+	add_child(lbl)
+	var tw: Tween = lbl.create_tween()
+	tw.tween_property(lbl, "position", world_pos - Vector2(16, 32), 0.8)
+	tw.parallel().tween_property(lbl, "modulate:a", 0.0, 0.8)
+	tw.tween_callback(lbl.queue_free)

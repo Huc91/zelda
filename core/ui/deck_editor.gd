@@ -186,7 +186,7 @@ func _count_id(card_id: String) -> int:
 
 
 func _owned(card_id: String) -> int:
-	return int(Global.card_collection.get(card_id, 0))
+	return int(Global.card_collection.get(card_id, 0)) + int(Global.foil_collection.get(card_id, 0))
 
 
 func _can_add(card_id: String) -> bool:

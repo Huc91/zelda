@@ -12,10 +12,14 @@ const DECKBOX := {
 }
 
 signal deckbuilding_requested(deck_index: int)
+signal open_pack_requested
+signal binder_requested
 
 var _subtitle: Label
 var _slots_row: HBoxContainer
 var _new_deck_btn: Button
+var _rupies_lbl: Label
+var _open_pack_btn: Button
 
 
 func _ready() -> void:
@@ -53,10 +57,50 @@ func _ready() -> void:
 	add_child(_new_deck_btn)
 
 	_slots_row = HBoxContainer.new()
-	_slots_row.position = Vector2i(24, 72)
+	_slots_row.position = Vector2i(24, 100)
 	_slots_row.add_theme_constant_override("separation", 8)
 	_slots_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	add_child(_slots_row)
+
+	# Rupies label
+	_rupies_lbl = Label.new()
+	_rupies_lbl.position = Vector2i(16, 52)
+	add_child(_rupies_lbl)
+	_refresh_rupies()
+	Global.rupies_changed.connect(func(_r: int) -> void: _refresh_rupies())
+
+	# OPEN PACK button
+	_open_pack_btn = Button.new()
+	_open_pack_btn.text = "OPEN PACK (%d R)" % Global.PACK_COST
+	_open_pack_btn.position = Vector2i(200, 46)
+	_open_pack_btn.size = Vector2i(180, 24)
+	_open_pack_btn.focus_mode = Control.FOCUS_NONE
+	_style_button(_open_pack_btn, Color(0.65, 0.30, 0.10))
+	_open_pack_btn.pressed.connect(func() -> void:
+		Sound.play(preload("res://data/sfx/LA_Menu_Select.wav"))
+		emit_signal("open_pack_requested")
+	)
+	add_child(_open_pack_btn)
+
+	# BINDER button
+	var binder_btn := Button.new()
+	binder_btn.text = "COLLECTION"
+	binder_btn.position = Vector2i(392, 46)
+	binder_btn.size = Vector2i(140, 24)
+	binder_btn.focus_mode = Control.FOCUS_NONE
+	_style_button(binder_btn, Color(0.10, 0.35, 0.50))
+	binder_btn.pressed.connect(func() -> void:
+		Sound.play(preload("res://data/sfx/LA_Menu_Select.wav"))
+		emit_signal("binder_requested")
+	)
+	add_child(binder_btn)
+
+
+func _refresh_rupies() -> void:
+	if _rupies_lbl != null:
+		_rupies_lbl.text = "Rupies: %d" % Global.rupies
+	if _open_pack_btn != null:
+		_open_pack_btn.disabled = Global.rupies < Global.PACK_COST
 
 
 func refresh_decks() -> void:
@@ -65,6 +109,7 @@ func refresh_decks() -> void:
 	var n: int = Global.player_decks.size()
 	_subtitle.text = "Your Decks %d/%d" % [n, Global.MAX_DECKS]
 	_new_deck_btn.disabled = n >= Global.MAX_DECKS
+	_refresh_rupies()
 	for i in n:
 		_slots_row.add_child(_make_slot(i, Global.player_decks[i]))
 

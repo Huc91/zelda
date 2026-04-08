@@ -193,7 +193,10 @@ func _unhandled_input(event: InputEvent) -> void:
 # ══════════════════════════════════════════════════════════════════
 func _start_battle() -> void:
 	player_deck = CardDB.deck_from_card_ids(Global.get_battle_deck_card_ids())
-	enemy_deck  = CardDB.enemy_deck()
+	var diff: String = "easy"
+	if is_instance_valid(enemy_actor) and "difficulty" in enemy_actor:
+		diff = str(enemy_actor.difficulty)
+	enemy_deck  = CardDB.enemy_deck_for_difficulty(diff)
 	_ai_type    = _ai_runner.detect_ai_type_from_deck(enemy_deck)
 	if not _draw_mandatory_refresh(player_hand, player_deck, CardBattleConstants.STARTING_HAND, true): return
 	if not _draw_mandatory_refresh(enemy_hand, enemy_deck, CardBattleConstants.STARTING_HAND, false): return
@@ -2758,8 +2761,11 @@ func _draw_mini_card(r: Rect2, d: Dictionary, targetable: bool, selected: bool) 
 	var art_bg_c: Color = fill_c
 	var art_r := Rect2(r.position.x + 8.0, r.position.y + CardBattleConstants.MINI_ART_TOP, CardBattleConstants.MINI_ART_SIZE, CardBattleConstants.MINI_ART_SIZE)
 	_view.draw_rect(art_r, Color(art_bg_c.r * 0.85, art_bg_c.g * 0.85, art_bg_c.b * 0.85))
+	var _art_tex_mini: Texture2D = CardArt.card_art_1x(str(card.get("id", "")), d.get("foil", false))
+	if _art_tex_mini != null:
+		_view.draw_texture_rect(_art_tex_mini, art_r, false)
 
-	if _mini_shows_effect_label(card):
+	if _mini_shows_effect_label(card) and _art_tex_mini == null:
 		var art_bot: float = r.position.y + CardBattleConstants.MINI_ART_TOP + CardBattleConstants.MINI_ART_SIZE
 		var fs_e: int = _fs(8)
 		var eff_col: Color = CardBattleConstants.C_EXHAUST_TEXT if ex else CardBattleConstants.C_TEXT
@@ -2801,8 +2807,11 @@ func _draw_hand_card(r: Rect2, card: Dictionary, selected: bool, grayed: bool) -
 	var art := Rect2(r.position.x + 8.0, r.position.y + CardBattleConstants.MINI_ART_TOP, CardBattleConstants.MINI_ART_SIZE, CardBattleConstants.MINI_ART_SIZE)
 	_view.draw_rect(art, Color(art_bg.r * 0.84, art_bg.g * 0.84, art_bg.b * 0.84))
 	_view.draw_rect(art, _mix_white(CardBattleConstants.C_MINI_BORDER, 0.35), false, 1.0)
+	var _art_hand: Texture2D = CardArt.card_art_1x(str(card.get("id", "")), card.get("foil", false))
+	if _art_hand != null:
+		_view.draw_texture_rect(_art_hand, art, false)
 
-	if _mini_shows_effect_label(card):
+	if _mini_shows_effect_label(card) and _art_hand == null:
 		var art_bot: float = r.position.y + CardBattleConstants.MINI_ART_TOP + CardBattleConstants.MINI_ART_SIZE
 		var fs_e: int = _fs(8)
 		_str("Effect", r.position.x + 5.0, art_bot - 2.0 - float(fs_e), 8, CardBattleConstants.C_TEXT)
@@ -2833,11 +2842,14 @@ func _draw_zoomed_card(card: Dictionary, state: Dictionary) -> void:
 	_draw_cost_badge_rect(Rect2(cr.position.x + cr.size.x - 22.0, cr.position.y + 2.0, 20.0, 19.0),
 		card.get("cost", 0))
 
-	# Art placeholder — below up-to-2-line title (fixes.md long names)
+	# Art area — below up-to-2-line title
 	var art := Rect2(cr.position.x + 18.0, cr.position.y + 30.0, 128.0, 128.0)
 	var art_bg := CardBattleConstants.C_DEMON_BG if is_dem else CardBattleConstants.C_SPELL_BG
 	_view.draw_rect(art, Color(art_bg.r * 0.80, art_bg.g * 0.80, art_bg.b * 0.80))
 	_view.draw_rect(art, _mix_white(CardBattleConstants.C_MINI_BORDER, 0.28), false, 1.0)
+	var _zoom_art: Texture2D = CardArt.card_art_2x(str(card.get("id", "")), card.get("foil", false))
+	if _zoom_art != null:
+		_view.draw_texture_rect(_zoom_art, art, false)
 
 	# Effect text — just below art
 	var ab_desc: String = card.get("ability_desc", card.get("desc", ""))

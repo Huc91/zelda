@@ -8,12 +8,20 @@ var target
 
 var _deck_editor: Control
 var _deck_editor_layer: CanvasLayer
+var _pack_opening: PackOpening
+var _binder: CollectionBinder
 
 
 func _ready() -> void:
 	# Deferred delivery: runs after EDIT/NEW finishes input, safe while paused.
 	if not deck_inventory.deckbuilding_requested.is_connected(_on_deckbuilding_requested):
 		deck_inventory.deckbuilding_requested.connect(_on_deckbuilding_requested, CONNECT_DEFERRED)
+	if not deck_inventory.open_pack_requested.is_connected(_on_open_pack_requested):
+		deck_inventory.open_pack_requested.connect(_on_open_pack_requested, CONNECT_DEFERRED)
+	if not deck_inventory.binder_requested.is_connected(_on_binder_requested):
+		deck_inventory.binder_requested.connect(_on_binder_requested, CONNECT_DEFERRED)
+	_ensure_pack_opening()
+	_ensure_binder()
 
 
 func initialize(_target : Actor):
@@ -91,6 +99,40 @@ func _on_deckbuilding_requested(deck_index: int) -> void:
 func _on_deck_editor_closed() -> void:
 	if _deck_editor_layer != null:
 		_deck_editor_layer.hide()
+	deck_inventory.refresh_decks()
+	deck_inventory.show()
+
+
+func _ensure_pack_opening() -> void:
+	if _pack_opening != null:
+		return
+	_pack_opening = PackOpening.new()
+	get_parent().add_child(_pack_opening)
+	_pack_opening.finished.connect(_on_pack_opening_finished)
+
+
+func _ensure_binder() -> void:
+	if _binder != null:
+		return
+	_binder = CollectionBinder.new()
+	get_parent().add_child(_binder)
+
+
+func _on_open_pack_requested() -> void:
+	_ensure_pack_opening()
+	if Global.rupies < Global.PACK_COST:
+		return  # not enough rupies — deck_inventory should disable the button
+	deck_inventory.hide()
+	_pack_opening.open_pack()
+
+
+func _on_binder_requested() -> void:
+	_ensure_binder()
+	deck_inventory.hide()
+	_binder.open_binder()
+
+
+func _on_pack_opening_finished() -> void:
 	deck_inventory.refresh_decks()
 	deck_inventory.show()
 

@@ -57,12 +57,27 @@ func _run_headless_battle_smoke() -> void:
 	get_tree().quit(0)
 
 
+var _guide_npc_spawned: bool = false
+
 func initialize_scene(map, entrance):
 	get_tree().paused = false
 	current_scene = GameScene.new(map, entrance, _ensure_player())
 	current_scene.map_changed.connect(initialize_scene)
 	screen.add_child(current_scene)
+	if not _guide_npc_spawned and map == STARTING_MAP:
+		_guide_npc_spawned = true
+		_spawn_guide_npc()
 	await ScreenFX.fade_white_out()
+
+
+func _spawn_guide_npc() -> void:
+	# Spawn guide NPC slightly above the player start position
+	var npc: NPC = NPC.new()
+	npc.dialogue_id = "guide"
+	npc.npc_color = Color(0.4, 0.6, 0.9)
+	current_scene.map.add_child(npc)
+	# Place 2 tiles above the starting entrance
+	npc.position = current_scene.map.map_to_local(STARTING_ENTRANCE + Vector2i(0, -3))
 
 
 func _on_card_battle_requested(p_first: bool, enemy: Node) -> void:
@@ -85,6 +100,7 @@ func _on_battle_ended(player_won: bool, battle: Node, enemy: Node) -> void:
 	await ScreenFX.fade_white_in()
 	battle.queue_free()
 	if player_won and is_instance_valid(enemy):
+		_give_battle_reward(enemy)
 		enemy.queue_free()
 	# Unfreeze all living actors and reset battle flag
 	for actor in get_tree().get_nodes_in_group("actor"):
@@ -93,3 +109,23 @@ func _on_battle_ended(player_won: bool, battle: Node, enemy: Node) -> void:
 			actor.in_battle = false
 	await ScreenFX.fade_white_out()
 	Global.card_battle_requested.connect(_on_card_battle_requested)
+
+
+func _give_battle_reward(enemy: Node) -> void:
+	var diff: String = "easy"
+	if "difficulty" in enemy:
+		diff = str(enemy.difficulty)
+	var reward_table: Dictionary = Global.REWARD_BY_DIFF.get(diff, Global.REWARD_BY_DIFF["easy"])
+	var amount: int = randi_range(int(reward_table["min"]), int(reward_table["max"]))
+	Global.add_rupies(amount)
+	# Rare card drop: hard enemies 15%, normal 5%, easy 2%
+	var card_drop_chance: float = 0.02
+	if diff == "normal":
+		card_drop_chance = 0.05
+	elif diff == "hard":
+		card_drop_chance = 0.15
+	if randf() < card_drop_chance:
+		var ids: Array[String] = CardDB.all_collectible_ids()
+		if not ids.is_empty():
+			var dropped_id: String = ids[randi() % ids.size()]
+			Global.collect_card(dropped_id, false)

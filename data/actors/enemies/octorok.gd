@@ -1,5 +1,27 @@
 extends Actor
 
+## Color-coded difficulty modulate (applied in _ready after sprite init).
+const DIFF_MODULATE: Dictionary = {
+	"easy":   Color(0.5, 1.0, 0.5),   ## green tint
+	"normal": Color(0.5, 0.7, 1.0),   ## blue tint
+	"hard":   Color(1.0, 0.4, 0.4),   ## red tint
+}
+
+
+func _ready() -> void:
+	super._ready()
+	# Apply difficulty color tint and scale HP/speed with difficulty
+	var mod: Color = DIFF_MODULATE.get(difficulty, DIFF_MODULATE["easy"])
+	sprite.modulate = mod
+	match difficulty:
+		"normal":
+			hearts = 1.0
+			speed = 55.0
+		"hard":
+			hearts = 2.0
+			speed = 70.0
+	health = hearts
+
 
 func _on_attacked(_source: Node) -> void:
 	if in_battle: return

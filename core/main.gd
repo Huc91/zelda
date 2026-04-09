@@ -58,26 +58,102 @@ func _run_headless_battle_smoke() -> void:
 
 
 var _guide_npc_spawned: bool = false
+var _guide_npcs: Array[Node] = []
 
-func initialize_scene(map, entrance):
+func initialize_scene(map: String, entrance: Vector2i) -> void:
 	get_tree().paused = false
+	Global.current_map_path = map
+	var old_scene: GameScene = current_scene
 	current_scene = GameScene.new(map, entrance, _ensure_player())
 	current_scene.map_changed.connect(initialize_scene)
 	screen.add_child(current_scene)
 	if not _guide_npc_spawned and map == STARTING_MAP:
 		_guide_npc_spawned = true
 		_spawn_guide_npc()
+	elif _guide_npc_spawned and map == STARTING_MAP and old_scene != null:
+		# Re-parent the persistent NPCs into the new overworld map before the old scene is freed.
+		for npc in _guide_npcs:
+			if is_instance_valid(npc):
+				if npc.get_parent() != null:
+					npc.get_parent().remove_child(npc)
+				current_scene.map.add_child(npc)
 	await ScreenFX.fade_white_out()
 
 
+## Returns true if the tile at `cell` exists and has no collision shapes (open ground).
+func _tile_walkable(cell: Vector2i) -> bool:
+	var data: TileData = current_scene.map.get_cell_tile_data(Map.Layer.STATIC, cell)
+	if data == null:
+		return false
+	return data.get_collision_polygons_count(0) == 0
+
+
+## Searches outward from `center` for a walkable tile not in `used`.
+## Stays within the same camera room as `center`.
+func _find_walkable(center: Vector2i, min_r: int, max_r: int, used: Array) -> Vector2i:
+	var center_world: Vector2 = current_scene.map.map_to_local(center)
+	var room_origin: Vector2 = Vector2(
+		floor(center_world.x / GridCamera.CELL_SIZE.x) * GridCamera.CELL_SIZE.x,
+		floor(center_world.y / GridCamera.CELL_SIZE.y) * GridCamera.CELL_SIZE.y
+	)
+	var room_end: Vector2 = room_origin + GridCamera.CELL_SIZE
+
+	for r in range(min_r, max_r + 1):
+		var ring: Array[Vector2i] = []
+		for dy in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				if maxi(absi(dx), absi(dy)) != r:
+					continue
+				var c := center + Vector2i(dx, dy)
+				if c in used:
+					continue
+				var cw: Vector2 = current_scene.map.map_to_local(c)
+				if cw.x < room_origin.x or cw.x >= room_end.x:
+					continue
+				if cw.y < room_origin.y or cw.y >= room_end.y:
+					continue
+				if _tile_walkable(c):
+					ring.append(c)
+		if not ring.is_empty():
+			return ring[0]
+	return center
+
+
 func _spawn_guide_npc() -> void:
-	# Spawn guide NPC slightly above the player start position
-	var npc: NPC = NPC.new()
-	npc.dialogue_id = "guide"
-	npc.npc_color = Color(0.4, 0.6, 0.9)
-	current_scene.map.add_child(npc)
-	# Place 2 tiles above the starting entrance
-	npc.position = current_scene.map.map_to_local(STARTING_ENTRANCE + Vector2i(0, -3))
+	var used: Array = [STARTING_ENTRANCE]
+
+	# Guide NPC
+	var guide: NPC = NPC.new()
+	guide.dialogue_id = "guide"
+	guide.npc_color = Color(0.4, 0.6, 0.9)
+	guide.z_index = 2
+	var guide_tile := _find_walkable(STARTING_ENTRANCE, 1, 6, used)
+	used.append(guide_tile)
+	current_scene.map.add_child(guide)
+	guide.position = current_scene.map.map_to_local(guide_tile)
+
+	# Merchant hint NPC
+	var hint_npc: NPC = NPC.new()
+	hint_npc.dialogue_id = "merchant_hint"
+	hint_npc.npc_color = Color(0.5, 0.8, 0.4)
+	hint_npc.z_index = 2
+	var hint_tile := _find_walkable(STARTING_ENTRANCE, 2, 7, used)
+	used.append(hint_tile)
+	current_scene.map.add_child(hint_npc)
+	hint_npc.position = current_scene.map.map_to_local(hint_tile)
+
+	# Merchant
+	var merchant: Merchant = Merchant.new()
+	merchant.merchant_type = "general"
+	merchant.z_index = 2
+	var merchant_tile := _find_walkable(STARTING_ENTRANCE, 3, 8, used)
+	used.append(merchant_tile)
+	current_scene.map.add_child(merchant)
+	merchant.position = current_scene.map.map_to_local(merchant_tile)
+
+	_guide_npcs = [guide, hint_npc, merchant]
+
+	# Enemies on the overworld are placed via the map's SpawnLayer tiles in the editor.
 
 
 func _on_card_battle_requested(p_first: bool, enemy: Node) -> void:
@@ -102,13 +178,63 @@ func _on_battle_ended(player_won: bool, battle: Node, enemy: Node) -> void:
 	if player_won and is_instance_valid(enemy):
 		_give_battle_reward(enemy)
 		enemy.queue_free()
-	# Unfreeze all living actors and reset battle flag
-	for actor in get_tree().get_nodes_in_group("actor"):
-		if is_instance_valid(actor) and actor is Actor:
-			actor.set_physics_process(true)
-			actor.in_battle = false
-	await ScreenFX.fade_white_out()
-	Global.card_battle_requested.connect(_on_card_battle_requested)
+		# Unfreeze all living actors and reset battle flag
+		for actor in get_tree().get_nodes_in_group("actor"):
+			if is_instance_valid(actor) and actor is Actor:
+				actor.set_physics_process(true)
+				actor.in_battle = false
+		await ScreenFX.fade_white_out()
+		Global.card_battle_requested.connect(_on_card_battle_requested)
+	else:
+		# Player lost — game over
+		await ScreenFX.fade_white_out()
+		_show_game_over()
+
+
+func _show_game_over() -> void:
+	var go: CanvasLayer = CanvasLayer.new()
+	go.layer = 50
+	go.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(go)
+	var font: Font = load("res://assets/fonts/Nudge Orb.ttf") as Font
+	var ctrl: Control = Control.new()
+	ctrl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ctrl.focus_mode = Control.FOCUS_CLICK
+	ctrl.mouse_filter = Control.MOUSE_FILTER_STOP
+	go.add_child(ctrl)
+	var _ready_input: bool = false
+	ctrl.draw.connect(func() -> void:
+		ctrl.draw_rect(Rect2(0, 0, 640, 576), Color(0.0, 0.0, 0.0, 0.88))
+		if font == null:
+			return
+		var title: String = "GAME OVER"
+		var tw_: float = font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, 28).x
+		ctrl.draw_string(font, Vector2((640.0 - tw_) * 0.5, 262.0), title,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 28, Color(1.0, 0.15, 0.05))
+		if _ready_input:
+			var hint: String = "PRESS ANY KEY TO RESTART"
+			var hw: float = font.get_string_size(hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 10).x
+			ctrl.draw_string(font, Vector2((640.0 - hw) * 0.5, 302.0), hint,
+					HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 1.0, 1.0, 0.85))
+	)
+	ctrl.gui_input.connect(func(event: InputEvent) -> void:
+		if not _ready_input:
+			return
+		var do_restart: bool = false
+		if event is InputEventKey and (event as InputEventKey).pressed:
+			do_restart = true
+		elif event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
+			do_restart = true
+		if do_restart:
+			Global.money = 10
+			Global.in_battle = false
+			get_tree().reload_current_scene()
+	)
+	ctrl.grab_focus()
+	ctrl.queue_redraw()
+	await get_tree().create_timer(1.2).timeout
+	_ready_input = true
+	ctrl.queue_redraw()
 
 
 func _give_battle_reward(enemy: Node) -> void:
@@ -117,15 +243,53 @@ func _give_battle_reward(enemy: Node) -> void:
 		diff = str(enemy.difficulty)
 	var reward_table: Dictionary = Global.REWARD_BY_DIFF.get(diff, Global.REWARD_BY_DIFF["easy"])
 	var amount: int = randi_range(int(reward_table["min"]), int(reward_table["max"]))
-	Global.add_rupies(amount)
-	# Rare card drop: hard enemies 15%, normal 5%, easy 2%
+	_spawn_coins(enemy.position, amount)
+	# Card drop chance by difficulty
 	var card_drop_chance: float = 0.02
 	if diff == "normal":
 		card_drop_chance = 0.05
 	elif diff == "hard":
 		card_drop_chance = 0.15
+	elif diff == "boss":
+		card_drop_chance = 0.50
 	if randf() < card_drop_chance:
 		var ids: Array[String] = CardDB.all_collectible_ids()
 		if not ids.is_empty():
 			var dropped_id: String = ids[randi() % ids.size()]
 			Global.collect_card(dropped_id, false)
+
+
+func _decompose_to_coins(amount: int) -> Array[int]:
+	var coins: Array[int] = []
+	var remaining: int = amount
+	while remaining >= 50:
+		coins.append(50)
+		remaining -= 50
+	while remaining >= 10:
+		coins.append(10)
+		remaining -= 10
+	while remaining > 0:
+		coins.append(1)
+		remaining -= 1
+	return coins
+
+
+func _spawn_coins(world_pos: Vector2, amount: int) -> void:
+	if current_scene == null or current_scene.map == null:
+		Global.add_money(amount)
+		return
+	var coin_values: Array[int] = _decompose_to_coins(amount)
+	var center_cell: Vector2i = current_scene.map.local_to_map(world_pos)
+	var used: Array = []
+	for i: int in coin_values.size():
+		var tile: Vector2i
+		if i == 0:
+			tile = center_cell
+			used.append(tile)
+		else:
+			tile = _find_walkable(center_cell, 1, 5, used)
+			used.append(tile)
+		var coin: Coin = Coin.new()
+		coin.value = coin_values[i]
+		coin.position = current_scene.map.map_to_local(tile)
+		current_scene.map.add_child(coin)

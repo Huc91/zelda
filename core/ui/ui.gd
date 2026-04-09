@@ -62,16 +62,11 @@ func _process(_delta):
 			_open_deck_inventory()
 		return
 	if Input.is_action_just_pressed("pause"):
-		# ESC / pause is used by CardBattle to cancel pay / row / freeze — do not open inventory.
+		# ESC closes the deck inventory if open; CardBattle handles it internally.
 		if Global.in_battle:
 			return
 		if deck_inventory.visible:
 			_close_deck_inventory()
-			return
-		if inventory.visible:
-			_close_inventory()
-		else:
-			_open_inventory()
 
 
 func _ensure_deck_editor() -> void:
@@ -120,8 +115,8 @@ func _ensure_binder() -> void:
 
 func _on_open_pack_requested() -> void:
 	_ensure_pack_opening()
-	if Global.rupies < Global.PACK_COST:
-		return  # not enough rupies — deck_inventory should disable the button
+	if Global.money < Global.PACK_COST:
+		return  # not enough money — deck_inventory should disable the button
 	deck_inventory.hide()
 	_pack_opening.open_pack()
 

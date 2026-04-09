@@ -59,7 +59,7 @@ const CTX_BTN_GAP_Y: float = 2.0
 const SIDE_BAND_Y: Array = [0.0, 57.0, 173.0, 293.0, 409.0, 524.0]
 const SIDE_BAND_H: Array = [53.0, 110.0, 110.0, 110.0, 110.0, 52.0]
 
-const STARTING_HP: int = 15
+const STARTING_HP: int = 10
 const LOW_LIFE_THRESHOLD: int = maxi(3, (STARTING_HP * 5) / 15)
 const STARTING_HAND: int = 5
 ## Maximum cards in hand (player and enemy). Draws and effects stop adding once full.
@@ -165,6 +165,7 @@ const RARITY_COL: Dictionary = {
 	"common"   : Color("#7C7C7C"),
 	"uncommon" : Color("#0257F7"),
 	"rare"     : Color("#0257F7"),
+	"epic"     : Color("#6844FC"),
 	"mythic"   : Color("#6844FC"),
 	"legendary": Color("#F83902"),
 }

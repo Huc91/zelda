@@ -13,7 +13,7 @@ static var KB_AMT = 100
 @export var hearts := 1.0
 @export var damage := 0.5
 @export var hit_sfx = preload("res://data/sfx/LA_Enemy_Hit.wav")
-## Difficulty determines rupie reward and battle deck used. Values: "easy" / "normal" / "hard"
+## Difficulty determines money reward and battle deck used. Values: "easy" / "normal" / "hard" / "boss"
 @export var difficulty: String = "easy"
 @onready var health = hearts
 

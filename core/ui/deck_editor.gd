@@ -126,7 +126,11 @@ func _apply_full_viewport_rect() -> void:
 
 func open(deck_idx: int) -> void:
 	_deck_index = deck_idx
-	_all_ids = CardDB.all_collectible_ids()
+	var all: Array[String] = CardDB.all_collectible_ids()
+	if Global.dev_mode:
+		_all_ids = all
+	else:
+		_all_ids = all.filter(func(id: String) -> bool: return _owned(id) > 0)
 	var d: Dictionary = Global.player_decks[deck_idx]
 	_edit_ids = _as_string_array(d.get("card_ids", []))
 	_snap_ids = _edit_ids.duplicate()
@@ -169,7 +173,7 @@ func close_save() -> void:
 		_show_save_error("Deck must have exactly %d cards (you have %d)." % [CardDB.DECK_SIZE_MAX, _edit_ids.size()])
 		return
 	if not CardDB.deck_ids_legal(_edit_ids):
-		_show_save_error("Invalid deck: max %d copies per card (or bad card id)." % CardDB.DECK_COPY_MAX)
+		_show_save_error("Invalid deck: too many copies of a card, or wrong card count.")
 		return
 	Global.apply_deck_edit(_deck_index, _name_edit.text, _edit_ids)
 	visible = false
@@ -193,10 +197,12 @@ func _can_add(card_id: String) -> bool:
 	if _edit_ids.size() >= CardDB.DECK_SIZE_MAX:
 		return false
 	var in_d: int = _count_id(card_id)
-	if in_d >= CardDB.DECK_COPY_MAX:
+	if in_d >= CardDB.card_copy_max(card_id):
 		return false
-	if in_d >= _owned(card_id):
-		return false
+	# Horde cards have no copy limit — skip the owned-count gate.
+	if CardDB.card_copy_max(card_id) <= CardDB.DECK_COPY_MAX:
+		if in_d >= _owned(card_id):
+			return false
 	return true
 
 
@@ -440,7 +446,7 @@ func _draw() -> void:
 		if cname.length() > 16:
 			cname = cname.left(16) + "…"
 		var ty: float = y + 3.0
-		_str("%d/%d" % [cnt, CardDB.DECK_COPY_MAX], 4.0, ty, 8, CardBattleConstants.C_TEXT)
+		_str("%d/%d" % [cnt, CardDB.card_copy_max(rid)], 4.0, ty, 8, CardBattleConstants.C_TEXT)
 		_str(cname, 40.0, ty, 8, CardBattleConstants.C_TEXT)
 		var pm: Array[Rect2] = _list_plus_minus_rects(y)
 		var plus_rect: Rect2 = pm[0]

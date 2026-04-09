@@ -21,9 +21,6 @@ static func draw(ci: CanvasItem, font: Font, rect: Rect2, card: Dictionary, stat
 		card.get("cost", 0))
 
 	var art := Rect2(cr.position.x + 18.0, cr.position.y + 30.0, 128.0, 128.0)
-	var art_bg := CardBattleConstants.C_DEMON_BG if is_dem else CardBattleConstants.C_SPELL_BG
-	ci.draw_rect(art, Color(art_bg.r * 0.80, art_bg.g * 0.80, art_bg.b * 0.80))
-	ci.draw_rect(art, _mix_white(CardBattleConstants.C_MINI_BORDER, 0.28), false, 1.0)
 	var ztex: Texture2D = CardArt.card_art_2x(str(card.get("id", "")), card.get("foil", false))
 	if ztex != null:
 		ci.draw_texture_rect(ztex, art, false)
@@ -62,16 +59,28 @@ static func _mix_white(c: Color, t: float) -> Color:
 	return Color(c.r * t + u, c.g * t + u, c.b * t + u)
 
 
-## Rarity gem — top band, just left of the mana badge (same idea as hand mini / pack face).
+## Rarity jewel PNG — pixel position x:147, y:139 relative to card top-left.
+static var _jewel_cache: Dictionary = {}
+
+static func _jewel_tex(rarity: String) -> Texture2D:
+	if _jewel_cache.has(rarity):
+		return _jewel_cache[rarity]
+	var path: String
+	match rarity:
+		"legendary": path = "res://assets/ui parts/jewel rarity-legendary.png"
+		"epic", "mythic": path = "res://assets/ui parts/jewel rarity-epic.png"
+		"rare": path = "res://assets/ui parts/jewel rarity rare.png"
+		_: path = "res://assets/ui parts/jewel rarity-common.png"
+	var tex: Texture2D = load(path) as Texture2D
+	_jewel_cache[rarity] = tex
+	return tex
+
 static func _draw_rarity_jewel(ci: CanvasItem, cr: Rect2, card: Dictionary) -> void:
 	var rarity: String = str(card.get("rarity", "common"))
-	var col: Color = CardBattleConstants.RARITY_COL.get(rarity, Color("#7C7C7C"))
-	# Mana badge occupies cr.size.x − 22 …; jewel sits clear to its left
-	var cx: float = cr.position.x + cr.size.x - 29.0
-	var cy: float = cr.position.y + 11.0
-	var rad: float = 4.0
-	ci.draw_circle(Vector2(cx, cy), rad, col)
-	ci.draw_arc(Vector2(cx, cy), rad, 0.0, TAU, 16, Color(0.12, 0.08, 0.06, 0.85), 1.0, true)
+	var tex: Texture2D = _jewel_tex(rarity)
+	if tex == null:
+		return
+	ci.draw_texture(tex, Vector2(int(cr.position.x + 147.0), int(cr.position.y + 139.0)))
 
 
 static func _draw_cost_badge_rect(ci: CanvasItem, font: Font, r: Rect2, cost: int) -> void:

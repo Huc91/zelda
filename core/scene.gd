@@ -4,10 +4,12 @@ var map: Map
 var player: Actor
 var camera: GridCamera
 var entrance: Vector2i
+var _map_path: String
 
 signal map_changed(map, entrance)
 
 func _init(map_path: String, p_entrance: Vector2i, p_player: Actor):
+	_map_path = map_path
 	map = load(map_path).instantiate()
 	map.scene = self
 	map.z_index -= 1
@@ -21,11 +23,18 @@ func _init(map_path: String, p_entrance: Vector2i, p_player: Actor):
 
 func _enter_tree():
 	add_child(map)
+	_remove_collected_pickups()
 	add_child(camera)
 	camera.target = player
 	map.add_child(player)
 	player.position = map.map_to_local(entrance)
 	player.last_safe_position = player.position
+
+
+func _remove_collected_pickups() -> void:
+	for child in map.get_children():
+		if child is Pickup and Global.is_pickup_collected(_map_path, child.position):
+			child.queue_free()
 
 
 func _find_exit(exit_name: String) -> Vector2i:

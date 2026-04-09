@@ -84,39 +84,38 @@ func _process(_dt: float) -> void:
 	_view.queue_redraw()
 
 
-func _on_input(event: InputEvent) -> void:
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible:
+		return
 	if event is InputEventKey:
 		var ek: InputEventKey = event as InputEventKey
 		if ek.pressed:
 			if ek.keycode == KEY_ESCAPE or ek.keycode == KEY_TAB:
 				hide()
+				get_viewport().set_input_as_handled()
 			elif ek.keycode == KEY_UP or ek.keycode == KEY_W:
 				_scroll_y = maxf(0.0, _scroll_y - 40.0)
+				get_viewport().set_input_as_handled()
 			elif ek.keycode == KEY_DOWN or ek.keycode == KEY_S:
 				_scroll_y = minf(_max_scroll, _scroll_y + 40.0)
+				get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton:
 		var mb: InputEventMouseButton = event as InputEventMouseButton
 		if mb.pressed:
 			if mb.button_index == MOUSE_BUTTON_WHEEL_UP:
 				_scroll_y = maxf(0.0, _scroll_y - 32.0)
+				get_viewport().set_input_as_handled()
 			elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 				_scroll_y = minf(_max_scroll, _scroll_y + 32.0)
+				get_viewport().set_input_as_handled()
+
+
+func _on_input(event: InputEvent) -> void:
+	pass
 
 
 func _on_draw() -> void:
 	_view.draw_rect(Rect2(0, 0, W, H), C_BG)
-
-	_view.draw_rect(Rect2(0, 0, W, HEADER_H), C_HDR)
-	_draw_str_c("BASE SET COLLECTION", W * 0.5, 6, 12, Color.WHITE)
-	_draw_str("Rupies: %d" % Global.rupies, 12, 24, 9, Color(1.0, 0.9, 0.3))
-
-	var total_owned: int = 0
-	for c in _cards:
-		var id: String = str(c.get("id", ""))
-		if Global.card_collection.get(id, 0) > 0 or Global.foil_collection.get(id, 0) > 0:
-			total_owned += 1
-	_draw_str_r("%d / %d" % [total_owned, _cards.size()], W - 12, 6, 9, Color(0.85, 0.85, 0.85))
-	_draw_str_r("ESC to close", W - 12, 20, 8, Color(0.7, 0.7, 0.7))
 
 	for i in _cards.size():
 		var col: int = i % GRID_COLS
@@ -133,6 +132,19 @@ func _on_draw() -> void:
 		var owned_foil: int = Global.foil_collection.get(id, 0)
 		var cr := Rect2(cx, cy, float(CARD_W), float(CARD_H))
 		_draw_cell(cr, card, owned_normal, owned_foil)
+
+	# Header drawn after cards so it always covers any card overflow
+	_view.draw_rect(Rect2(0, 0, W, HEADER_H), C_HDR)
+	_draw_str_c("BASE SET COLLECTION", W * 0.5, 6, 12, Color.WHITE)
+	_draw_str("Money: %d" % Global.money, 12, 24, 9, Color(1.0, 0.9, 0.3))
+
+	var total_owned: int = 0
+	for c in _cards:
+		var id: String = str(c.get("id", ""))
+		if Global.card_collection.get(id, 0) > 0 or Global.foil_collection.get(id, 0) > 0:
+			total_owned += 1
+	_draw_str_r("%d / %d" % [total_owned, _cards.size()], W - 12, 6, 9, Color(0.85, 0.85, 0.85))
+	_draw_str_r("ESC to close", W - 12, 20, 8, Color(0.7, 0.7, 0.7))
 
 	if _max_scroll > 0.0:
 		var track_h: float = float(H - HEADER_H - 4)

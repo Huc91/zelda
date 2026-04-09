@@ -81,6 +81,7 @@ func _custom_collision(other) -> void:
 
 
 func _pickup(pickup) -> void:
+	Global.record_pickup(Global.current_map_path, pickup.position)
 	if items.has("B"):
 		if items.has("A"):
 			var slot = 0

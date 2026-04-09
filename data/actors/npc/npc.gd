@@ -18,7 +18,8 @@ extends StaticBody2D
 ## Which line to show next (auto-cycles).
 var _dialogue_index: int = 0
 var _ui_open: bool = false
-const INTERACT_RADIUS: float = 24.0
+var _cooldown_frames: int = 0
+const INTERACT_RADIUS: float = 32.0
 
 # ── Dialogue database ─────────────────────────────────────────────────
 ## Add new NPCs here. Each entry is an Array of Strings (lines in order).
@@ -28,7 +29,7 @@ const DIALOGUES: Dictionary = {
 	],
 	"guide": [
 		"Welcome, young traveller!",
-		"Defeat enemies to earn Rupies.",
+		"Defeat enemies to earn money.",
 		"Open your inventory (TAB) to manage your card decks.",
 		"Open packs to collect new cards for your binder.",
 		"The stronger the enemy, the better the reward.",
@@ -57,19 +58,16 @@ var _dialog_box: DialogueBox
 
 func _ready() -> void:
 	add_to_group("npc")
-	set_collision_layer_value(1, false)
-	set_collision_layer_value(2, true)
+	set_collision_layer_value(1, true)
+	set_collision_layer_value(2, false)
 	_build_visuals()
 
 
 func _build_visuals() -> void:
 	_sprite = Sprite2D.new()
-	var img: Image = Image.create(12, 20, false, Image.FORMAT_RGBA8)
-	img.fill(npc_color)
-	_sprite.texture = ImageTexture.create_from_image(img)
+	_sprite.texture = ImageTexture.create_from_image(_make_npc_image())
 	add_child(_sprite)
 
-	# Exclamation mark above head to signal interactable
 	var lbl: Label = Label.new()
 	lbl.position = Vector2(-4, -28)
 	lbl.text = "!"
@@ -77,7 +75,67 @@ func _build_visuals() -> void:
 	add_child(lbl)
 
 
+func _make_npc_image() -> Image:
+	# 12×20 pixel-art human silhouette
+	# Row layout (y): 0-3 head, 4 neck, 5-12 body/arms, 13-19 legs
+	const W: int = 12
+	const H: int = 20
+	var img: Image = Image.create(W, H, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+
+	var skin: Color = npc_color.lightened(0.35)
+	var body: Color = npc_color
+	var dark: Color = npc_color.darkened(0.35)
+	var outline: Color = Color(0.05, 0.02, 0.02, 1.0)
+
+	# Head (4×4 centered at x:4-7)
+	for y in range(0, 4):
+		for x in range(4, 8):
+			img.set_pixel(x, y, skin)
+	# Head outline
+	for x in range(4, 8):
+		img.set_pixel(x, 0, outline)
+		img.set_pixel(x, 3, outline)
+	img.set_pixel(4, 1, outline); img.set_pixel(4, 2, outline)
+	img.set_pixel(7, 1, outline); img.set_pixel(7, 2, outline)
+
+	# Neck
+	img.set_pixel(5, 4, skin); img.set_pixel(6, 4, skin)
+
+	# Body (6 wide, y 5-11)
+	for y in range(5, 12):
+		for x in range(3, 9):
+			img.set_pixel(x, y, body)
+	# Body outline sides
+	for y in range(5, 12):
+		img.set_pixel(3, y, outline)
+		img.set_pixel(8, y, outline)
+	for x in range(3, 9):
+		img.set_pixel(x, 5, outline)
+		img.set_pixel(x, 11, outline)
+
+	# Arms (y 5-10, x 1-2 left, x 9-10 right)
+	for y in range(5, 11):
+		img.set_pixel(1, y, dark); img.set_pixel(2, y, dark)
+		img.set_pixel(9, y, dark); img.set_pixel(10, y, dark)
+
+	# Legs (y 12-19, split at center)
+	for y in range(12, 20):
+		img.set_pixel(3, y, dark); img.set_pixel(4, y, dark)
+		img.set_pixel(7, y, dark); img.set_pixel(8, y, dark)
+	# Leg outlines
+	for y in range(12, 20):
+		img.set_pixel(3, y, outline if y == 12 or y == 19 else dark)
+		img.set_pixel(2, y, outline)
+		img.set_pixel(9, y, outline)
+
+	return img
+
+
 func _physics_process(_delta: float) -> void:
+	if _cooldown_frames > 0:
+		_cooldown_frames -= 1
+		return
 	if Global.in_battle or _ui_open:
 		return
 	var player: Node = _find_player()
@@ -109,4 +167,5 @@ func _talk() -> void:
 
 func _on_dialogue_done() -> void:
 	_ui_open = false
+	_cooldown_frames = 6
 	get_tree().paused = false

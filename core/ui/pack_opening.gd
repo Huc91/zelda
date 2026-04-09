@@ -34,7 +34,7 @@ static func _card_rect(i: int) -> Rect2:
 	return Rect2(x0b + float(j * (CARD_W + CARD_GAP)), float(_ROW2_Y), float(CARD_W), float(CARD_H))
 
 # ── Colours ──────────────────────────────────────────────────────────
-const C_BG: Color        = Color(0.06, 0.04, 0.12, 0.97)
+const C_BG: Color        = Color(0.06, 0.04, 0.12)
 const C_CARD_BACK: Color = Color(0.15, 0.10, 0.30)
 const C_BACK_BORDER: Color = Color(0.5, 0.3, 0.9)
 const C_FOIL_SHIMMER: Color = Color(0.9, 0.8, 0.2)
@@ -53,7 +53,7 @@ var _animating: bool = false
 var _pack_scale: float = 1.0
 var _pack_alpha: float = 1.0
 var _pack_shake_x: float = 0.0
-var _card_scale_x: Array = [1.0, 1.0, 1.0, 1.0, 1.0]
+var _card_alpha: Array = [1.0, 1.0, 1.0, 1.0, 1.0]
 var _card_face_visible: Array = [false, false, false, false, false]
 var _particle_lists: Array = [[], [], [], [], []]   ## per-card particles
 var _pack_y_off: float = 0.0
@@ -78,9 +78,9 @@ func _ready() -> void:
 	hide()
 
 
-## Call this to start a pack opening. Deducts cost from rupies.
+## Call this to start a pack opening. Deducts cost from money.
 func open_pack() -> void:
-	if not Global.spend_rupies(Global.PACK_COST):
+	if not Global.spend_money(Global.PACK_COST):
 		return
 	_pack_cards = CardDB.roll_pack()
 	_revealed_count = 0
@@ -91,7 +91,7 @@ func open_pack() -> void:
 	_hint_text = "TAP TO OPEN"
 	_hint_alpha = 1.0
 	for i in CARDS_TOTAL:
-		_card_scale_x[i] = 1.0
+		_card_alpha[i] = 1.0
 		_card_face_visible[i] = false
 		_particle_lists[i] = []
 	_state = _State.PACK_SHOW
@@ -205,11 +205,10 @@ func _reveal_next_card() -> void:
 	var idx: int = _revealed_count
 	_animating = true
 	_hint_text = ""
-	# Flip: scale X to 0, flip to face, scale X back to 1
+	_card_face_visible[idx] = true
+	_card_alpha[idx] = 0.0
 	var tw: Tween = create_tween()
-	tw.tween_method(func(v: float) -> void: _card_scale_x[idx] = v, 1.0, 0.0, 0.12)
-	tw.tween_callback(func() -> void: _card_face_visible[idx] = true)
-	tw.tween_method(func(v: float) -> void: _card_scale_x[idx] = v, 0.0, 1.0, 0.14).set_ease(Tween.EASE_OUT)
+	tw.tween_method(func(v: float) -> void: _card_alpha[idx] = v, 0.0, 1.0, 0.22).set_ease(Tween.EASE_OUT)
 	tw.tween_callback(func() -> void:
 		var card: Dictionary = _pack_cards[idx]
 		var is_foil: bool = card.get("foil", false)
@@ -265,18 +264,14 @@ func _draw_pack() -> void:
 
 func _draw_cards() -> void:
 	for i in CARDS_TOTAL:
-		var base: Rect2 = _card_rect(i)
-		var sx: float = _card_scale_x[i]
-		var dw: float = float(CARD_W) * sx
-		var dh: float = float(CARD_H) * sx
-		var offset_x: float = (float(CARD_W) - dw) * 0.5
-		var offset_y: float = (float(CARD_H) - dh) * 0.5
-		var r: Rect2 = Rect2(base.position.x + offset_x, base.position.y + offset_y, dw, dh)
+		var r: Rect2 = _card_rect(i)
 
 		if not _card_face_visible[i]:
-			_draw_card_back(r, sx)
+			_draw_card_back(r)
 		else:
 			CardZoomDraw.draw(_view, _font, r, _pack_cards[i], {})
+			if _card_alpha[i] < 1.0:
+				_view.draw_rect(r, Color(C_BG.r, C_BG.g, C_BG.b, 1.0 - _card_alpha[i]))
 
 		# Particles
 		for p in _particle_lists[i]:
@@ -285,7 +280,7 @@ func _draw_cards() -> void:
 			_view.draw_circle(Vector2(p["x"], p["y"]), p["size"], pc)
 
 
-func _draw_card_back(r: Rect2, _sx: float) -> void:
+func _draw_card_back(r: Rect2) -> void:
 	_view.draw_rect(r, C_CARD_BACK)
 	_view.draw_rect(r, C_BACK_BORDER, false, 2.0)
 	# Simple pattern: small inner rectangle

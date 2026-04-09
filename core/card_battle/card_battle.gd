@@ -11,10 +11,10 @@ class _View extends Control:
 class _ArrowOverlay extends Control:
 	var b: CardBattle
 	func _process(_dt: float) -> void:
-		if b == null or b._ended or not b.is_player_turn:
+		if b == null or b._ended:
 			return
-		if b._mode == CardBattle.Mode.ATTACKING:
-			queue_redraw()
+		# Always redraw so the arrow is cleared the moment mode leaves ATTACKING.
+		queue_redraw()
 	func _draw() -> void:
 		if b == null:
 			return
@@ -70,6 +70,8 @@ var _pending_card:  Dictionary = {}
 var _pending_hand_idx := -1
 ## Pay for a card: pitch other hand cards until `player_mana` ≥ cost, then auto-play `_pay_card_id`.
 var _pay_card_id: String = ""
+## Hand index of the card being paid for (-1 = from arsenal).
+var _pay_hand_idx: int = -1
 var _pay_cost: int = 0
 var _pay_to_front: bool = true
 var _pay_from_arsenal: bool = false
@@ -937,6 +939,7 @@ func _begin_pay_mana(card: Dictionary, _hand_idx: int, to_front: bool, drop_pos:
 	_mode = Mode.CHOOSE_PAY_MANA
 	_pay_from_arsenal = false
 	_pay_card_id = str(card.get("id", ""))
+	_pay_hand_idx = _hand_idx
 	var base_cost: int = int(card.get("cost", 0))
 	_pay_cost = base_cost + (_spell_tax_against_caster(true) if str(card.get("type", "")) == "spell" else 0)
 	_pay_to_front = to_front
@@ -1230,7 +1233,9 @@ func _refresh_mimic_minions_and_front_atk_auras() -> void:
 			if hp_b != old_hp_aura:
 				d["hp"] += hp_b - old_hp_aura
 			d["hp"] = mini(int(d["hp"]), max_hp)
-			d["hp"] = maxi(int(d["hp"]), 1)
+			# Only prevent death from aura removal; never override actual combat damage.
+			if hp_b != old_hp_aura:
+				d["hp"] = maxi(int(d["hp"]), 1)
 			var rgs: int = int(d.get("rage_stacks", 0))
 			var aintr: int = int(d.get("atk_intrinsic", int(d["data"].get("atk", 0))))
 			d["atk"] = aintr + atk_b + rgs
@@ -1699,7 +1704,7 @@ func _on_right_click(pos: Vector2) -> void:
 	if _mode != Mode.CHOOSE_PAY_MANA: return
 	for i in player_hand.size():
 		if CardBattleLayout.hand_rect(i, player_hand.size()).has_point(pos):
-			if str(player_hand[i].get("id", "")) == _pay_card_id:
+			if i == _pay_hand_idx:
 				_log("Pitch a different card — not the one you are casting.")
 				_view.queue_redraw()
 				return
@@ -1793,7 +1798,7 @@ func _on_left_press(pos: Vector2) -> void:
 	# Hand → start drag (clears attack prep / menu)
 	for i in player_hand.size():
 		if CardBattleLayout.hand_rect(i, player_hand.size()).has_point(pos):
-			if _mode == Mode.CHOOSE_PAY_MANA and str(player_hand[i].get("id", "")) == _pay_card_id:
+			if _mode == Mode.CHOOSE_PAY_MANA and i == _pay_hand_idx:
 				_view.queue_redraw()
 				return
 			_ctx_idx = -1
@@ -1860,7 +1865,7 @@ func _on_drag_drop(pos: Vector2) -> void:
 	if _mode == Mode.CHOOSE_PAY_MANA:
 		if CardBattleLayout.pinfo_rect().has_point(pos):
 			if hand_idx >= 0 and hand_idx < player_hand.size():
-				if str(player_hand[hand_idx].get("id", "")) == _pay_card_id:
+				if hand_idx == _pay_hand_idx:
 					_log("Pitch a different card to add mana.")
 				else:
 					_pitch_card(hand_idx)
@@ -2135,6 +2140,7 @@ func _on_arsenal_play() -> void:
 		_mode = Mode.CHOOSE_PAY_MANA
 		_pay_from_arsenal = true
 		_pay_card_id = str(card.get("id", ""))
+		_pay_hand_idx = -1
 		_pay_cost = total_cst
 		_pay_to_front = true
 		_pay_stack_t = 0.0
@@ -2474,7 +2480,7 @@ func _paint_attack_arrow_overlay(ci: CanvasItem) -> void:
 		var bonus: int = _type_advantage(att_sub, def_sub)
 		if bonus > 0:
 			var mid: Vector2 = (start + _mouse_pos) * 0.5
-			_str_c_on(ci, "Type Adv +%d dmg" % bonus, mid.x, mid.y - 10.0, 8, CardBattleConstants.C_TEXT)
+			_str_c_on(ci, "Type Adv +%d dmg" % bonus, mid.x, mid.y - 10.0, 10, CardBattleConstants.C_HP_RED)
 
 
 func _draw_chrome() -> void:
@@ -2712,7 +2718,7 @@ func _draw_hand() -> void:
 		return
 	var drew_any: bool = false
 	for i in player_hand.size():
-		if _mode == Mode.CHOOSE_PAY_MANA and str(player_hand[i].get("id", "")) == _pay_card_id:
+		if _mode == Mode.CHOOSE_PAY_MANA and i == _pay_hand_idx:
 			continue
 		if _drag_active and _drag_hand_idx == i: continue
 		drew_any = true
@@ -2758,9 +2764,7 @@ func _draw_mini_card(r: Rect2, d: Dictionary, targetable: bool, selected: bool) 
 	if nm.length() > 8: nm = nm.left(8) + "..."
 	_str(nm, r.position.x + 5.0, r.position.y + 2.0, 8, nm_col)
 
-	var art_bg_c: Color = fill_c
 	var art_r := Rect2(r.position.x + 8.0, r.position.y + CardBattleConstants.MINI_ART_TOP, CardBattleConstants.MINI_ART_SIZE, CardBattleConstants.MINI_ART_SIZE)
-	_view.draw_rect(art_r, Color(art_bg_c.r * 0.85, art_bg_c.g * 0.85, art_bg_c.b * 0.85))
 	var _art_tex_mini: Texture2D = CardArt.card_art_1x(str(card.get("id", "")), d.get("foil", false))
 	if _art_tex_mini != null:
 		_view.draw_texture_rect(_art_tex_mini, art_r, false)

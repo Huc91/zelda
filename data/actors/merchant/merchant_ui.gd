@@ -74,7 +74,7 @@ func _build_stock() -> void:
 			# Rares + mythics
 			for id in all_ids:
 				var r: String = str(CardDB.get_card(id).get("rarity", ""))
-				if r in ["rare", "mythic"]:
+				if r in ["rare", "epic", "mythic"]:
 					pool.append(id)
 			pool.shuffle()
 			pool = pool.slice(0, 6)
@@ -121,6 +121,7 @@ func _single_price(card: Dictionary) -> int:
 		"common":    return base
 		"uncommon":  return base * 2
 		"rare":      return base * 4
+		"epic":      return base * 8
 		"mythic":    return base * 8
 		"legendary": return base * 20
 	return base
@@ -207,7 +208,7 @@ func _confirm() -> void:
 	if _tab == 0:
 		# BUY
 		var price: int = int(entry.get("price", 0))
-		if not Global.spend_rupies(price):
+		if not Global.spend_money(price):
 			return
 		var id: String = str(entry.get("card_id", ""))
 		var foil: bool = bool(entry.get("is_foil", false))
@@ -236,7 +237,7 @@ func _on_draw() -> void:
 	_view.draw_rect(Rect2(0, 0, W, H), C_BG)
 	_view.draw_rect(Rect2(0, 0, W, 44), C_HDR)
 	_draw_str_c("MERCHANT", W * 0.5, 4, 14, C_TEXT)
-	_draw_str("Rupies: %d" % Global.rupies, 12, 22, 9, C_PRICE)
+	_draw_str("Money: %d" % Global.money, 12, 22, 9, C_PRICE)
 
 	# Tabs
 	var buy_col: Color  = C_BTN_SEL if _tab == 0 else C_BTN
@@ -276,11 +277,11 @@ func _on_draw() -> void:
 
 			var price_str: String
 			if _tab == 0:
-				price_str = "%d R" % int(entry.get("price", 0))
+				price_str = "%d" % int(entry.get("price", 0))
 				_draw_str_r(price_str, W - 20, ry + 4, 10, C_PRICE)
 			else:
 				var copies: int = int(entry.get("copies", 0))
-				price_str = "SELL %d R  (x%d)" % [int(entry.get("price", 0)), copies]
+				price_str = "SELL %d  (x%d)" % [int(entry.get("price", 0)), copies]
 				_draw_str_r(price_str, W - 20, ry + 4, 10, C_SELL)
 
 			# Art thumbnail

@@ -33,6 +33,16 @@ const DECK_SIZE_MAX := 20
 const DECK_COPY_MAX := 2
 
 
+## Returns the max copies of `card_id` allowed in one deck.
+## Cards with ability "skeleton_horde" have no copy limit (up to DECK_SIZE_MAX).
+static func card_copy_max(card_id: String) -> int:
+	_ensure_init()
+	var card: Dictionary = _map.get(card_id, {})
+	if card.get("ability", "") == "skeleton_horde":
+		return DECK_SIZE_MAX
+	return DECK_COPY_MAX
+
+
 static func deck_ids_legal(ids: Array) -> bool:
 	if ids.size() != DECK_SIZE_MAX:
 		return false
@@ -42,14 +52,21 @@ static func deck_ids_legal(ids: Array) -> bool:
 			return false
 		var k: String = id
 		counts[k] = counts.get(k, 0) + 1
-		if counts[k] > DECK_COPY_MAX:
+		if counts[k] > card_copy_max(k):
 			return false
 	return true
 
 
 static func _build(ids: Array) -> Array:
 	_ensure_init()
-	assert(deck_ids_legal(ids), "Deck must be exactly %d cards and ≤%d copies per id." % [DECK_SIZE_MAX, DECK_COPY_MAX])
+	if not deck_ids_legal(ids):
+		push_error("CardDB._build: illegal deck %s — falling back to STARTER_DECK." % str(ids.slice(0, 5)))
+		return _build_raw(STARTER_DECK)
+	return _build_raw(ids)
+
+
+static func _build_raw(ids: Array) -> Array:
+	_ensure_init()
 	var deck: Array = []
 	for id in ids:
 		if _map.has(id):
@@ -79,45 +96,41 @@ static func all_collectible_ids() -> Array[String]:
 
 
 ## Roll one booster pack (5 cards). Returns Array of Dictionaries with added "foil" bool key.
-## Cards 1-4: common/uncommon. Card 5: tiered (2% legendary, 8% mythic, 40% rare, 50% common/uncommon).
-## Every card has a 0.888% foil chance.
+## Cards 1-4: 100% common. Card 5: 50% rare | 20% epic | 2% legendary | 28% common.
+## Card 5 foil chance: 0.88%.
 static func roll_pack() -> Array:
 	_ensure_init()
 	var result: Array = []
-	var common_pool: Array = _cards_by_rarity(["common", "uncommon"])
+	var common_pool: Array = _cards_by_rarity(["common"])
 	var all_pool: Array = _all_collectible_cards()
 
 	for _i in 4:
 		var c: Dictionary = common_pool[randi() % common_pool.size()].duplicate(true)
-		c["foil"] = _roll_foil()
+		c["foil"] = false
 		result.append(c)
 
-	var card5: Dictionary = _roll_rarity_card(all_pool).duplicate(true)
+	var card5: Dictionary = _roll_pack_fifth(all_pool).duplicate(true)
 	card5["foil"] = _roll_foil()
 	result.append(card5)
 	return result
 
 
 static func _roll_foil() -> bool:
-	return randf() < 0.00888
+	return randf() < 0.0088
 
 
-static func _roll_rarity_card(all_pool: Array) -> Dictionary:
+static func _roll_pack_fifth(all_pool: Array) -> Dictionary:
+	## 2% legendary | 20% epic (mythic) | 50% rare | 28% common
 	var r: float = randf() * 100.0
-	var target: String
-	if r < 2.0:
-		target = "legendary"
-	elif r < 10.0:
-		target = "mythic"
-	elif r < 50.0:
-		target = "rare"
-	else:
-		target = ""
 	var filtered: Array = []
-	if target == "":
-		filtered = _cards_by_rarity(["common", "uncommon"])
+	if r < 2.0:
+		filtered = _cards_by_rarity(["legendary"])
+	elif r < 22.0:
+		filtered = _cards_by_rarity(["epic", "mythic"])
+	elif r < 72.0:
+		filtered = _cards_by_rarity(["rare"])
 	else:
-		filtered = _cards_by_rarity([target])
+		filtered = _cards_by_rarity(["common"])
 	if filtered.is_empty():
 		filtered = all_pool
 	return filtered[randi() % filtered.size()]
@@ -308,20 +321,13 @@ const CHAOS_KING = [
 ]
 
 
-# ── Player starter deck (20 cards, max 2 per id) ─────────────────
+# ── Player starter deck (20 cards: 10 Skeleton + 10 Skeleton Soldier) ───────
+# Both skeleton types have "skeleton_horde" — no copy limit applies.
 const STARTER_DECK = [
-	"demon_001", "demon_001",
-	"demon_003", "demon_003",
-	"demon_018", "demon_018",
-	"demon_002", "demon_002",
-	"demon_006",
-	"demon_007",
-	"demon_008", "demon_008",
-	"demon_005", "demon_005",
-	"demon_013",
-	"demon_015",
-	"demon_011", "demon_011",
-	"spell_004", "spell_004",
+	"demon_124", "demon_124", "demon_124", "demon_124", "demon_124",
+	"demon_124", "demon_124", "demon_124", "demon_124", "demon_124",
+	"demon_125", "demon_125", "demon_125", "demon_125", "demon_125",
+	"demon_125", "demon_125", "demon_125", "demon_125", "demon_125",
 ]
 
 # ── Enemy deck (20 cards, aggressive, max 2 per id) ─────────────
@@ -541,5 +547,5 @@ const ALL_CARDS = [
 	{"id": "token_ash_wraith", "name": "Ash Wraith", "type": "demon", "subtype": "regalia", "cost": 0, "mana_value": 1, "atk": 2, "hp": 2, "rarity": "common", "ability": "", "ability_desc": "", "desc": "Born from the phoenix's last breath."},
 	{"id": "token_imp", "name": "Imp", "type": "demon", "subtype": "obscura", "cost": 0, "mana_value": 1, "atk": 1, "hp": 1, "rarity": "common", "ability": "haste", "ability_desc": "Haste.", "desc": "A tiny demon."},
 	# Zelda legacy skeletons (IDs moved; bloodungeon 046+ are expansion cards)
-	{"id": "demon_124", "name": "Skeleton", "type": "demon", "subtype": "terresta", "cost": 1, "mana_value": 1, "atk": 1, "hp": 1, "rarity": "common", "ability": "", "ability_desc": "", "desc": "A rookie in the infernal army."},
-	{"id": "demon_125", "name": "Skeleton Soldier", "type": "demon", "subtype": "terresta", "cost": 2, "mana_value": 1, "atk": 2, "hp": 2, "rarity": "common", "ability": "", "ability_desc": "", "desc": "Frontline of the infernal army."}, ]
+	{"id": "demon_124", "name": "Skeleton", "type": "demon", "subtype": "terresta", "cost": 1, "mana_value": 1, "atk": 1, "hp": 1, "rarity": "common", "ability": "skeleton_horde", "ability_desc": "Skeleton Horde — no copy limit in your deck.", "desc": "A rookie in the infernal army."},
+	{"id": "demon_125", "name": "Skeleton Soldier", "type": "demon", "subtype": "terresta", "cost": 2, "mana_value": 1, "atk": 2, "hp": 2, "rarity": "common", "ability": "skeleton_horde", "ability_desc": "Skeleton Horde — no copy limit in your deck.", "desc": "Frontline of the infernal army."}, ]

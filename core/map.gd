@@ -75,7 +75,9 @@ func _get_exit_tiles() -> Array:
 func on_step(actor: Actor) -> String:
 	var cell = local_to_map(actor.position)
 	var data = get_cell_tile_data(Layer.STATIC, cell)
-	
+	if data == null:
+		return ""
+
 	if data.get_custom_data("is_exit") and actor == scene.player and actor.has_entered:
 		scene.change_map(exits[cell].linked_map, exits[cell].linked_exit)
 	if data.get_custom_data("on_step"):
@@ -98,11 +100,11 @@ func slash(cell: Vector2i) -> void:
 
 func _try_grass_drop(world_pos: Vector2) -> void:
 	var roll: float = randf()
-	# 3% chance: rupie drop
+	# 3% chance: money drop
 	if roll < 0.03:
-		var amount: int = randi_range(Global.RUPIES_GRASS_MIN, Global.RUPIES_GRASS_MAX)
-		Global.add_rupies(amount)
-		_spawn_drop_label(world_pos, "+%d R" % amount, Color(1.0, 0.9, 0.2))
+		var amount: int = randi_range(Global.MONEY_GRASS_MIN, Global.MONEY_GRASS_MAX)
+		Global.add_money(amount)
+		_spawn_drop_label(world_pos, "+%d" % amount, Color(1.0, 0.9, 0.2))
 		return
 	# 0.5% chance: card drop
 	if roll < 0.035:

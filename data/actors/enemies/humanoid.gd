@@ -7,13 +7,17 @@ const DIFF_MODULATE: Dictionary = {
 	"hard":   Color(1.0, 0.35, 0.35),
 }
 
-## Range at which this enemy detects and chases the player (pixels)
 @export var aggro_range: float = 80.0
-## Wander duration before picking a new direction
 @export var wander_time: float = 1.4
 
 var move_direction: Vector2 = Vector2.DOWN
 var _player: Actor = null
+
+var _path: PackedVector2Array = PackedVector2Array()
+var _path_idx: int = 0
+var _path_timer: float = 0.0
+const PATH_REFRESH: float = 0.35
+const WAYPOINT_REACH: float = 6.0
 
 
 func _ready() -> void:
@@ -39,9 +43,16 @@ func _get_player() -> Actor:
 	if _player != null and is_instance_valid(_player):
 		return _player
 	for node: Node in get_tree().get_nodes_in_group("actor"):
-		if node is Actor and node.actor_type == 1:   # 1 == Player
+		if node is Actor and node.actor_type == 1:
 			_player = node as Actor
 			return _player
+	return null
+
+
+func _get_map() -> Map:
+	var p: Node = get_parent()
+	if p is Map:
+		return p as Map
 	return null
 
 
@@ -50,6 +61,9 @@ func _get_player() -> Actor:
 func state_default() -> void:
 	var p: Actor = _get_player()
 	if p != null and position.distance_to(p.position) <= aggro_range:
+		_path = PackedVector2Array()
+		_path_idx = 0
+		_path_timer = 0.0
 		_change_state(state_chase)
 		return
 	move_direction = _get_random_direction()
@@ -58,7 +72,6 @@ func state_default() -> void:
 
 func state_wander() -> void:
 	if is_on_wall():
-		# Reverse direction flips every frame → oscillation. Pick a fresh direction instead.
 		move_direction = _get_random_direction()
 		_change_state(state_wander)
 		return
@@ -71,6 +84,9 @@ func state_wander() -> void:
 
 	var p: Actor = _get_player()
 	if p != null and position.distance_to(p.position) <= aggro_range:
+		_path = PackedVector2Array()
+		_path_idx = 0
+		_path_timer = 0.0
 		_change_state(state_chase)
 		return
 
@@ -84,21 +100,36 @@ func state_chase() -> void:
 		_change_state(state_default)
 		return
 
-	# Snap to 4 cardinal directions — classic Zelda-style pursuit
-	var diff: Vector2 = p.position - position
-	var dir: Vector2
-	if absf(diff.x) > absf(diff.y):
-		dir = Vector2(signf(diff.x), 0.0)
+	var dt: float = get_process_delta_time()
+	_path_timer -= dt
+
+	if _path_timer <= 0.0 or _path_idx >= _path.size():
+		_path_timer = PATH_REFRESH
+		var map: Map = _get_map()
+		if map != null:
+			_path = map.nav_find_path(position, p.position)
+			_path_idx = 0
+			if _path.size() > 0 and position.distance_to(_path[0]) < WAYPOINT_REACH:
+				_path_idx = 1
+
+	var dir: Vector2 = Vector2.ZERO
+	if _path_idx < _path.size():
+		var target: Vector2 = _path[_path_idx]
+		dir = (target - position).normalized()
+		if position.distance_to(target) < WAYPOINT_REACH:
+			_path_idx += 1
 	else:
-		dir = Vector2(0.0, signf(diff.y))
+		dir = (p.position - position).normalized()
 
-	move_direction = dir
-	velocity = dir * speed
-	move_and_slide()
-	_check_collisions()
-	_update_sprite_direction(dir)
-	_play_animation("Walk")
+	if dir != Vector2.ZERO:
+		velocity = dir * speed
+		move_and_slide()
+		_check_collisions()
+		_update_sprite_direction(dir)
+		_play_animation("Walk")
+		move_direction = dir
 
-	# Drop chase if player moved far away
 	if position.distance_to(p.position) > aggro_range * 1.6:
+		_path = PackedVector2Array()
+		_path_idx = 0
 		_change_state(state_default)

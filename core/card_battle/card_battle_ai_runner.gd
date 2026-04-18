@@ -166,7 +166,7 @@ func demon_play_value(card: Dictionary) -> int:
 	var ab: String = card.get("ability", "")
 	var body: int = atk * 2 + hp * 2 + card.get("cost", 0)
 	if "taunt" in ab: body += 6
-	if "haste" in ab: body += 7
+	if "haste" in ab: body += 9
 	if "divine_shield" in ab: body += 4
 	if "lifesteal" in ab: body += 4
 	if "poisonous" in ab: body += 4
@@ -228,11 +228,11 @@ func spell_play_value(card: Dictionary) -> int:
 		"return_demon":
 			base = 16
 		"hp_to_mana":
-			base = 5 + val * 3
+			base = 1 + val * 3
 			if b.enemy_hp <= 5:
 				base -= 12
 		"hp_for_draw":
-			base = 4 + val * 2
+			base = 3 + val * 2
 			if b.enemy_hp <= 5:
 				base -= 10
 		"mana_per_demon":
@@ -246,7 +246,7 @@ func spell_play_value(card: Dictionary) -> int:
 		"resurrect", "reanimate_top", "reanimate_demon":
 			base = 14 + val * 2
 		"resurrect_all":
-			base = 12 + b.enemy_gy.size()
+			base = 22 + b.enemy_gy.size()
 		"chaos_damage":
 			base = 8 + val
 		"deal_face_if_low":
@@ -374,17 +374,17 @@ func _do_attack_with_preview(a_idx: int) -> void:
 
 ## Returns { type: "face"/"front"/"rear", idx: int } for the attack at `a_idx` without resolving it.
 func pick_attack_target(a_idx: int) -> Dictionary:
-	if a_idx >= b.enemy_front.size(): return {"type": "face", "idx": -1}
+	if a_idx >= b.enemy_front.size(): return {"type": "face", "idx": - 1}
 	var att: Dictionary = b.enemy_front[a_idx]
 	if att.get("unblockable", false):
-		return {"type": "face", "idx": -1}
+		return {"type": "face", "idx": - 1}
 	var taunt_idx: int = b.ai_find_taunt(b.player_front)
 	if taunt_idx >= 0:
 		return {"type": "front", "idx": taunt_idx}
 	if not b.player_front.is_empty():
 		return {"type": "front", "idx": pick_target(b.player_front)}
 	if b.ai_get_ai_type() == "aggro" or b.player_rear.is_empty():
-		return {"type": "face", "idx": -1}
+		return {"type": "face", "idx": - 1}
 	return {"type": "rear", "idx": pick_target(b.player_rear)}
 
 

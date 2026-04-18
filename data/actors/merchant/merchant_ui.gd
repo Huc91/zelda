@@ -213,13 +213,13 @@ func _confirm() -> void:
 		var id: String = str(entry.get("card_id", ""))
 		var foil: bool = bool(entry.get("is_foil", false))
 		Global.collect_card(id, foil)
-		Sound.play(preload("res://data/sfx/LA_Menu_Select.wav"))
+		Sound.play(preload("res://data/sfx/to use/JDSherbert - Pixel UI SFX Pack - Select 2 (Sine).wav"))
 	else:
 		# SELL
 		var id: String = str(entry.get("card_id", ""))
 		var foil: bool = bool(entry.get("is_foil", false))
 		Global.sell_one_copy(id, foil)
-		Sound.play(preload("res://data/sfx/LA_Menu_Select.wav"))
+		Sound.play(preload("res://data/sfx/to use/JDSherbert - Pixel UI SFX Pack - Select 2 (Sine).wav"))
 		_build_sellable()
 		_sel = mini(_sel, _sellable.size() - 1)
 		if _sellable.is_empty():

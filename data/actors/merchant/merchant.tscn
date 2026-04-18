@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3 uid="uid://merchant_scene_001"]
+
+[ext_resource type="Script" uid="uid://b7xqnnj3yfa4p" path="res://data/actors/merchant/merchant.gd" id="1_merchant"]
+
+[node name="Merchant" type="StaticBody2D"]
+script = ExtResource("1_merchant")
+merchant_type = "general"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]

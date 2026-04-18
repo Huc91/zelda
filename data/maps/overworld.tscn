@@ -1,10 +1,11 @@
-[gd_scene load_steps=6 format=3 uid="uid://cjb7is1lieu4j"]
+[gd_scene load_steps=7 format=3 uid="uid://cjb7is1lieu4j"]
 
 [ext_resource type="TileSet" uid="uid://blww4jrwxlr0s" path="res://data/tilesets/overworld_tileset.tres" id="1_2l45r"]
 [ext_resource type="Script" uid="uid://badp0jtmytehc" path="res://core/map.gd" id="2_corn8"]
 [ext_resource type="PackedScene" uid="uid://dvf03s230d0c" path="res://data/actors/enemies/lizalfos.tscn" id="3_03ws5"]
 [ext_resource type="PackedScene" uid="uid://04ndutkgymfo" path="res://data/actors/enemies/moblin.tscn" id="4_gjswp"]
 [ext_resource type="PackedScene" uid="uid://bonfire000001" path="res://data/actors/bonfire.tscn" id="6_bf01"]
+[ext_resource type="PackedScene" uid="uid://kxivvs10ga6s" path="res://data/actors/npc/npc.tscn" id="6_gjh61"]
 
 [node name="Overworld" type="TileMap"]
 tile_set = ExtResource("1_2l45r")
@@ -110,3 +111,16 @@ position = Vector2(1598, 1290)
 
 [node name="Bonfire" parent="." instance=ExtResource("6_bf01")]
 position = Vector2(1875, 1327)
+collision_layer = 1
+collision_mask = 3
+
+[node name="woman_spawn" parent="." instance=ExtResource("6_gjh61")]
+position = Vector2(1863, 1296)
+dialogue_id = "fire_guide"
+sprite_name = "woman"
+has_flag = true
+
+[node name="bonzo_spawn" parent="." instance=ExtResource("6_gjh61")]
+position = Vector2(1880, 1269)
+dialogue_id = "bonzo_spawn"
+sprite_name = "bonzo"

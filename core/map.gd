@@ -69,6 +69,89 @@ func _get_exit_tiles() -> Array:
 	
 	return exit_tiles
 
+## Navigation ##
+################
+
+var _nav_astar: AStarGrid2D = AStarGrid2D.new()
+var _nav_region: Rect2i = Rect2i()
+var _nav_ready: bool = false
+
+
+func _ready() -> void:
+	if not Engine.is_editor_hint():
+		_bake_navigation.call_deferred()
+
+
+func _bake_navigation() -> void:
+	var used: Array[Vector2i] = get_used_cells(Layer.STATIC)
+	if used.is_empty():
+		return
+	var min_x: int = used[0].x
+	var min_y: int = used[0].y
+	var max_x: int = used[0].x
+	var max_y: int = used[0].y
+	for c: Vector2i in used:
+		if c.x < min_x: min_x = c.x
+		if c.y < min_y: min_y = c.y
+		if c.x > max_x: max_x = c.x
+		if c.y > max_y: max_y = c.y
+	_nav_region = Rect2i(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)
+	_nav_astar.region = _nav_region
+	_nav_astar.cell_size = Vector2(tile_set.tile_size)
+	_nav_astar.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
+	_nav_astar.update()
+	var used_set: Dictionary = {}
+	for c: Vector2i in used:
+		used_set[c] = true
+	for cy: int in range(_nav_region.position.y, _nav_region.end.y):
+		for cx: int in range(_nav_region.position.x, _nav_region.end.x):
+			var cell := Vector2i(cx, cy)
+			if not used_set.has(cell):
+				_nav_astar.set_point_solid(cell, true)
+				continue
+			var data: TileData = get_cell_tile_data(Layer.STATIC, cell)
+			if data == null or data.get_collision_polygons_count(0) > 0:
+				_nav_astar.set_point_solid(cell, true)
+	_nav_ready = true
+
+
+func _clamp_to_region(cell: Vector2i) -> Vector2i:
+	return Vector2i(
+		clampi(cell.x, _nav_region.position.x, _nav_region.end.x - 1),
+		clampi(cell.y, _nav_region.position.y, _nav_region.end.y - 1)
+	)
+
+
+func _nav_nearest_walkable(cell: Vector2i) -> Vector2i:
+	for r: int in range(1, 8):
+		for dy: int in range(-r, r + 1):
+			for dx: int in range(-r, r + 1):
+				if maxi(absi(dx), absi(dy)) != r:
+					continue
+				var c := Vector2i(cell.x + dx, cell.y + dy)
+				if not _nav_region.has_point(c):
+					continue
+				if not _nav_astar.is_point_solid(c):
+					return c
+	return cell
+
+
+func nav_find_path(from_world: Vector2, to_world: Vector2) -> PackedVector2Array:
+	if not _nav_ready:
+		return PackedVector2Array()
+	var from_cell: Vector2i = _clamp_to_region(local_to_map(from_world))
+	var to_cell: Vector2i = _clamp_to_region(local_to_map(to_world))
+	if _nav_astar.is_point_solid(from_cell):
+		from_cell = _nav_nearest_walkable(from_cell)
+	if _nav_astar.is_point_solid(to_cell):
+		to_cell = _nav_nearest_walkable(to_cell)
+	var cell_path: Array[Vector2i] = _nav_astar.get_id_path(from_cell, to_cell)
+	var result: PackedVector2Array = PackedVector2Array()
+	for c: Vector2i in cell_path:
+		result.append(map_to_local(c))
+	return result
+
+
 ## Gameplay ##
 ##############
 

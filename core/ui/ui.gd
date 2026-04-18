@@ -147,7 +147,7 @@ func _inventory_changed(new_items):
 
 func _open_deck_inventory() -> void:
 	get_tree().paused = true
-	Sound.play(preload("res://data/sfx/LA_PauseMenu_Open.wav"))
+	Sound.play(preload("res://data/sfx/Menu_In.wav"))
 	await ScreenFX.fade_white_in()
 	deck_inventory.refresh_decks()
 	deck_inventory.show()
@@ -155,7 +155,7 @@ func _open_deck_inventory() -> void:
 
 
 func _close_deck_inventory() -> void:
-	Sound.play(preload("res://data/sfx/LA_PauseMenu_Close.wav"))
+	Sound.play(preload("res://data/sfx/Menu_Out.wav"))
 	await ScreenFX.fade_white_in()
 	deck_inventory.hide()
 	await ScreenFX.fade_white_out()
@@ -164,14 +164,14 @@ func _close_deck_inventory() -> void:
 
 func _open_inventory():
 	get_tree().paused = true
-	Sound.play(preload("res://data/sfx/LA_PauseMenu_Open.wav"))
+	Sound.play(preload("res://data/sfx/Menu_In.wav"))
 	await ScreenFX.fade_white_in()
 	inventory.show()
 	ScreenFX.fade_white_out()
 
 
 func _close_inventory():
-	Sound.play(preload("res://data/sfx/LA_PauseMenu_Close.wav"))
+	Sound.play(preload("res://data/sfx/Menu_Out.wav"))
 	await ScreenFX.fade_white_in()
 	inventory.hide()
 	await ScreenFX.fade_white_out()

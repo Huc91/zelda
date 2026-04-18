@@ -1,0 +1,21 @@
+[gd_scene load_steps=5 format=3 uid="uid://kxivvs10ga6s"]
+
+[ext_resource type="Script" uid="uid://bknhnbdlmgjw0" path="res://data/actors/npc/npc.gd" id="1_npc"]
+[ext_resource type="Texture2D" uid="uid://0jx6y5d5yc5m" path="res://data/actors/npc/npc.png" id="2_ph"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_placeholder"]
+atlas = ExtResource("2_ph")
+region = Rect2(0, 0, 16, 16)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_dnfg4"]
+size = Vector2(14, 13)
+
+[node name="NPC" type="StaticBody2D"]
+script = ExtResource("1_npc")
+
+[node name="PlaceholderSprite" type="Sprite2D" parent="."]
+texture = SubResource("AtlasTexture_placeholder")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, -0.5)
+shape = SubResource("RectangleShape2D_dnfg4")

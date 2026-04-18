@@ -23,13 +23,18 @@ func _ready() -> void:
 
 func _build_sprite() -> void:
 	_sprite = Sprite2D.new()
-	# Simple colored square as placeholder merchant art
-	var img: Image = Image.create(16, 24, false, Image.FORMAT_RGBA8)
-	match merchant_type:
-		"general":      img.fill(Color(0.6, 0.5, 0.2))
-		"rare_hunter":  img.fill(Color(0.7, 0.2, 0.7))
-		"spell_dealer": img.fill(Color(0.2, 0.4, 0.8))
-	_sprite.texture = ImageTexture.create_from_image(img)
+	var tex: Texture2D = load("res://data/actors/merchant/merchant.png") as Texture2D
+	if tex != null:
+		_sprite.texture = tex
+		_sprite.region_enabled = true
+		_sprite.region_rect = Rect2(0, 0, 16, 16)
+	else:
+		var img: Image = Image.create(16, 24, false, Image.FORMAT_RGBA8)
+		match merchant_type:
+			"general":      img.fill(Color(0.6, 0.5, 0.2))
+			"rare_hunter":  img.fill(Color(0.7, 0.2, 0.7))
+			"spell_dealer": img.fill(Color(0.2, 0.4, 0.8))
+		_sprite.texture = ImageTexture.create_from_image(img)
 	add_child(_sprite)
 
 	# Name label above

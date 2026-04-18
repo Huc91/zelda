@@ -76,7 +76,7 @@ func _ready() -> void:
 	_open_pack_btn.focus_mode = Control.FOCUS_NONE
 	_style_button(_open_pack_btn, Color(0.65, 0.30, 0.10))
 	_open_pack_btn.pressed.connect(func() -> void:
-		Sound.play(preload("res://data/sfx/LA_Menu_Select.wav"))
+		Sound.play(preload("res://data/sfx/to use/JDSherbert - Pixel UI SFX Pack - Select 2 (Sine).wav"))
 		emit_signal("open_pack_requested")
 	)
 	action_row.add_child(_open_pack_btn)
@@ -91,7 +91,7 @@ func _ready() -> void:
 	binder_btn.focus_mode = Control.FOCUS_NONE
 	_style_button(binder_btn, Color(0.10, 0.35, 0.50))
 	binder_btn.pressed.connect(func() -> void:
-		Sound.play(preload("res://data/sfx/LA_Menu_Select.wav"))
+		Sound.play(preload("res://data/sfx/to use/JDSherbert - Pixel UI SFX Pack - Select 2 (Sine).wav"))
 		emit_signal("binder_requested")
 	)
 	action_row.add_child(binder_btn)
@@ -208,13 +208,13 @@ func _style_button(btn: Button, bg: Color) -> void:
 
 
 func _on_deck_icon_pressed(index: int) -> void:
-	Sound.play(preload("res://data/sfx/LA_Menu_Select.wav"))
+	Sound.play(preload("res://data/sfx/to use/JDSherbert - Pixel UI SFX Pack - Select 2 (Sine).wav"))
 	Global.set_battle_deck_index(index)
 	call_deferred("refresh_decks")
 
 
 func _on_edit_pressed(index: int) -> void:
-	Sound.play(preload("res://data/sfx/LA_Menu_Select.wav"))
+	Sound.play(preload("res://data/sfx/to use/JDSherbert - Pixel UI SFX Pack - Select 2 (Sine).wav"))
 	emit_signal("deckbuilding_requested", index)
 
 
@@ -223,7 +223,7 @@ func _on_delete_pressed(index: int) -> void:
 		return
 	Global.player_decks.remove_at(index)
 	Global.notify_deck_removed_at(index)
-	Sound.play(preload("res://data/sfx/LA_Menu_Select.wav"))
+	Sound.play(preload("res://data/sfx/to use/JDSherbert - Pixel UI SFX Pack - Select 2 (Sine).wav"))
 	# Rebuild next frame so we never free this button (or its slot) during the pressed callback.
 	call_deferred("refresh_decks")
 
@@ -231,7 +231,7 @@ func _on_delete_pressed(index: int) -> void:
 func _on_new_deck_pressed() -> void:
 	if not Global.try_add_new_deck():
 		return
-	Sound.play(preload("res://data/sfx/LA_Menu_Select.wav"))
+	Sound.play(preload("res://data/sfx/to use/JDSherbert - Pixel UI SFX Pack - Select 2 (Sine).wav"))
 	refresh_decks()
 	var new_idx: int = Global.player_decks.size() - 1
 	emit_signal("deckbuilding_requested", new_idx)

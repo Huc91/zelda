@@ -62,6 +62,8 @@ var _view: Control
 var _font: Font
 var _hint_text: String = "CLICK TO OPEN"
 var _hint_alpha: float = 1.0
+var _legendary_flash: float = 0.0
+var _foil_time: float = 0.0
 
 
 func _ready() -> void:
@@ -105,10 +107,13 @@ func open_pack() -> void:
 	tw.tween_property(self, "_pack_alpha", 1.0, 0.25)
 
 
-func _process(_dt: float) -> void:
+func _process(dt: float) -> void:
 	if _state == _State.IDLE:
 		return
 	_tick_particles()
+	if _legendary_flash > 0.0:
+		_legendary_flash = maxf(0.0, _legendary_flash - dt * 2.0)
+	_foil_time += dt
 	_view.queue_redraw()
 
 
@@ -129,26 +134,41 @@ func _spawn_particles(card_idx: int, is_foil: bool, is_legendary: bool, is_mythi
 	var rr: Rect2 = _card_rect(card_idx)
 	var cx: float = rr.position.x + rr.size.x * 0.5
 	var cy: float = rr.position.y + rr.size.y * 0.5
-	var count: int = 40 if (is_legendary or is_mythic) else 20
+	var count: int
+	if is_legendary:
+		count = 120
+	elif is_mythic:
+		count = 80
+	elif is_foil:
+		count = 40
+	else:
+		count = 20
 	for _i in count:
 		var angle: float = randf() * TAU
-		var speed: float = randf_range(0.5, 2.5)
+		var speed: float = randf_range(0.5, 3.5) if (is_legendary or is_mythic) else randf_range(0.5, 2.5)
 		var col: Color
 		if is_legendary:
-			col = Color(1.0, randf_range(0.2, 0.6), 0.0)
+			var r: float = randf()
+			if r < 0.6:
+				col = Color(1.0, randf_range(0.1, 0.5), 0.0)
+			elif r < 0.85:
+				col = Color(1.0, randf_range(0.5, 0.9), 0.0)
+			else:
+				col = Color(1.0, 1.0, randf_range(0.0, 0.3))
 		elif is_mythic:
 			col = Color(randf_range(0.5, 1.0), randf_range(0.2, 0.4), 1.0)
 		elif is_foil:
 			col = Color(randf_range(0.7, 1.0), randf_range(0.7, 1.0), randf_range(0.3, 1.0))
 		else:
 			col = Color.WHITE
+		var life: float = randf_range(0.8, 2.0) if is_legendary else randf_range(0.5, 1.2)
 		_particle_lists[card_idx].append({
-			"x": cx + randf_range(-10.0, 10.0),
-			"y": cy + randf_range(-10.0, 10.0),
+			"x": cx + randf_range(-rr.size.x * 0.4, rr.size.x * 0.4),
+			"y": cy + randf_range(-rr.size.y * 0.4, rr.size.y * 0.4),
 			"vx": cos(angle) * speed,
-			"vy": sin(angle) * speed - 1.5,
-			"life": randf_range(0.5, 1.2),
-			"size": randf_range(1.5, 4.0),
+			"vy": sin(angle) * speed - 2.0 if is_legendary else sin(angle) * speed - 1.5,
+			"life": life,
+			"size": randf_range(2.0, 6.0) if is_legendary else randf_range(1.5, 4.0),
 			"col": col,
 		})
 
@@ -201,6 +221,7 @@ func _next_unrevealed() -> int:
 func _do_open_animation() -> void:
 	_animating = true
 	_hint_text = ""
+	Sound.play(preload("res://data/sfx/Sword_Slash.wav"))
 	var tw: Tween = create_tween()
 	# Shake
 	tw.tween_method(_shake_pack, 0.0, 1.0, 0.3)
@@ -233,8 +254,15 @@ func _reveal_card(idx: int) -> void:
 		var rarity: String = card.get("rarity", "common")
 		var is_leg: bool = rarity == "legendary"
 		var is_myth: bool = rarity == "mythic"
+		var is_epic: bool = rarity == "epic"
 		if is_foil or is_leg or is_myth:
 			_spawn_particles(idx, is_foil, is_leg, is_myth)
+		if is_leg or is_foil:
+			Sound.play(preload("res://data/sfx/to use/1up.wav"))
+		elif is_epic or is_myth:
+			Sound.play(preload("res://data/sfx/to use/gem.wav"))
+		if is_leg:
+			_legendary_flash = 1.0
 		_revealed_count += 1
 		if _revealed_count >= CARDS_TOTAL:
 			_hint_text = "CLICK TO COLLECT"
@@ -268,6 +296,11 @@ func _on_draw() -> void:
 	if _state == _State.REVEAL or _state == _State.DONE:
 		_draw_cards()
 
+	# Legendary flash overlay
+	if _legendary_flash > 0.0:
+		var fa: float = _legendary_flash * 0.55
+		_view.draw_rect(Rect2(0, 0, W, H), Color(1.0, 0.4, 0.0, fa))
+
 	_draw_hint()
 
 
@@ -290,12 +323,44 @@ func _draw_cards() -> void:
 			CardZoomDraw.draw(_view, _font, r, _pack_cards[i], {})
 			if _card_alpha[i] < 1.0:
 				_view.draw_rect(r, Color(C_BG.r, C_BG.g, C_BG.b, 1.0 - _card_alpha[i]))
+			# Foil shimmer: rainbow sweep overlay
+			if _pack_cards[i].get("foil", false):
+				_draw_foil_shimmer(r)
 
 		# Particles
 		for p in _particle_lists[i]:
 			var pc: Color = p["col"]
 			pc.a = clampf(p["life"], 0.0, 1.0)
 			_view.draw_circle(Vector2(p["x"], p["y"]), p["size"], pc)
+
+
+func _draw_foil_shimmer(r: Rect2) -> void:
+	# Animated diagonal rainbow sweep
+	var t: float = _foil_time * 1.2
+	var sweep: float = fmod(t, 2.0) / 2.0  # 0..1 cycling
+	# Draw 3 thin diagonal color bands sweeping across the card
+	for band in 3:
+		var off: float = sweep + float(band) * 0.33
+		off = fmod(off, 1.0)
+		var hue: float = fmod(t * 0.3 + float(band) * 0.33, 1.0)
+		var band_col: Color = Color.from_hsv(hue, 0.7, 1.0, 0.18)
+		# Clip to card bounds by drawing a thin parallelogram approximated as a rect strip
+		var bx: float = r.position.x + off * (r.size.x + r.size.y) - r.size.y * 0.5
+		var stripe_w: float = r.size.x * 0.18
+		var strip_r := Rect2(bx, r.position.y, stripe_w, r.size.y)
+		# Intersect with card rect
+		var clipped := r.intersection(strip_r)
+		if not clipped.has_area():
+			continue
+		_view.draw_rect(clipped, band_col)
+	# Sparkle dots
+	var sparkle_seed: int = int(_foil_time * 8.0)
+	for s in 6:
+		var sx: float = r.position.x + float((sparkle_seed * 37 + s * 113) % int(r.size.x))
+		var sy: float = r.position.y + float((sparkle_seed * 73 + s * 59) % int(r.size.y))
+		var salpha: float = absf(sin(_foil_time * 3.0 + float(s)))
+		var shue: float = fmod(_foil_time * 0.5 + float(s) * 0.16, 1.0)
+		_view.draw_circle(Vector2(sx, sy), 2.0, Color.from_hsv(shue, 0.5, 1.0, salpha * 0.8))
 
 
 func _draw_card_back(r: Rect2) -> void:

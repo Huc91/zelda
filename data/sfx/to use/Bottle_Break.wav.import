@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://cera85w0ywhed"
+path="res://.godot/imported/Bottle_Break.wav-fabb86088c10dcf455d85edf5ebe80fe.sample"
+
+[deps]
+
+source_file="res://data/sfx/to use/Bottle_Break.wav"
+dest_files=["res://.godot/imported/Bottle_Break.wav-fabb86088c10dcf455d85edf5ebe80fe.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

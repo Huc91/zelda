@@ -19,11 +19,11 @@ const HEADER_H: int = 44
 
 const FONT_PATH: String = "res://assets/fonts/Nudge Orb.ttf"
 
-const C_BG: Color        = Color(0.88, 0.88, 0.90)
-const C_EMPTY: Color     = Color(0.70, 0.70, 0.72)
+const C_BG: Color = Color(0.88, 0.88, 0.90)
+const C_EMPTY: Color = Color(0.70, 0.70, 0.72)
 const C_EMPTY_BOR: Color = Color(0.55, 0.55, 0.58)
-const C_HDR: Color       = Color(0.18, 0.12, 0.30)
-const C_TEXT: Color      = Color(0.08, 0.04, 0.02)
+const C_HDR: Color = Color(0.18, 0.12, 0.30)
+const C_TEXT: Color = Color(0.08, 0.04, 0.02)
 
 # ── State ─────────────────────────────────────────────────────────────
 var _view: Control
@@ -88,6 +88,10 @@ func _process(_dt: float) -> void:
 	_view.queue_redraw()
 
 
+func _scroll(amount: float) -> void:
+	_scroll_y = clampf(_scroll_y + amount, 0.0, _max_scroll)
+
+
 func _input(event: InputEvent) -> void:
 	if not visible:
 		return
@@ -99,24 +103,45 @@ func _input(event: InputEvent) -> void:
 				closed.emit()
 				get_viewport().set_input_as_handled()
 			elif ek.keycode == KEY_UP or ek.keycode == KEY_W:
-				_scroll_y = maxf(0.0, _scroll_y - 40.0)
+				_scroll(-40.0)
 				get_viewport().set_input_as_handled()
 			elif ek.keycode == KEY_DOWN or ek.keycode == KEY_S:
-				_scroll_y = minf(_max_scroll, _scroll_y + 40.0)
+				_scroll(40.0)
 				get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton:
 		var mb: InputEventMouseButton = event as InputEventMouseButton
 		if mb.pressed:
 			if mb.button_index == MOUSE_BUTTON_WHEEL_UP:
-				_scroll_y = maxf(0.0, _scroll_y - 32.0)
+				_scroll(-32.0)
 				get_viewport().set_input_as_handled()
 			elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-				_scroll_y = minf(_max_scroll, _scroll_y + 32.0)
+				_scroll(32.0)
 				get_viewport().set_input_as_handled()
+	elif event is InputEventPanGesture:
+		# macOS trackpad two-finger scroll
+		var pg: InputEventPanGesture = event as InputEventPanGesture
+		_scroll(pg.delta.y * 12.0)
+		get_viewport().set_input_as_handled()
 
 
-func _on_input(_event: InputEvent) -> void:
-	pass
+func _on_input(event: InputEvent) -> void:
+	# Belt-and-suspenders: also handle in gui_input for cases where
+	# MOUSE_FILTER_STOP on _view captures the event before _input() sees it.
+	if not visible:
+		return
+	if event is InputEventMouseButton:
+		var mb: InputEventMouseButton = event as InputEventMouseButton
+		if mb.pressed:
+			if mb.button_index == MOUSE_BUTTON_WHEEL_UP:
+				_scroll(-32.0)
+				_view.accept_event()
+			elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+				_scroll(32.0)
+				_view.accept_event()
+	elif event is InputEventPanGesture:
+		var pg: InputEventPanGesture = event as InputEventPanGesture
+		_scroll(pg.delta.y * 12.0)
+		_view.accept_event()
 
 
 func _on_draw() -> void:
@@ -141,7 +166,6 @@ func _on_draw() -> void:
 	# Header drawn after cards so it always covers any card overflow
 	_view.draw_rect(Rect2(0, 0, W, HEADER_H), C_HDR)
 	_draw_str_c("BASE SET COLLECTION", W * 0.5, 6, 12, Color.WHITE)
-	_draw_str("Money: %d" % Global.money, 12, 24, 9, Color(1.0, 0.9, 0.3))
 
 	var total_owned: int = 0
 	for c in _cards:

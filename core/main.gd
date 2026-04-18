@@ -63,7 +63,6 @@ func _show_title_screen() -> void:
 	Global.bonfire_rested.connect(_on_bonfire_rested)
 
 
-
 func _run_headless_battle_smoke() -> void:
 	## CI / automation: full project autoloads (e.g. Global) — `godot --path . --headless -- --headless-battle-smoke`
 	Global.in_battle = true
@@ -89,16 +88,6 @@ func initialize_scene(map: String, entrance: Vector2i) -> void:
 	current_scene = GameScene.new(map, entrance, _ensure_player())
 	current_scene.map_changed.connect(initialize_scene)
 	screen.add_child(current_scene)
-	if not _guide_npc_spawned and map == STARTING_MAP:
-		_guide_npc_spawned = true
-		_spawn_guide_npc()
-	elif _guide_npc_spawned and map == STARTING_MAP and old_scene != null:
-		# Re-parent the persistent NPCs into the new overworld map before the old scene is freed.
-		for npc in _guide_npcs:
-			if is_instance_valid(npc):
-				if npc.get_parent() != null:
-					npc.get_parent().remove_child(npc)
-				current_scene.map.add_child(npc)
 	await ScreenFX.fade_white_out()
 
 
@@ -139,43 +128,6 @@ func _find_walkable(center: Vector2i, min_r: int, max_r: int, used: Array) -> Ve
 		if not ring.is_empty():
 			return ring[0]
 	return center
-
-
-func _spawn_guide_npc() -> void:
-	var used: Array = [STARTING_ENTRANCE]
-
-	# Guide NPC
-	var guide: NPC = NPC.new()
-	guide.dialogue_id = "guide"
-	guide.npc_color = Color(0.4, 0.6, 0.9)
-	guide.z_index = 2
-	var guide_tile := _find_walkable(STARTING_ENTRANCE, 1, 6, used)
-	used.append(guide_tile)
-	current_scene.map.add_child(guide)
-	guide.position = current_scene.map.map_to_local(guide_tile)
-
-	# Merchant hint NPC
-	var hint_npc: NPC = NPC.new()
-	hint_npc.dialogue_id = "merchant_hint"
-	hint_npc.npc_color = Color(0.5, 0.8, 0.4)
-	hint_npc.z_index = 2
-	var hint_tile := _find_walkable(STARTING_ENTRANCE, 2, 7, used)
-	used.append(hint_tile)
-	current_scene.map.add_child(hint_npc)
-	hint_npc.position = current_scene.map.map_to_local(hint_tile)
-
-	# Merchant
-	var merchant: Merchant = Merchant.new()
-	merchant.merchant_type = "general"
-	merchant.z_index = 2
-	var merchant_tile := _find_walkable(STARTING_ENTRANCE, 3, 8, used)
-	used.append(merchant_tile)
-	current_scene.map.add_child(merchant)
-	merchant.position = current_scene.map.map_to_local(merchant_tile)
-
-	_guide_npcs = [guide, hint_npc, merchant]
-
-	# Enemies on the overworld are placed via the map's SpawnLayer tiles in the editor.
 
 
 func _on_bonfire_rested() -> void:

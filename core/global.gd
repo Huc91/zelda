@@ -51,6 +51,9 @@ var current_map_path: String = ""
 ## Pickup positions already collected, keyed by map path.
 var collected_pickups: Dictionary = {}  # { map_path: Array[Vector2] }
 
+## NPC dialogue_ids whose "!" flag has been dismissed by the player.
+var npc_flags_dismissed: Dictionary = {}  # { dialogue_id: true }
+
 ## Player inventory slots serialized as resource paths. { "B": "res://...", "A": "res://..." }
 var player_items: Dictionary = {}
 

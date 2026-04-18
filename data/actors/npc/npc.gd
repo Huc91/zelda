@@ -1,59 +1,31 @@
 ## NPC base class. Add to any scene on the map.
 ##
-## ADDING DIALOGUES — simple way:
-##   Export `dialogue_id` in the editor (e.g. "old_man").
-##   Add your dialogue lines to the DIALOGUES dictionary below.
-##   The NPC automatically cycles through the lines when the player talks.
-##
-## Example dialogue definition:
-##   "old_man": [
-##       "It's dangerous to go alone!",
-##       "Take this sword with you.",
-##   ],
+## DIALOGUE FILE: data/actors/npc/dialogues.gd (NPCDialogues class).
+## Set `dialogue_id` in the editor. If the NPC has a quest flag, a "!" balloon appears
+## above their head and vanishes permanently after first conversation.
 class_name NPC
 extends StaticBody2D
 
-## Key into DIALOGUES. Set in the editor per-NPC instance.
+## Key into NPCDialogues.DB. Set in the editor per-NPC instance.
 @export var dialogue_id: String = "default"
-## Which line to show next (auto-cycles).
+## Sprite name from data/actors/npc/sprites/ (without .png). Leave empty for generated sprite.
+@export var sprite_name: String = ""
+## Color used when generating a procedural sprite (ignored if sprite_name is set).
+@export var npc_color: Color = Color(0.4, 0.6, 0.9)
+## Show "!" flag above head; flag disappears permanently after first conversation.
+@export var has_flag: bool = false
+## 0 = first frame (left), 1 = second, … along `sprites/<sprite_name>.png` (16×16 cells in a row).
+@export_range(0, 15) var sprite_frame: int = 0
+
 var _dialogue_index: int = 0
 var _ui_open: bool = false
 var _cooldown_frames: int = 0
-const INTERACT_RADIUS: float = 32.0
+var _flag_dismissed: bool = false
 
-# ── Dialogue database ─────────────────────────────────────────────────
-## Add new NPCs here. Each entry is an Array of Strings (lines in order).
-const DIALOGUES: Dictionary = {
-	"default": [
-		"...",
-	],
-	"guide": [
-		"Welcome, young traveller!",
-		"Defeat enemies to earn money.",
-		"Open your inventory (TAB) to manage your card decks.",
-		"Open packs to collect new cards for your binder.",
-		"The stronger the enemy, the better the reward.",
-		"Good luck out there!",
-	],
-	"merchant_hint": [
-		"I heard a merchant set up shop nearby.",
-		"You can buy single cards from merchants,",
-		"but packs are a much better deal.",
-		"Foil cards are worth a fortune when sold!",
-	],
-	"lore_1": [
-		"Long ago, this land was ruled by card masters.",
-		"They would duel to settle every dispute.",
-		"The Demon cards were the most feared of all.",
-		"Some say the Osiris pieces still wander the wilds...",
-	],
-}
-
-# ── Appearance ────────────────────────────────────────────────────────
-@export var npc_color: Color = Color(0.4, 0.6, 0.9)
+const INTERACT_RADIUS: float = 16.0
 
 var _sprite: Sprite2D
-var _dialog_box: DialogueBox
+var _flag_label: Label
 
 
 func _ready() -> void:
@@ -61,75 +33,45 @@ func _ready() -> void:
 	set_collision_layer_value(1, true)
 	set_collision_layer_value(2, false)
 	_build_visuals()
+	if has_flag:
+		_flag_dismissed = Global.npc_flags_dismissed.get(dialogue_id, false)
+		_flag_label.visible = not _flag_dismissed
 
 
 func _build_visuals() -> void:
+	## Editor-only preview node; runtime builds the real sprite in code.
+	var ph: Node = get_node_or_null("PlaceholderSprite")
+	if ph != null:
+		ph.queue_free()
 	_sprite = Sprite2D.new()
-	_sprite.texture = ImageTexture.create_from_image(_make_npc_image())
-	add_child(_sprite)
+	if sprite_name != "":
+		var tex: Texture2D = load("res://data/actors/npc/sprites/" + sprite_name + ".png") as Texture2D
+		if tex != null:
+			_sprite.texture = tex
+			_sprite.region_enabled = true
+			_apply_sprite_frame()
+			add_child(_sprite)
+		else:
+			return
+	else:
+		return
 
-	var lbl: Label = Label.new()
-	lbl.position = Vector2(-4, -28)
-	lbl.text = "!"
-	lbl.add_theme_font_size_override("font_size", 10)
-	add_child(lbl)
+	_flag_label = Label.new()
+	_flag_label.position = Vector2(-4, -36)
+	_flag_label.text = "!"
+	_flag_label.add_theme_font_size_override("font_size", 12)
+	_flag_label.visible = false
+	add_child(_flag_label)
 
 
-func _make_npc_image() -> Image:
-	# 12×20 pixel-art human silhouette
-	# Row layout (y): 0-3 head, 4 neck, 5-12 body/arms, 13-19 legs
-	const W: int = 12
-	const H: int = 20
-	var img: Image = Image.create(W, H, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0, 0, 0, 0))
+func _apply_sprite_frame() -> void:
+	_set_sprite_region_column(sprite_frame)
 
-	var skin: Color = npc_color.lightened(0.35)
-	var body: Color = npc_color
-	var dark: Color = npc_color.darkened(0.35)
-	var outline: Color = Color(0.05, 0.02, 0.02, 1.0)
 
-	# Head (4×4 centered at x:4-7)
-	for y in range(0, 4):
-		for x in range(4, 8):
-			img.set_pixel(x, y, skin)
-	# Head outline
-	for x in range(4, 8):
-		img.set_pixel(x, 0, outline)
-		img.set_pixel(x, 3, outline)
-	img.set_pixel(4, 1, outline); img.set_pixel(4, 2, outline)
-	img.set_pixel(7, 1, outline); img.set_pixel(7, 2, outline)
-
-	# Neck
-	img.set_pixel(5, 4, skin); img.set_pixel(6, 4, skin)
-
-	# Body (6 wide, y 5-11)
-	for y in range(5, 12):
-		for x in range(3, 9):
-			img.set_pixel(x, y, body)
-	# Body outline sides
-	for y in range(5, 12):
-		img.set_pixel(3, y, outline)
-		img.set_pixel(8, y, outline)
-	for x in range(3, 9):
-		img.set_pixel(x, 5, outline)
-		img.set_pixel(x, 11, outline)
-
-	# Arms (y 5-10, x 1-2 left, x 9-10 right)
-	for y in range(5, 11):
-		img.set_pixel(1, y, dark); img.set_pixel(2, y, dark)
-		img.set_pixel(9, y, dark); img.set_pixel(10, y, dark)
-
-	# Legs (y 12-19, split at center)
-	for y in range(12, 20):
-		img.set_pixel(3, y, dark); img.set_pixel(4, y, dark)
-		img.set_pixel(7, y, dark); img.set_pixel(8, y, dark)
-	# Leg outlines
-	for y in range(12, 20):
-		img.set_pixel(3, y, outline if y == 12 or y == 19 else dark)
-		img.set_pixel(2, y, outline)
-		img.set_pixel(9, y, outline)
-
-	return img
+func _set_sprite_region_column(col: int) -> void:
+	if _sprite == null or not _sprite.region_enabled:
+		return
+	_sprite.region_rect = Rect2(16 * col, 0, 16, 16)
 
 
 func _physics_process(_delta: float) -> void:
@@ -153,19 +95,51 @@ func _find_player() -> Node:
 	return null
 
 
+func _calcPlayerPos(player: Node) -> int:
+	var x_dist = position.x - player.position.x
+	var y_dist = position.y - player.position.y
+
+	if x_dist > 0 and x_dist < 16 and y_dist > -8 and y_dist < 8:
+		return 2
+	elif x_dist < 0 and x_dist > -16 and y_dist > -8 and y_dist < 8:
+		return 0
+	elif y_dist > 0 and x_dist > -8 and x_dist < 8:
+		return 1
+	else:
+		return 0
+
+
 func _talk() -> void:
+	var player: Node = _find_player()
+	if player == null:
+		return
+
 	_ui_open = true
 	get_tree().paused = true
-	var lines: Array = DIALOGUES.get(dialogue_id, DIALOGUES["default"])
+
+	if has_flag and not _flag_dismissed:
+		_flag_dismissed = true
+		_flag_label.visible = false
+		Global.npc_flags_dismissed[dialogue_id] = true
+
+
+	# Face the player.
+	var talk_col: int = _calcPlayerPos(player)
+	_set_sprite_region_column(talk_col)
+
+	var db: Dictionary = NPCDialogues.DB.get(dialogue_id, NPCDialogues.DB.get("default", {}))
+	var lines: Array = db.get("lines", ["..."])
 	var line: String = lines[_dialogue_index % lines.size()]
 	_dialogue_index = (_dialogue_index + 1) % lines.size()
-	_dialog_box = DialogueBox.new()
-	_dialog_box.show_line(line)
-	_dialog_box.finished.connect(_on_dialogue_done)
-	get_tree().root.add_child(_dialog_box)
+
+	var dialog_box: DialogueBox = DialogueBox.new()
+	dialog_box.show_line(line)
+	dialog_box.finished.connect(_on_dialogue_done)
+	get_tree().root.add_child(dialog_box)
 
 
 func _on_dialogue_done() -> void:
 	_ui_open = false
 	_cooldown_frames = 6
 	get_tree().paused = false
+	_apply_sprite_frame()

@@ -66,7 +66,7 @@ func _swap_item(hud,inv):
 	var swap = items.get(hud)
 	items[hud] = items.get(inv)
 	items[inv] = swap
-	Sound.play(preload("res://data/sfx/LA_Menu_Select.wav"))
+	Sound.play(preload("res://data/sfx/to use/JDSherbert - Pixel UI SFX Pack - Select 2 (Sine).wav"))
 	
 	if items[hud] == null:
 		items.erase(hud)

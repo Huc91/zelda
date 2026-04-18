@@ -20,7 +20,7 @@ static func resolve(b: CardBattle, card: Dictionary, is_player: bool) -> void:
 			if is_player: b._deal_damage_to_enemy(val)
 			else:         b._deal_damage_to_player(val)
 		"heal":
-			if is_player: b.player_hp = mini(b.player_hp + val, CardBattleConstants.STARTING_HP)
+			if is_player: b._heal_player(val)
 			else:         b.enemy_hp  = mini(b.enemy_hp  + val, CardBattleConstants.STARTING_HP)
 		"draw":
 			for _i in val: b._draw_one(own_hand, own_deck)
@@ -61,7 +61,7 @@ static func resolve(b: CardBattle, card: Dictionary, is_player: bool) -> void:
 					ddor["atk_intrinsic"] = maxi(0, ddor.get("atk_intrinsic", int(ddor["data"].get("atk", 0))) - val)
 		"life_per_demon":
 			var gain: int = (pf.size() + pr.size()) * val
-			if is_player: b.player_hp = mini(b.player_hp + gain, CardBattleConstants.STARTING_HP)
+			if is_player: b._heal_player(gain)
 			else:         b.enemy_hp  = mini(b.enemy_hp  + gain, CardBattleConstants.STARTING_HP)
 		"buff_hp":
 			var pool: Array = []
@@ -144,7 +144,7 @@ static func resolve(b: CardBattle, card: Dictionary, is_player: bool) -> void:
 		"deal_face_drain":
 			if is_player:
 				b._deal_damage_to_enemy(val)
-				b.player_hp = mini(b.player_hp + val, CardBattleConstants.STARTING_HP)
+				b._heal_player(val)
 			else:
 				b._deal_damage_to_player(val)
 				b.enemy_hp = mini(b.enemy_hp + val, CardBattleConstants.STARTING_HP)

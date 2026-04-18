@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://chj57sb1i2ii8"
+path="res://.godot/imported/JDSherbert - Pixel UI SFX Pack - Select 2 (Sine).wav-1421d444faf6f61b87d6dea95decbc2a.sample"
+
+[deps]
+
+source_file="res://data/sfx/to use/JDSherbert - Pixel UI SFX Pack - Select 2 (Sine).wav"
+dest_files=["res://.godot/imported/JDSherbert - Pixel UI SFX Pack - Select 2 (Sine).wav-1421d444faf6f61b87d6dea95decbc2a.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

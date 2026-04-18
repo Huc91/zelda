@@ -112,10 +112,13 @@ var _mouse_pos:   Vector2 = Vector2.ZERO
 var _hover_card:  Dictionary = {}
 var _hover_state: Dictionary = {}
 
-var _drag_active:   bool = false
-var _drag_card:     Dictionary = {}
-var _drag_hand_idx: int = -1
-var _drag_pos:      Vector2 = Vector2.ZERO
+var _drag_active:    bool = false
+var _drag_card:      Dictionary = {}
+var _drag_hand_idx:  int = -1
+var _drag_pos:       Vector2 = Vector2.ZERO
+var _drag_start_pos: Vector2 = Vector2.ZERO
+## When entering CHOOSE_ROW via a hand-card click, restore here on cancel (-1 = arsenal).
+var _pending_hand_restore_idx: int = -1
 
 ## Context menu: `_ctx_idx` indexes `player_front` or `player_rear` depending on `_ctx_is_front`.
 ## Front minion: drag past threshold = attack aim (arrow). Rear: click toggles context only.
@@ -758,7 +761,7 @@ func _resolve_battlecry(d: Dictionary, is_player: bool) -> void:
 		for o in or_.duplicate(): o["hp"] = 0
 		_process_deaths(of_, not is_player, true); _process_deaths(or_, not is_player, false)
 	elif "battlecry_heal_3"            in ab:
-		if is_player: player_hp = mini(player_hp + 3, CardBattleConstants.STARTING_HP)
+		if is_player: _heal_player(3)
 		else:         enemy_hp  = mini(enemy_hp  + 3, CardBattleConstants.STARTING_HP)
 	elif "battlecry_summon_imps"       in ab:
 		_summon(CardDB.get_card("token_imp"), is_player, true)
@@ -979,6 +982,7 @@ func _cancel_pay_mana() -> void:
 	_pay_arsenal_pitch_start = 0
 	_pay_stack_t = 0.0
 	_pay_stack_use_drop_anchor = false
+	Sound.play(preload("res://data/sfx/to use/Cancel.wav"))
 	_log("Cancelled paying mana.")
 	_view.queue_redraw()
 
@@ -995,11 +999,18 @@ func _cancel_choose_row() -> void:
 		_choose_row_mana_refund = 0
 	if _pending_hand_idx >= 0 and _pending_hand_idx <= player_hand.size():
 		player_hand.insert(_pending_hand_idx, _pending_card.duplicate(true))
+	elif _pending_hand_restore_idx >= 0:
+		# Came from hand-click flow: card was removed before entering CHOOSE_ROW.
+		var ri: int = mini(_pending_hand_restore_idx, player_hand.size())
+		player_hand.insert(ri, _pending_card.duplicate(true))
+		_pending_hand_restore_idx = -1
 	else:
 		player_arsenal = _pending_card.duplicate(true)
 	_pending_card = {}
 	_pending_hand_idx = -1
+	_pending_hand_restore_idx = -1
 	_mode = Mode.IDLE
+	Sound.play(preload("res://data/sfx/to use/Cancel.wav"))
 	_log("Summon cancelled.")
 	_view.queue_redraw()
 
@@ -1011,6 +1022,7 @@ func _cancel_chaos_summon() -> void:
 	_chaos_selected.clear()
 	_chaos_hand_idx = -1
 	_chaos_from_arsenal = false
+	Sound.play(preload("res://data/sfx/to use/Cancel.wav"))
 	_log("Chaos King summon cancelled.")
 	_view.queue_redraw()
 
@@ -1377,6 +1389,10 @@ func _refresh_mimic_minions_and_front_atk_auras() -> void:
 					continue
 				if "aura_front_hp_2" in str(pf[j]["data"].get("ability", "")):
 					hp_b += 2
+			# Also check rear row as aura source so Komainu buffs front regardless of placement.
+			for j in range(pr.size()):
+				if "aura_front_hp_2" in str(pr[j]["data"].get("ability", "")):
+					hp_b += 2
 			var old_hp_aura: int = int(d.get("hp_aura_bonus", 0))
 			d["hp_aura_bonus"] = hp_b
 			var hpin: int = int(d.get("hp_intrinsic", int(d["data"].get("hp", 1))))
@@ -1427,7 +1443,7 @@ func _process_global_death_triggers(dead: Dictionary, dead_owner_is_player: bool
 		else: enemy_mana = mini(enemy_mana + 1, 10)
 	if "ally_death_lifegain" in dead_ab:
 		_log("%s %s: +1 HP on its own death!" % [dead_who, dead_name])
-		if dead_owner_is_player: player_hp = mini(player_hp + 1, CardBattleConstants.STARTING_HP)
+		if dead_owner_is_player: _heal_player(1)
 		else: enemy_hp = mini(enemy_hp + 1, CardBattleConstants.STARTING_HP)
 	# ── Living creatures triggered by the death ───────────────────────
 	for row in [player_front, player_rear]:
@@ -1489,7 +1505,7 @@ func _process_global_death_triggers(dead: Dictionary, dead_owner_is_player: bool
 					nlg += 1
 		if nlg > 0:
 			_log("Your lifegain creatures heal +%d!" % nlg)
-			player_hp = mini(player_hp + nlg, CardBattleConstants.STARTING_HP)
+			_heal_player(nlg)
 	else:
 		var nlg2: int = 0
 		for row in [enemy_front, enemy_rear]:
@@ -1511,7 +1527,7 @@ func _apply_after_spell_cast(is_player: bool) -> void:
 			var ab: String = str(d["data"].get("ability", ""))
 			if "spell_lifegain" in ab:
 				if is_player:
-					player_hp = mini(player_hp + 1, CardBattleConstants.STARTING_HP)
+					_heal_player(1)
 				else:
 					enemy_hp = mini(enemy_hp + 1, CardBattleConstants.STARTING_HP)
 			if "spell_aoe" in ab:
@@ -1545,6 +1561,11 @@ func _face_attack_followup(att: Dictionary, attacker_is_player: bool) -> void:
 
 const ALLY_TARGET_EFFECTS: Array[String] = ["buff_hp", "give_divine_shield", "buff_target_stats"]
 
+const _EXPLOSION_EFFECTS: Array = ["destroy_all_both", "aoe_all_2", "aoe_all_hp"]
+const _THUNDER_EFFECTS: Array = ["damage", "deal_face", "deal_and_gain_mana", "deal_face_drain",
+	"face_per_graveyard", "aoe_enemy_and_face", "deal_face_if_low", "chaos_damage",
+	"aoe_enemy", "aoe_demon_dmg"]
+
 func _resolve_spell(card: Dictionary, is_player: bool) -> void:
 	if is_player and str(card.get("effect", "")) in ALLY_TARGET_EFFECTS:
 		var pf: Array = player_front
@@ -1552,6 +1573,11 @@ func _resolve_spell(card: Dictionary, is_player: bool) -> void:
 		if not pf.is_empty() or not pr.is_empty():
 			_begin_choose_ally_target(str(card.get("name", "Spell")), card)
 			return
+	var eff: String = str(card.get("effect", ""))
+	if eff in _EXPLOSION_EFFECTS:
+		Sound.play(preload("res://data/sfx/to use/Explosion.wav"))
+	elif eff in _THUNDER_EFFECTS:
+		Sound.play(preload("res://data/sfx/to use/Thunder.wav"))
 	CardBattleSpellEffects.resolve(self, card, is_player)
 	_apply_after_spell_cast(is_player)
 	_refresh_mimic_minions_and_front_atk_auras()
@@ -1575,6 +1601,7 @@ func _do_combat(a_board: Array, a_idx: int, a_is_player: bool, a_is_front: bool,
 	var type_bonus: int = _type_advantage(att_sub, def_sub)
 	if type_bonus > 0:
 		_log("%s has type advantage over %s (+%d dmg)!" % [att["data"].get("name","?"), def_["data"].get("name","?"), type_bonus])
+	Sound.play(preload("res://data/sfx/to use/Gun.wav"))
 	_spawn_float(CardBattleLayout.board_world_pos(_get_row(a_is_player, a_is_front), a_is_player, a_is_front, a_idx),      "-%d" % def_atk, CardBattleConstants.C_HP_RED)
 	_spawn_float(CardBattleLayout.board_world_pos(_get_row(not a_is_player, d_is_front), not a_is_player, d_is_front, d_idx),  "-%d" % (att_atk + type_bonus), CardBattleConstants.C_HP_RED)
 	var att_ab: String = str(att["data"].get("ability", ""))
@@ -1585,7 +1612,7 @@ func _do_combat(a_board: Array, a_idx: int, a_is_player: bool, a_is_front: bool,
 	_hit_demon(att,  def_atk, def_poi)
 	var def_died: bool = def_.get("hp", 1) <= 0
 	if att.get("lifesteal", false) and att_atk > 0:
-		if a_is_player: player_hp = mini(player_hp + att_atk, CardBattleConstants.STARTING_HP)
+		if a_is_player: _heal_player(att_atk)
 		else:           enemy_hp  = mini(enemy_hp  + att_atk, CardBattleConstants.STARTING_HP)
 		_log("%s leeches %d HP!" % [att["data"].get("name","?"), att_atk])
 	if _kwrd(att_ab, "on_kill_both_lose_life") and def_died:
@@ -1671,8 +1698,15 @@ func _resolve_deathrattle(d: Dictionary, is_player: bool, is_front: bool) -> voi
 		_draw_one(hand_dr, deck_dr)
 
 
+func _heal_player(n: int) -> void:
+	if n <= 0: return
+	player_hp = mini(player_hp + n, CardBattleConstants.STARTING_HP)
+	Sound.play(preload("res://data/sfx/to use/Drink.wav"))
+
+
 func _deal_damage_to_player(n: int) -> void:
 	player_hp -= n
+	Sound.play(preload("res://data/sfx/Hurt.wav"))
 	_spawn_float(Vector2(float(CardBattleConstants.LEFT_W) * 0.5, float(CardBattleConstants.PINFO_Y) + 10.0), "-%d" % n, CardBattleConstants.C_HP_RED)
 	_log_colored("You take %d face damage!" % n, CardBattleConstants.C_HP_RED)
 	_view.queue_redraw()
@@ -1680,6 +1714,7 @@ func _deal_damage_to_player(n: int) -> void:
 
 
 func _deal_damage_to_enemy(n: int) -> void:
+	Sound.play(preload("res://data/sfx/to use/Crunch.wav"))
 	enemy_hp -= n
 	_spawn_float(Vector2(float(CardBattleConstants.LEFT_W) * 0.5, float(CardBattleConstants.EINFO_H) * 0.5), "-%d" % n, CardBattleConstants.C_HP_RED)
 	_log_colored("Enemy takes %d face damage!" % n, CardBattleConstants.C_HP_RED)
@@ -2107,6 +2142,7 @@ func _on_left_press(pos: Vector2) -> void:
 			_drag_card = player_hand[i]
 			_drag_hand_idx = i
 			_drag_pos = pos
+			_drag_start_pos = pos
 			_view.queue_redraw()
 			return
 
@@ -2198,6 +2234,41 @@ func _on_drag_drop(pos: Vector2) -> void:
 				and not _stashed_this_turn and player_arsenal.is_empty():
 			if CardBattleLayout.hand_rect(hand_idx, player_hand.size()).has_point(pos):
 				await _on_stash(hand_idx)
+			_view.queue_redraw(); return
+		# Short drag (click) on a hand card: enter CHOOSE_ROW like the arsenal flow.
+		var is_click: bool = pos.distance_to(_drag_start_pos) <= CardBattleConstants.ATTACK_DRAG_THRESH
+		if is_click and hand_idx >= 0 and hand_idx < player_hand.size() \
+				and _mode != Mode.CHOOSE_PAY_MANA:
+			var cc: Dictionary = card
+			var cst_c: int = int(cc.get("cost", 0))
+			var tax_c: int = _spell_tax_against_caster(true) if str(cc.get("type", "")) == "spell" else 0
+			var total_c: int = cst_c + tax_c
+			if total_c > player_mana:
+				if cst_c <= 10:
+					_begin_pay_mana(cc, hand_idx, true)
+			elif str(cc.get("type", "")) == "demon":
+				var ab_c: String = str(cc.get("ability", ""))
+				if "taunt" in ab_c:
+					player_hand.remove_at(hand_idx)
+					player_mana -= total_c
+					_summon(cc, true, true)
+					_log("Played %s to front!" % cc.get("name", "?"))
+					_view.queue_redraw(); _check_game_over(); return
+				player_hand.remove_at(hand_idx)
+				player_mana -= total_c
+				_pending_card = cc
+				_pending_hand_idx = -1
+				_pending_hand_restore_idx = hand_idx
+				_pending_skip_mana_on_place = true
+				_choose_row_mana_refund = total_c
+				_mode = Mode.CHOOSE_ROW
+			else:
+				player_hand.remove_at(hand_idx)
+				player_mana -= total_c
+				_resolve_spell(cc, true)
+				player_gy.append(cc)
+				_log("Cast %s!" % cc.get("name", "?"))
+				_view.queue_redraw(); _check_game_over(); return
 		_view.queue_redraw(); return
 
 	var to_front: bool = on_front
@@ -2372,7 +2443,7 @@ func _place_pending(to_front: bool) -> void:
 	_summon(_pending_card, true, to_front)
 	## Demon goes to GY only on death.
 	_log("Played %s (%s)" % [_pending_card["name"], "front" if to_front else "rear"])
-	_pending_card = {}; _pending_hand_idx = -1
+	_pending_card = {}; _pending_hand_idx = -1; _pending_hand_restore_idx = -1
 	if _mode != Mode.CHOOSE_ENEMY_TARGET:
 		_mode = Mode.IDLE
 	_view.queue_redraw(); _check_game_over()
@@ -2387,7 +2458,7 @@ func _on_attack_face() -> void:
 	att["attacked"] += 1
 	att["exhausted"] = att["attacked"] >= (2 if att.get("double_attack", false) else 1)
 	_deal_damage_to_enemy(att["atk"])
-	if att.get("lifesteal", false): player_hp = mini(player_hp + att["atk"], CardBattleConstants.STARTING_HP)
+	if att.get("lifesteal", false): _heal_player(att["atk"])
 	_face_attack_followup(att, true)
 	_log("%s attacks face for %d!" % [att["data"]["name"], att["atk"]])
 	_mode = Mode.IDLE

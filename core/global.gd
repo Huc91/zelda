@@ -17,6 +17,19 @@ var Item = {
 ## True while a card battle overlay is active (overworld inventory blocked).
 var in_battle: bool = false
 
+## Player lives. Reaching 0 triggers game over.
+var lives: int = 3
+const MAX_LIVES: int = 3
+
+## World position of the last activated bonfire (null = use starting entrance).
+var last_bonfire_position = null
+## Map path where the last bonfire was activated.
+var last_bonfire_map: String = ""
+## All lit bonfire positions keyed by map path — persists across map transitions.
+var lit_bonfires: Dictionary = {}  ## { map_path: Array[Vector2] }
+
+signal lives_changed(new_lives: int)
+
 ## Saved deck slots: each `{ "name": String, "color": String, "card_ids": Array[String] }`.
 var player_decks: Array[Dictionary] = []
 
@@ -38,6 +51,9 @@ var current_map_path: String = ""
 ## Pickup positions already collected, keyed by map path.
 var collected_pickups: Dictionary = {}  # { map_path: Array[Vector2] }
 
+## Player inventory slots serialized as resource paths. { "B": "res://...", "A": "res://..." }
+var player_items: Dictionary = {}
+
 # ── Economy constants ────────────────────────────────────────────────
 const PACK_COST: int        = 10
 const SINGLE_BUY_MULT: int  = 8   ## singles cost PACK_COST * MULT / 5 per card
@@ -55,6 +71,7 @@ const REWARD_BY_DIFF: Dictionary = {
 
 signal card_battle_requested(player_first: bool, enemy: Node)
 signal money_changed(new_amount: int)
+signal bonfire_rested
 
 
 func _ready() -> void:
@@ -87,6 +104,27 @@ func toggle_dev_mode() -> void:
 		dev_mode = true
 		_apply_dev_mode()
 	money_changed.emit(money)
+
+
+## Wipe all runtime state back to fresh-game defaults (call before starting a new game).
+func reset_new_game() -> void:
+	dev_mode = false
+	money = 10
+	lives = MAX_LIVES
+	last_bonfire_position = null
+	last_bonfire_map = ""
+	lit_bonfires.clear()
+	collected_pickups.clear()
+	player_items.clear()
+	card_collection.clear()
+	foil_collection.clear()
+	player_decks.clear()
+	battle_deck_index = 0
+	in_battle = false
+	_init_default_decks()
+	_init_card_collection()
+	money_changed.emit(money)
+	lives_changed.emit(lives)
 
 
 func _apply_dev_mode() -> void:
@@ -164,6 +202,137 @@ func notify_deck_removed_at(removed_index: int) -> void:
 	if battle_deck_index > removed_index:
 		battle_deck_index -= 1
 	battle_deck_index = clampi(battle_deck_index, 0, maxi(0, player_decks.size() - 1))
+
+
+func lose_life() -> bool:
+	lives = maxi(0, lives - 1)
+	lives_changed.emit(lives)
+	return lives <= 0
+
+
+func restore_lives() -> void:
+	lives = MAX_LIVES
+	lives_changed.emit(lives)
+
+
+func activate_bonfire(world_pos: Vector2, map_path: String) -> void:
+	last_bonfire_position = world_pos
+	last_bonfire_map = map_path
+	if not lit_bonfires.has(map_path):
+		lit_bonfires[map_path] = []
+	var list: Array = lit_bonfires[map_path]
+	if not list.has(world_pos):
+		list.append(world_pos)
+
+
+func is_bonfire_lit(world_pos: Vector2, map_path: String) -> bool:
+	var list: Array = lit_bonfires.get(map_path, [])
+	return list.has(world_pos)
+
+
+const SAVE_PATH: String = "user://save.json"
+const SAVE_PATH_DEV: String = "user://save_dev.json"
+
+
+func _active_save_path() -> String:
+	return SAVE_PATH_DEV if dev_mode else SAVE_PATH
+
+
+## Returns true if a normal (non-dev) save file exists.
+func has_normal_save() -> bool:
+	return FileAccess.file_exists(SAVE_PATH)
+
+
+func save_game() -> void:
+	var bp = null
+	if last_bonfire_position != null:
+		var bpv: Vector2 = last_bonfire_position as Vector2
+		bp = {"x": bpv.x, "y": bpv.y}
+	var pickups_serial: Dictionary = _serialize_vec2_dict(collected_pickups)
+	var data: Dictionary = {
+		"money": money,
+		"lives": lives,
+		"last_bonfire_position": bp,
+		"last_bonfire_map": last_bonfire_map,
+		"card_collection": card_collection.duplicate(),
+		"foil_collection": foil_collection.duplicate(),
+		"player_decks": player_decks.duplicate(true),
+		"battle_deck_index": battle_deck_index,
+		"collected_pickups": pickups_serial,
+		"lit_bonfires": _serialize_vec2_dict(lit_bonfires),
+		"player_items": player_items.duplicate(),
+	}
+	data["dev_mode"] = dev_mode
+	var f: FileAccess = FileAccess.open(_active_save_path(), FileAccess.WRITE)
+	f.store_string(JSON.stringify(data))
+	f.close()
+
+
+func load_game() -> bool:
+	var path: String = _active_save_path()
+	if not FileAccess.file_exists(path):
+		return false
+	var f: FileAccess = FileAccess.open(path, FileAccess.READ)
+	var text: String = f.get_as_text()
+	f.close()
+	var parsed: Variant = JSON.parse_string(text)
+	if parsed == null or typeof(parsed) != TYPE_DICTIONARY:
+		return false
+	var data: Dictionary = parsed as Dictionary
+	money = int(data.get("money", 10))
+	lives = int(data.get("lives", MAX_LIVES))
+	last_bonfire_map = str(data.get("last_bonfire_map", ""))
+	var bp: Variant = data.get("last_bonfire_position", null)
+	if bp != null and typeof(bp) == TYPE_DICTIONARY:
+		last_bonfire_position = Vector2(float(bp["x"]), float(bp["y"]))
+	else:
+		last_bonfire_position = null
+	var cc: Variant = data.get("card_collection", {})
+	if typeof(cc) == TYPE_DICTIONARY:
+		card_collection = cc as Dictionary
+	var fc: Variant = data.get("foil_collection", {})
+	if typeof(fc) == TYPE_DICTIONARY:
+		foil_collection = fc as Dictionary
+	var pd: Variant = data.get("player_decks", [])
+	if typeof(pd) == TYPE_ARRAY and not (pd as Array).is_empty():
+		player_decks.clear()
+		for entry: Variant in (pd as Array):
+			if typeof(entry) == TYPE_DICTIONARY:
+				player_decks.append(entry as Dictionary)
+	battle_deck_index = int(data.get("battle_deck_index", 0))
+	var ps: Variant = data.get("collected_pickups", {})
+	if typeof(ps) == TYPE_DICTIONARY:
+		collected_pickups = _deserialize_vec2_dict(ps as Dictionary)
+	var lb: Variant = data.get("lit_bonfires", {})
+	if typeof(lb) == TYPE_DICTIONARY:
+		lit_bonfires = _deserialize_vec2_dict(lb as Dictionary)
+	var pi: Variant = data.get("player_items", {})
+	if typeof(pi) == TYPE_DICTIONARY:
+		player_items = pi as Dictionary
+	money_changed.emit(money)
+	lives_changed.emit(lives)
+	return true
+
+
+func _serialize_vec2_dict(src: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for k: String in src:
+		var arr: Array = []
+		for v: Vector2 in src[k]:
+			arr.append({"x": v.x, "y": v.y})
+		out[k] = arr
+	return out
+
+
+func _deserialize_vec2_dict(src: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for k: Variant in src:
+		var vlist: Array = []
+		for entry: Variant in src[k]:
+			if typeof(entry) == TYPE_DICTIONARY:
+				vlist.append(Vector2(float(entry["x"]), float(entry["y"])))
+		out[str(k)] = vlist
+	return out
 
 
 func request_card_battle(player_first: bool, enemy: Node) -> void:

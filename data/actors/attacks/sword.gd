@@ -29,6 +29,7 @@ var target_cell_position : Vector2i:
 func activate(u) -> void:
 	user = u
 	actor_type = user.actor_type
+	damage = 0.5
 	user.current_state = user.state_swing
 	user.connect("on_hit", queue_free)
 	user.ray.add_exception(self)
@@ -47,3 +48,7 @@ func _on_body_entered(body) -> void:
 	if body is Map:
 		var cell = body.local_to_map(target_cell_position)
 		body.slash(cell)
+	elif body is Actor:
+		var a: Actor = body as Actor
+		if a.actor_type != actor_type and not a.in_battle:
+			a._on_attacked(self)

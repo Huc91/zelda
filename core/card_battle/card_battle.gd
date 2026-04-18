@@ -50,9 +50,12 @@ var enemy_arsenal: Dictionary = {}
 
 var _pitched_this_turn:       Array = []
 var _enemy_pitched_this_turn: Array = []
+var _pay_arsenal_pitch_start: int = 0
 var _moved_this_turn   := false
 var _stashed_this_turn := false
 var _enemy_stashed_this_turn := false
+var _soul_collector_drew_this_turn: bool = false
+var _enemy_soul_collector_drew_this_turn: bool = false
 
 var player_mana     := 0
 var player_turn_num := 0
@@ -64,7 +67,7 @@ var is_player_turn := false
 var _animating     := false
 var _ended         := false
 
-enum Mode { IDLE, CHOOSE_ROW, ATTACKING, CHOOSE_ARSENAL, CHOOSE_ENEMY_TARGET, CHOOSE_PAY_MANA }
+enum Mode { IDLE, CHOOSE_ROW, ATTACKING, CHOOSE_ARSENAL, CHOOSE_ENEMY_TARGET, CHOOSE_ALLY_TARGET, CHOOSE_PAY_MANA }
 var _mode          := Mode.IDLE
 var _pending_card:  Dictionary = {}
 var _pending_hand_idx := -1
@@ -93,6 +96,8 @@ var _chaos_selected: Dictionary = {}
 var _sel_idx          := -1
 ## Log label while player must click an enemy minion to freeze (Frost Mage, Frost Bolt, etc.).
 var _freeze_target_source_name: String = ""
+var _ally_target_pending_card: Dictionary = {}
+var _ally_target_source_name: String = ""
 
 var _battle_log:  Array = []
 var _log_scroll:  int   = 0
@@ -121,6 +126,11 @@ var _atk_drag_start: Vector2 = Vector2.ZERO
 var _rear_pick_idx: int = -1
 var _rear_pick_start: Vector2 = Vector2.ZERO
 
+## Enemy attack preview: set by AI before dealing damage so arrow is visible.
+var _enemy_atk_from_idx: int = -1
+var _enemy_atk_target_type: String = ""  ## "face", "front", "rear"
+var _enemy_atk_target_idx: int = -1
+
 var _toast_text:  String = ""
 var _toast_timer: float  = 0.0
 ## True after End Turn opened the Arsenal choice — stashing should finish the turn without a second End press.
@@ -129,6 +139,9 @@ var _pending_finish_after_arsenal: bool = false
 var _modal_open:  bool   = false
 var _modal_cards: Array  = []
 var _modal_title: String = ""
+
+var _enemy_spell_preview: Dictionary = {}
+var _enemy_spell_preview_t: float = 0.0
 
 var _view: _View
 var _arrow_overlay: _ArrowOverlay
@@ -184,6 +197,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif _mode == Mode.CHOOSE_ENEMY_TARGET:
 		_log("Freeze cancelled.")
 		_finish_choose_enemy_target_idle()
+	elif _mode == Mode.CHOOSE_ALLY_TARGET:
+		_log("Target cancelled (spell fizzled).")
+		_finish_choose_ally_target_idle()
 	else:
 		return
 	get_viewport().set_input_as_handled()
@@ -219,7 +235,7 @@ func _draw_mandatory_refresh(hand: Array, deck: Array, n: int, is_player_deck: b
 			break
 		if hand.size() >= CardBattleConstants.MAX_HAND:
 			break
-		hand.append(deck.pop_front())
+		_draw_one(hand, deck)
 	_check_auto_lose_no_resources(is_player_deck)
 	return not _ended
 
@@ -283,8 +299,16 @@ func _draw_one(hand: Array, deck: Array) -> void:
 
 
 func _log(s: String) -> void:
-	_battle_log.append(s)
-	var flat: Array[String] = _log_flat_lines()
+	_battle_log.append({"text": s, "color": CardBattleConstants.C_LOG_BODY})
+	var flat: Array = _log_flat_lines()
+	_log_scroll = maxi(0, flat.size() - CardBattleConstants.LOG_VISIBLE)
+	_clamp_log_scroll()
+	_view.queue_redraw()
+
+
+func _log_colored(s: String, color: Color) -> void:
+	_battle_log.append({"text": s, "color": color})
+	var flat: Array = _log_flat_lines()
 	_log_scroll = maxi(0, flat.size() - CardBattleConstants.LOG_VISIBLE)
 	_clamp_log_scroll()
 	_view.queue_redraw()
@@ -298,6 +322,7 @@ func _start_player_turn() -> void:
 	_pitched_this_turn.clear()
 	_moved_this_turn   = false
 	_stashed_this_turn = false
+	_soul_collector_drew_this_turn = false
 	_mode              = Mode.IDLE
 	_sel_idx           = -1
 	_ctx_idx           = -1
@@ -325,6 +350,8 @@ func _finish_end_player_turn() -> void:
 		_cancel_choose_row()
 	if _mode == Mode.CHOOSE_ENEMY_TARGET:
 		_finish_choose_enemy_target_idle()
+	if _mode == Mode.CHOOSE_ALLY_TARGET:
+		_finish_choose_ally_target_idle()
 	_apply_end_of_turn_board_effects(true)
 	_thaw_frozen_minions_for_side(true)
 	is_player_turn = false
@@ -366,8 +393,8 @@ func _handle_end_turn_click() -> void:
 	if _modal_kind == "chaos_pick":
 		_log("Esc or CLOSE cancels Chaos King — or press SUMMON when ready.")
 		return
-	if _mode == Mode.ATTACKING or _mode == Mode.CHOOSE_ROW or _mode == Mode.CHOOSE_ENEMY_TARGET:
-		_log("Finish that action first (attack / row / freeze target).")
+	if _mode == Mode.ATTACKING or _mode == Mode.CHOOSE_ROW or _mode == Mode.CHOOSE_ENEMY_TARGET or _mode == Mode.CHOOSE_ALLY_TARGET:
+		_log("Choose a target first.")
 		return
 	if _mode == Mode.CHOOSE_ARSENAL:
 		_pending_finish_after_arsenal = false
@@ -398,6 +425,7 @@ func _start_enemy_turn() -> void:
 	enemy_turn_num += 1
 	enemy_mana      = 0
 	_enemy_stashed_this_turn = false
+	_enemy_soul_collector_drew_this_turn = false
 	## Previous turn’s unplayed hand — graveyard (pitched cards already left hand earlier).
 	for c in enemy_hand: enemy_gy.append(c)
 	enemy_hand.clear()
@@ -464,13 +492,18 @@ func _apply_end_of_turn_board_effects(is_player: bool) -> void:
 			if d.get("hp", 0) <= 0:
 				continue
 			var ab: String = str(d["data"].get("ability", ""))
-			if not _kwrd(ab, "taunt_regen"):
+			var regen_amt: int = 0
+			if _kwrd(ab, "taunt_regen_2"):
+				regen_amt = 2
+			elif _kwrd(ab, "taunt_regen"):
+				regen_amt = 1
+			if regen_amt == 0:
 				continue
 			var mx: int = int(d.get("hp_intrinsic", int(d["data"].get("hp", 1)))) + int(d.get("hp_aura_bonus", 0))
 			if d["hp"] >= mx:
 				continue
-			d["hp"] = mini(d["hp"] + 1, mx)
-			_log("%s restores 1 HP." % str(d["data"].get("name", "?")))
+			d["hp"] = mini(d["hp"] + regen_amt, mx)
+			_log("%s restores %d HP." % [str(d["data"].get("name", "?")), regen_amt])
 
 
 ## Freeze — show exhausted (ZZZ) on the target until end of that minion owner's next turn (then thaw).
@@ -502,6 +535,48 @@ func _complete_choose_enemy_freeze(target: Dictionary) -> void:
 	_log("%s freezes %s!" % [_freeze_target_source_name, str(target["data"].get("name", "?"))])
 	_finish_choose_enemy_target_idle()
 	_check_auto_lose_no_resources(true)
+	_check_game_over()
+	_view.queue_redraw()
+
+
+func _begin_choose_ally_target(source_name: String, card: Dictionary) -> void:
+	_ally_target_source_name = source_name
+	_ally_target_pending_card = card
+	_mode = Mode.CHOOSE_ALLY_TARGET
+	_ctx_idx = -1; _ctx_is_front = true; _atk_drag_idx = -1; _rear_pick_idx = -1; _sel_idx = -1
+	_show_toast("Choose a friendly demon")
+	_log("%s — click one of your demons." % source_name)
+	_view.queue_redraw()
+
+
+func _finish_choose_ally_target_idle() -> void:
+	_mode = Mode.IDLE
+	_ally_target_source_name = ""
+	_ally_target_pending_card = {}
+
+
+func _complete_choose_ally_target(target: Dictionary) -> void:
+	var card: Dictionary = _ally_target_pending_card
+	var effect: String = str(card.get("effect", ""))
+	var val: int = int(card.get("value", 0))
+	var cname: String = str(card.get("name", "Spell"))
+	var tname: String = str(target["data"].get("name", "?"))
+	match effect:
+		"buff_hp":
+			target["hp"] += val
+			target["hp_intrinsic"] = target.get("hp_intrinsic", int(target["data"].get("hp", 1))) + val
+			_log("%s: +%d HP to %s!" % [cname, val, tname])
+		"give_divine_shield":
+			target["divine_active"] = true
+			_log("%s: Divine Shield on %s!" % [cname, tname])
+		"buff_target_stats":
+			target["atk_intrinsic"] = target.get("atk_intrinsic", int(target["data"].get("atk", 0))) + val
+			target["hp"] += val
+			target["hp_intrinsic"] = target.get("hp_intrinsic", int(target["data"].get("hp", 1))) + val
+			_log("%s: +%d/+%d to %s!" % [cname, val, val, tname])
+	_finish_choose_ally_target_idle()
+	_apply_after_spell_cast(true)
+	_refresh_mimic_minions_and_front_atk_auras()
 	_check_game_over()
 	_view.queue_redraw()
 
@@ -626,6 +701,7 @@ func _make_board_demon(card: Dictionary) -> Dictionary:
 		"lifesteal"    : _kwrd(ab, "lifesteal"),
 		"taunt"        : _kwrd(ab, "taunt"),
 		"unblockable"  : _kwrd(ab, "unblockable"),
+		"aerial"       : _kwrd(ab, "aerial"),
 		"rage"         : _kwrd(ab, "rage"),
 		"double_attack": _kwrd(ab, "double_attack"),
 		"frozen"       : false,
@@ -698,8 +774,68 @@ func _resolve_battlecry(d: Dictionary, is_player: bool) -> void:
 			if is_player: _deal_damage_to_enemy(nrear)
 			else: _deal_damage_to_player(nrear)
 	elif "battlecry_equalize_hp" in ab:
-		player_hp = 8
-		enemy_hp = 8
+		player_hp = 5
+		enemy_hp = 5
+	elif "battlecry_buff_all_hp" in ab:
+		for ally in pf:
+			if ally != d:
+				ally["hp"] = ally.get("hp", 1) + 2
+				ally["hp_intrinsic"] = ally.get("hp_intrinsic", int(ally["data"].get("hp", 1))) + 2
+		for ally in pr:
+			if ally != d:
+				ally["hp"] = ally.get("hp", 1) + 2
+				ally["hp_intrinsic"] = ally.get("hp_intrinsic", int(ally["data"].get("hp", 1))) + 2
+	elif "battlecry_buff_target_2_2" in ab:
+		var allies_all: Array = []
+		for ally in pf:
+			if ally != d: allies_all.append({"d": ally})
+		for ally in pr:
+			if ally != d: allies_all.append({"d": ally})
+		if not allies_all.is_empty():
+			var picked: Dictionary = allies_all[randi() % allies_all.size()]["d"]
+			picked["atk_intrinsic"] = picked.get("atk_intrinsic", int(picked["data"].get("atk", 0))) + 2
+			picked["hp"] = picked.get("hp", 1) + 2
+			picked["hp_intrinsic"] = picked.get("hp_intrinsic", int(picked["data"].get("hp", 1))) + 2
+			_log("%s buffed %s +2/+2." % [d["data"].get("name", "?"), picked["data"].get("name", "?")])
+	elif "battlecry_buff_random_ally_1_atk" in ab:
+		var pool_a: Array = []
+		for ally in pf:
+			if ally != d: pool_a.append(ally)
+		for ally in pr:
+			if ally != d: pool_a.append(ally)
+		if not pool_a.is_empty():
+			var tgt: Dictionary = pool_a[randi() % pool_a.size()]
+			tgt["atk_intrinsic"] = tgt.get("atk_intrinsic", int(tgt["data"].get("atk", 0))) + 1
+			_log("%s gives +1 ATK to %s." % [d["data"].get("name", "?"), tgt["data"].get("name", "?")])
+	elif "battlecry_aoe_all_1" in ab:
+		for o in of_.duplicate(): _hit_demon(o, 1, false)
+		for o in or_.duplicate(): _hit_demon(o, 1, false)
+		for o in pf.duplicate():
+			if o != d: _hit_demon(o, 1, false)
+		for o in pr.duplicate():
+			if o != d: _hit_demon(o, 1, false)
+		_process_deaths(of_, not is_player, true); _process_deaths(or_, not is_player, false)
+		_process_deaths(pf, is_player, true); _process_deaths(pr, is_player, false)
+	elif "wormoyf_power" in ab:
+		var subtypes_seen: Dictionary = {}
+		for row_w: Array in [pf, pr, of_, or_]:
+			for dm: Dictionary in row_w:
+				if dm == d: continue
+				var st: String = str(dm["data"].get("subtype", ""))
+				if st != "": subtypes_seen[st] = true
+		var spell_count: int = 0
+		var pg_w: Array = player_gy if is_player else enemy_gy
+		var og_w: Array = enemy_gy if is_player else player_gy
+		for c in pg_w:
+			if str(c.get("type", "")) == "spell": spell_count += 1
+		for c in og_w:
+			if str(c.get("type", "")) == "spell": spell_count += 1
+		var bonus: int = subtypes_seen.size() + spell_count
+		if bonus > 0:
+			d["atk_intrinsic"] = d.get("atk_intrinsic", int(d["data"].get("atk", 0))) + bonus
+			d["hp"] = d.get("hp", 1) + bonus
+			d["hp_intrinsic"] = d.get("hp_intrinsic", int(d["data"].get("hp", 1))) + bonus
+			_log("Wormoyf absorbs power: +%d/+%d." % [bonus, bonus])
 	elif "battlecry_destroy_weak" in ab:
 		var killed: bool = false
 		for o in of_.duplicate():
@@ -831,10 +967,16 @@ func _find_hand_idx_by_id(id: String) -> int:
 func _cancel_pay_mana() -> void:
 	if _mode != Mode.CHOOSE_PAY_MANA:
 		return
+	var cards_to_return: Array = _pitched_this_turn.slice(_pay_arsenal_pitch_start)
+	for c in cards_to_return:
+		player_mana = maxi(0, player_mana - int(c.get("mana_value", 1)))
+		player_hand.append(c)
+	_pitched_this_turn.resize(_pay_arsenal_pitch_start)
 	_mode = Mode.IDLE
 	_pay_card_id = ""
 	_pay_cost = 0
 	_pay_from_arsenal = false
+	_pay_arsenal_pitch_start = 0
 	_pay_stack_t = 0.0
 	_pay_stack_use_drop_anchor = false
 	_log("Cancelled paying mana.")
@@ -925,7 +1067,8 @@ func _try_finish_pay_mana() -> void:
 	else:
 		_resolve_spell(card, true)
 		player_gy.append(card)
-	_mode = Mode.IDLE
+	if _mode != Mode.CHOOSE_ENEMY_TARGET:
+		_mode = Mode.IDLE
 	_pay_card_id = ""
 	_pay_cost = 0
 	_log("Played %s." % str(card.get("name", "?")))
@@ -941,9 +1084,16 @@ func _begin_pay_mana(card: Dictionary, _hand_idx: int, to_front: bool, drop_pos:
 	_pay_card_id = str(card.get("id", ""))
 	_pay_hand_idx = _hand_idx
 	var base_cost: int = int(card.get("cost", 0))
+	if "spell_cost_reduce_per_spell_gy" in str(card.get("ability", "")):
+		var spell_count_gy: int = 0
+		for c_gy in player_gy:
+			if str(c_gy.get("type", "")) == "spell":
+				spell_count_gy += 1
+		base_cost = maxi(0, base_cost - spell_count_gy)
 	_pay_cost = base_cost + (_spell_tax_against_caster(true) if str(card.get("type", "")) == "spell" else 0)
 	_pay_to_front = to_front
 	_pay_stack_t = 0.0
+	_pay_arsenal_pitch_start = _pitched_this_turn.size()
 	var rr0: Rect2 = CardBattleLayout.row_drop_rect(to_front)
 	if rr0.has_point(drop_pos):
 		_pay_stack_anchor = drop_pos
@@ -1191,6 +1341,7 @@ func _refresh_demon_keywords(d: Dictionary) -> void:
 	d["lifesteal"]     = _kwrd(ab, "lifesteal")
 	d["taunt"]         = _kwrd(ab, "taunt")
 	d["unblockable"]   = _kwrd(ab, "unblockable")
+	d["aerial"]        = _kwrd(ab, "aerial")
 	d["rage"]          = _kwrd(ab, "rage")
 	d["double_attack"] = _kwrd(ab, "double_attack")
 	d["divine_active"] = _kwrd(ab, "divine_shield")
@@ -1247,7 +1398,9 @@ func _refresh_mimic_minions_and_front_atk_auras() -> void:
 					warlord_haste = true
 					break
 			if warlord_haste and not d.get("frozen", false):
-				d["exhausted"] = false
+				var max_atk: int = 2 if d.get("double_attack", false) else 1
+				if int(d.get("attacked", 0)) < max_atk:
+					d["exhausted"] = false
 		for d in pr:
 			var rgs2: int = int(d.get("rage_stacks", 0))
 			var aintr2: int = int(d.get("atk_intrinsic", int(d["data"].get("atk", 0))))
@@ -1255,14 +1408,37 @@ func _refresh_mimic_minions_and_front_atk_auras() -> void:
 	_view.queue_redraw()
 
 
-func _process_global_death_triggers(_dead: Dictionary, dead_owner_is_player: bool) -> void:
+func _process_global_death_triggers(dead: Dictionary, dead_owner_is_player: bool) -> void:
+	# ── Dying creature sees its own death (like MTG last gasp) ──────────
+	var dead_ab: String = str(dead["data"].get("ability", ""))
+	var dead_name: String = str(dead["data"].get("name", "?"))
+	var dead_who: String = "Your" if dead_owner_is_player else "Enemy"
+	if "any_death_drain" in dead_ab:
+		_log("%s %s drains from the grave!" % [dead_who, dead_name])
+		if dead_owner_is_player: _deal_damage_to_enemy(1)
+		else: _deal_damage_to_player(1)
+	if "any_death_draw" in dead_ab:
+		_log("%s %s draws from the grave!" % [dead_who, dead_name])
+		if dead_owner_is_player: _draw_one(player_hand, player_deck)
+		else: _draw_one(enemy_hand, enemy_deck)
+	if "ally_death_mana" in dead_ab:
+		_log("%s %s: +1 mana on its own death!" % [dead_who, dead_name])
+		if dead_owner_is_player: player_mana = mini(player_mana + 1, 10)
+		else: enemy_mana = mini(enemy_mana + 1, 10)
+	if "ally_death_lifegain" in dead_ab:
+		_log("%s %s: +1 HP on its own death!" % [dead_who, dead_name])
+		if dead_owner_is_player: player_hp = mini(player_hp + 1, CardBattleConstants.STARTING_HP)
+		else: enemy_hp = mini(enemy_hp + 1, CardBattleConstants.STARTING_HP)
+	# ── Living creatures triggered by the death ───────────────────────
 	for row in [player_front, player_rear]:
 		for obs in row:
 			if "any_death_drain" in str(obs["data"].get("ability", "")):
+				_log("Your %s drains 1!" % obs["data"].get("name","?"))
 				_deal_damage_to_enemy(1)
 	for row in [enemy_front, enemy_rear]:
 		for obs in row:
 			if "any_death_drain" in str(obs["data"].get("ability", "")):
+				_log("Enemy %s drains 1!" % obs["data"].get("name","?"))
 				_deal_damage_to_player(1)
 	for row in [player_front, player_rear, enemy_front, enemy_rear]:
 		for obs in row:
@@ -1270,23 +1446,40 @@ func _process_global_death_triggers(_dead: Dictionary, dead_owner_is_player: boo
 				obs["atk_intrinsic"] = obs.get("atk_intrinsic", int(obs["data"].get("atk", 0))) + 1
 				obs["hp_intrinsic"] = obs.get("hp_intrinsic", int(obs["data"].get("hp", 1))) + 1
 				obs["hp"] = int(obs["hp"]) + 1
+				_log("%s feeds on death! (+1/+1)" % obs["data"].get("name","?"))
 	if dead_owner_is_player:
 		for row in [player_front, player_rear]:
 			for obs in row:
 				if "ally_death_mana" in str(obs["data"].get("ability", "")):
+					_log("Your %s gains +1 mana!" % obs["data"].get("name","?"))
 					player_mana = mini(player_mana + 1, 10)
 	else:
 		for row in [enemy_front, enemy_rear]:
 			for obs in row:
 				if "ally_death_mana" in str(obs["data"].get("ability", "")):
+					_log("Enemy %s gains +1 mana!" % obs["data"].get("name","?"))
 					enemy_mana = mini(enemy_mana + 1, 10)
 	for row in [player_front, player_rear]:
 		for obs in row:
-			if "any_death_draw" in str(obs["data"].get("ability", "")):
+			var obs_ab: String = str(obs["data"].get("ability", ""))
+			if "any_death_draw_own_turn" in obs_ab:
+				if is_player_turn and not _soul_collector_drew_this_turn:
+					_soul_collector_drew_this_turn = true
+					_log("Your %s draws a card!" % obs["data"].get("name","?"))
+					_draw_one(player_hand, player_deck)
+			elif "any_death_draw" in obs_ab:
+				_log("Your %s draws a card!" % obs["data"].get("name","?"))
 				_draw_one(player_hand, player_deck)
 	for row in [enemy_front, enemy_rear]:
 		for obs in row:
-			if "any_death_draw" in str(obs["data"].get("ability", "")):
+			var obs_ab2: String = str(obs["data"].get("ability", ""))
+			if "any_death_draw_own_turn" in obs_ab2:
+				if not is_player_turn and not _enemy_soul_collector_drew_this_turn:
+					_enemy_soul_collector_drew_this_turn = true
+					_log("Enemy %s draws a card!" % obs["data"].get("name","?"))
+					_draw_one(enemy_hand, enemy_deck)
+			elif "any_death_draw" in obs_ab2:
+				_log("Enemy %s draws a card!" % obs["data"].get("name","?"))
 				_draw_one(enemy_hand, enemy_deck)
 	if dead_owner_is_player:
 		var nlg: int = 0
@@ -1295,6 +1488,7 @@ func _process_global_death_triggers(_dead: Dictionary, dead_owner_is_player: boo
 				if "ally_death_lifegain" in str(obs["data"].get("ability", "")):
 					nlg += 1
 		if nlg > 0:
+			_log("Your lifegain creatures heal +%d!" % nlg)
 			player_hp = mini(player_hp + nlg, CardBattleConstants.STARTING_HP)
 	else:
 		var nlg2: int = 0
@@ -1303,6 +1497,7 @@ func _process_global_death_triggers(_dead: Dictionary, dead_owner_is_player: boo
 				if "ally_death_lifegain" in str(obs["data"].get("ability", "")):
 					nlg2 += 1
 		if nlg2 > 0:
+			_log("Enemy lifegain creatures heal +%d!" % nlg2)
 			enemy_hp = mini(enemy_hp + nlg2, CardBattleConstants.STARTING_HP)
 
 
@@ -1320,6 +1515,8 @@ func _apply_after_spell_cast(is_player: bool) -> void:
 				else:
 					enemy_hp = mini(enemy_hp + 1, CardBattleConstants.STARTING_HP)
 			if "spell_aoe" in ab:
+				var aoe_name: String = d["data"].get("name", "?")
+				_log("%s: spell triggers AOE — 1 damage to all enemies!" % aoe_name)
 				for o in of_.duplicate():
 					_hit_demon(o, 1, false)
 				for o in or_.duplicate():
@@ -1330,19 +1527,31 @@ func _apply_after_spell_cast(is_player: bool) -> void:
 
 func _face_attack_followup(att: Dictionary, attacker_is_player: bool) -> void:
 	var ab: String = str(att["data"].get("ability", ""))
+	var aname: String = att["data"].get("name", "?")
+	var who: String = "Your" if attacker_is_player else "Enemy"
 	if "haste_face_draw" in ab:
+		_log("%s %s draws after face attack!" % [who, aname])
 		if attacker_is_player:
 			_draw_one(player_hand, player_deck)
 		else:
 			_draw_one(enemy_hand, enemy_deck)
 	if "haste_face_mana" in ab:
+		_log("%s %s gains +1 mana after face attack!" % [who, aname])
 		if attacker_is_player:
 			player_mana = mini(player_mana + 1, 10)
 		else:
 			enemy_mana = mini(enemy_mana + 1, 10)
 
 
+const ALLY_TARGET_EFFECTS: Array[String] = ["buff_hp", "give_divine_shield", "buff_target_stats"]
+
 func _resolve_spell(card: Dictionary, is_player: bool) -> void:
+	if is_player and str(card.get("effect", "")) in ALLY_TARGET_EFFECTS:
+		var pf: Array = player_front
+		var pr: Array = player_rear
+		if not pf.is_empty() or not pr.is_empty():
+			_begin_choose_ally_target(str(card.get("name", "Spell")), card)
+			return
 	CardBattleSpellEffects.resolve(self, card, is_player)
 	_apply_after_spell_cast(is_player)
 	_refresh_mimic_minions_and_front_atk_auras()
@@ -1364,24 +1573,42 @@ func _do_combat(a_board: Array, a_idx: int, a_is_player: bool, a_is_front: bool,
 	var att_sub: String = att["data"].get("subtype", "")
 	var def_sub: String = def_["data"].get("subtype", "")
 	var type_bonus: int = _type_advantage(att_sub, def_sub)
+	if type_bonus > 0:
+		_log("%s has type advantage over %s (+%d dmg)!" % [att["data"].get("name","?"), def_["data"].get("name","?"), type_bonus])
 	_spawn_float(CardBattleLayout.board_world_pos(_get_row(a_is_player, a_is_front), a_is_player, a_is_front, a_idx),      "-%d" % def_atk, CardBattleConstants.C_HP_RED)
 	_spawn_float(CardBattleLayout.board_world_pos(_get_row(not a_is_player, d_is_front), not a_is_player, d_is_front, d_idx),  "-%d" % (att_atk + type_bonus), CardBattleConstants.C_HP_RED)
+	var att_ab: String = str(att["data"].get("ability", ""))
+	if _kwrd(att_ab, "on_attack_buff_2"):
+		att["atk_intrinsic"] = att.get("atk_intrinsic", int(att["data"].get("atk", 0))) + 2
+		_log("%s charges up: +2 ATK this turn!" % att["data"].get("name","?"))
 	_hit_demon(def_, att_atk + type_bonus, att_poi)
 	_hit_demon(att,  def_atk, def_poi)
+	var def_died: bool = def_.get("hp", 1) <= 0
 	if att.get("lifesteal", false) and att_atk > 0:
 		if a_is_player: player_hp = mini(player_hp + att_atk, CardBattleConstants.STARTING_HP)
 		else:           enemy_hp  = mini(enemy_hp  + att_atk, CardBattleConstants.STARTING_HP)
+		_log("%s leeches %d HP!" % [att["data"].get("name","?"), att_atk])
+	if _kwrd(att_ab, "on_kill_both_lose_life") and def_died:
+		_deal_damage_to_player(1)
+		_deal_damage_to_enemy(1)
+		_log("%s venom: both players lose 1 life!" % att["data"].get("name","?"))
 	_process_deaths(a_board, a_is_player,     a_is_front)
 	_process_deaths(d_board, not a_is_player, d_is_front)
 
 
 func _hit_demon(d: Dictionary, dmg: int, source_poi: bool) -> void:
 	if dmg <= 0: return
-	if d.get("divine_active", false): d["divine_active"] = false; return
+	if d.get("divine_active", false):
+		d["divine_active"] = false
+		_log("%s's Divine Shield absorbs the hit!" % d["data"].get("name","?"))
+		return
 	if d.get("rage", false):
 		d["rage_stacks"] = int(d.get("rage_stacks", 0)) + 1
+		_log("%s rages! (+1 ATK)" % d["data"].get("name","?"))
 	d["hp"] -= dmg
-	if source_poi: d["hp"] = 0
+	if source_poi:
+		_log("%s is poisoned!" % d["data"].get("name","?"))
+		d["hp"] = 0
 
 
 func _process_deaths(board: Array, is_player: bool, is_front: bool) -> void:
@@ -1399,20 +1626,30 @@ func _process_deaths(board: Array, is_player: bool, is_front: bool) -> void:
 
 func _resolve_deathrattle(d: Dictionary, is_player: bool, is_front: bool) -> void:
 	var ab: String = d["data"].get("ability", "")
+	var dname: String = d["data"].get("name", "?")
+	var who: String = "Your" if is_player else "Enemy"
 	var gy := player_gy if is_player else enemy_gy
 	gy.append(d["data"])
 	if   "deathrattle_damage_2"     in ab:
+		_log("%s %s's deathrattle: 2 face damage!" % [who, dname])
 		if is_player: _deal_damage_to_enemy(2)
 		else:         _deal_damage_to_player(2)
 	elif "deathrattle_summon_zombie" in ab:
+		_log("%s %s's deathrattle: summons a Zombie!" % [who, dname])
 		_summon(CardDB.get_card("token_zombie"), is_player, is_front)
 	elif "deathrattle_summon_ash_wraith" in ab:
+		_log("%s %s's deathrattle: summons Ash Wraith!" % [who, dname])
 		_summon(CardDB.get_card("token_ash_wraith"), is_player, is_front)
 	elif "deathrattle_return_hand"   in ab:
 		var hand := player_hand if is_player else enemy_hand
 		if hand.size() < CardBattleConstants.MAX_HAND:
+			_log("%s %s's deathrattle: returns to hand!" % [who, dname])
+			gy.remove_at(gy.size() - 1)
 			hand.append(d["data"])
+		else:
+			_log("%s %s's deathrattle fizzles (hand full)." % [who, dname])
 	elif "deathrattle_buff_all"      in ab:
+		_log("%s %s's deathrattle: buffs allies +1/+1!" % [who, dname])
 		var pf := player_front if is_player else enemy_front
 		var pr := player_rear  if is_player else enemy_rear
 		for ally in pf:
@@ -1424,13 +1661,20 @@ func _resolve_deathrattle(d: Dictionary, is_player: bool, is_front: bool) -> voi
 			ally["hp_intrinsic"] = ally.get("hp_intrinsic", int(ally["data"].get("hp", 1))) + 1
 			ally["hp"] += 1
 	elif "deathrattle_summon_2_imps" in ab:
+		_log("%s %s's deathrattle: summons 2 Imps!" % [who, dname])
 		_summon(CardDB.get_card("token_imp"), is_player, is_front)
 		_summon(CardDB.get_card("token_imp"), is_player, is_front)
+	elif "deathrattle_draw_1" in ab:
+		var hand_dr := player_hand if is_player else enemy_hand
+		var deck_dr := player_deck if is_player else enemy_deck
+		_log("%s %s's deathrattle: draw 1!" % [who, dname])
+		_draw_one(hand_dr, deck_dr)
 
 
 func _deal_damage_to_player(n: int) -> void:
 	player_hp -= n
 	_spawn_float(Vector2(float(CardBattleConstants.LEFT_W) * 0.5, float(CardBattleConstants.PINFO_Y) + 10.0), "-%d" % n, CardBattleConstants.C_HP_RED)
+	_log_colored("You take %d face damage!" % n, CardBattleConstants.C_HP_RED)
 	_view.queue_redraw()
 	_check_game_over()
 
@@ -1438,6 +1682,7 @@ func _deal_damage_to_player(n: int) -> void:
 func _deal_damage_to_enemy(n: int) -> void:
 	enemy_hp -= n
 	_spawn_float(Vector2(float(CardBattleConstants.LEFT_W) * 0.5, float(CardBattleConstants.EINFO_H) * 0.5), "-%d" % n, CardBattleConstants.C_HP_RED)
+	_log_colored("Enemy takes %d face damage!" % n, CardBattleConstants.C_HP_RED)
 	_view.queue_redraw()
 	_check_game_over()
 
@@ -1540,6 +1785,36 @@ func ai_find_strongest(board: Array) -> int:
 	return _find_strongest(board)
 
 
+func ai_set_enemy_atk_preview(from_idx: int, tgt_type: String, tgt_idx: int) -> void:
+	_enemy_atk_from_idx = from_idx
+	_enemy_atk_target_type = tgt_type
+	_enemy_atk_target_idx = tgt_idx
+	_arrow_overlay.queue_redraw()
+
+
+func ai_clear_enemy_atk_preview() -> void:
+	_enemy_atk_from_idx = -1
+	_enemy_atk_target_type = ""
+	_enemy_atk_target_idx = -1
+	_arrow_overlay.queue_redraw()
+
+
+func ai_show_enemy_spell_preview(card: Dictionary) -> void:
+	_enemy_spell_preview = card
+	_enemy_spell_preview_t = 2.0
+	_view.queue_redraw()
+
+
+func ai_clear_enemy_spell_preview() -> void:
+	_enemy_spell_preview = {}
+	_enemy_spell_preview_t = 0.0
+	_view.queue_redraw()
+
+
+func ai_type_advantage(att_sub: String, def_sub: String) -> int:
+	return _type_advantage(att_sub, def_sub)
+
+
 func _enemy_pitch_card(i: int) -> void:
 	if i < 0 or i >= enemy_hand.size(): return
 	var card: Dictionary = enemy_hand[i]
@@ -1567,7 +1842,7 @@ func _on_input(event: InputEvent) -> void:
 			if event.delta.y > 0.0:
 				_log_scroll = maxi(0, _log_scroll - 1)
 			elif event.delta.y < 0.0:
-				var fl: Array[String] = _log_flat_lines()
+				var fl: Array = _log_flat_lines()
 				_log_scroll = mini(_log_scroll + 1, maxi(0, fl.size() - CardBattleConstants.LOG_VISIBLE))
 			_clamp_log_scroll()
 			_view.queue_redraw()
@@ -1579,7 +1854,7 @@ func _on_input(event: InputEvent) -> void:
 			if event.delta.y < -0.35:
 				_log_scroll = maxi(0, _log_scroll - 1)
 			elif event.delta.y > 0.35:
-				var fl2: Array[String] = _log_flat_lines()
+				var fl2: Array = _log_flat_lines()
 				_log_scroll = mini(_log_scroll + 1, maxi(0, fl2.size() - CardBattleConstants.LOG_VISIBLE))
 			_clamp_log_scroll()
 			_view.queue_redraw()
@@ -1601,7 +1876,7 @@ func _on_input(event: InputEvent) -> void:
 		return
 	if mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 		if CardBattleLayout.log_rect().has_point(pos):
-			var fl3: Array[String] = _log_flat_lines()
+			var fl3: Array = _log_flat_lines()
 			_log_scroll = mini(_log_scroll + 1, maxi(0, fl3.size() - CardBattleConstants.LOG_VISIBLE))
 			_clamp_log_scroll()
 			_view.queue_redraw()
@@ -1700,6 +1975,11 @@ func _on_right_click(pos: Vector2) -> void:
 		_log("Freeze cancelled.")
 		_view.queue_redraw()
 		return
+	if _mode == Mode.CHOOSE_ALLY_TARGET:
+		_finish_choose_ally_target_idle()
+		_log("Target cancelled (spell fizzled).")
+		_view.queue_redraw()
+		return
 	if not is_player_turn or _animating or _ended: return
 	if _mode != Mode.CHOOSE_PAY_MANA: return
 	for i in player_hand.size():
@@ -1735,6 +2015,21 @@ func _on_left_press(pos: Vector2) -> void:
 		var s := player_deck.duplicate(); s.shuffle(); _open_modal(s, "Your Deck (random)"); return
 
 	if not is_player_turn or _animating: return
+
+	# Targeting: ally buff spells — click friendly minion (elsewhere cancels)
+	if _mode == Mode.CHOOSE_ALLY_TARGET:
+		for i in player_front.size():
+			if CardBattleLayout.mini_rect(player_front, CardBattleConstants.PFFRONT_Y, i).has_point(pos):
+				_complete_choose_ally_target(player_front[i])
+				return
+		for i in player_rear.size():
+			if CardBattleLayout.mini_rect(player_rear, CardBattleConstants.PFREAR_Y, i).has_point(pos):
+				_complete_choose_ally_target(player_rear[i])
+				return
+		_log("Target cancelled (spell fizzled).")
+		_finish_choose_ally_target_idle()
+		_view.queue_redraw()
+		return
 
 	# Targeting: Frost Mage / Frost Bolt — click enemy minion (elsewhere cancels)
 	if _mode == Mode.CHOOSE_ENEMY_TARGET:
@@ -1857,8 +2152,8 @@ func _on_drag_drop(pos: Vector2) -> void:
 	var hand_idx: int = _drag_hand_idx
 
 	if not is_player_turn or _animating or _ended: _view.queue_redraw(); return
-	if _mode == Mode.CHOOSE_ENEMY_TARGET:
-		_log("Choose freeze target first (or right-click to cancel).")
+	if _mode == Mode.CHOOSE_ENEMY_TARGET or _mode == Mode.CHOOSE_ALLY_TARGET:
+		_log("Choose a target first (or right-click to cancel).")
 		_view.queue_redraw()
 		return
 
@@ -1963,7 +2258,7 @@ func _on_left_release(pos: Vector2) -> void:
 		_atk_drag_idx = -1
 		_rear_pick_idx = -1
 		return
-	if _mode == Mode.CHOOSE_ENEMY_TARGET:
+	if _mode == Mode.CHOOSE_ENEMY_TARGET or _mode == Mode.CHOOSE_ALLY_TARGET:
 		_atk_drag_idx = -1
 		_rear_pick_idx = -1
 		return
@@ -2077,7 +2372,9 @@ func _place_pending(to_front: bool) -> void:
 	_summon(_pending_card, true, to_front)
 	## Demon goes to GY only on death.
 	_log("Played %s (%s)" % [_pending_card["name"], "front" if to_front else "rear"])
-	_pending_card = {}; _pending_hand_idx = -1; _mode = Mode.IDLE
+	_pending_card = {}; _pending_hand_idx = -1
+	if _mode != Mode.CHOOSE_ENEMY_TARGET:
+		_mode = Mode.IDLE
 	_view.queue_redraw(); _check_game_over()
 
 
@@ -2106,7 +2403,7 @@ func _on_attack_demon(d_idx: int, d_is_front: bool) -> void:
 	var att: Dictionary = player_front[_sel_idx]
 	var d_board := enemy_front if d_is_front else enemy_rear
 	if d_idx >= d_board.size(): return
-	if not att.get("unblockable", false):
+	if not att.get("unblockable", false) and not att.get("aerial", false):
 		if not d_is_front and not enemy_front.is_empty():
 			_log("Must attack front first!"); _view.queue_redraw(); return
 		if _has_taunt(enemy_front) and not d_board[d_idx].get("taunt", false):
@@ -2139,6 +2436,7 @@ func _on_arsenal_play() -> void:
 			_view.queue_redraw(); return
 		_mode = Mode.CHOOSE_PAY_MANA
 		_pay_from_arsenal = true
+		_pay_arsenal_pitch_start = _pitched_this_turn.size()
 		_pay_card_id = str(card.get("id", ""))
 		_pay_hand_idx = -1
 		_pay_cost = total_cst
@@ -2273,7 +2571,7 @@ func _enemy_name() -> String:
 # RECT HELPERS
 # ══════════════════════════════════════════════════════════════════
 func _clamp_log_scroll() -> void:
-	var flat: Array[String] = _log_flat_lines()
+	var flat: Array = _log_flat_lines()
 	var max_start: int = maxi(0, flat.size() - CardBattleConstants.LOG_VISIBLE)
 	_log_scroll = clampi(_log_scroll, 0, max_start)
 
@@ -2319,11 +2617,13 @@ func _wrap_log_lines(text: String, max_w: float, sz: int) -> Array[String]:
 	return out
 
 
-func _log_flat_lines() -> Array[String]:
-	var acc: Array[String] = []
+func _log_flat_lines() -> Array:
+	var acc: Array = []
 	for entry in _battle_log:
-		for wl in _wrap_log_lines("_" + str(entry), CardBattleConstants.LOG_TEXT_MAX_W, 8):
-			acc.append(wl)
+		var text: String = entry["text"] if entry is Dictionary else str(entry)
+		var color: Color = entry["color"] if entry is Dictionary else CardBattleConstants.C_LOG_BODY
+		for wl in _wrap_log_lines("_" + text, CardBattleConstants.LOG_TEXT_MAX_W, 8):
+			acc.append({"text": wl, "color": color})
 	return acc
 
 
@@ -2393,6 +2693,11 @@ func _tick(delta: float) -> void:
 	if _mode == Mode.CHOOSE_PAY_MANA:
 		_pay_stack_t += delta
 		changed = true
+	if _enemy_spell_preview_t > 0.0:
+		_enemy_spell_preview_t = maxf(0.0, _enemy_spell_preview_t - delta)
+		if _enemy_spell_preview_t <= 0.0:
+			_enemy_spell_preview = {}
+		changed = true
 	if changed: _view.queue_redraw()
 	# Drag past threshold on a front minion → attack aim (arrow); exhausted minions skip
 	if _atk_drag_idx >= 0 and not _drag_active and is_player_turn and not _animating and not _ended \
@@ -2433,6 +2738,8 @@ func _on_draw() -> void:
 	_draw_right_sidebar()
 	_draw_hand()
 	_draw_chrome()
+	if _enemy_spell_preview_t > 0.0 and not _enemy_spell_preview.is_empty():
+		_draw_enemy_spell_preview()
 
 	for f in _floats:
 		_str_c(f["text"], f["pos"].x, f["pos"].y, 11,
@@ -2460,27 +2767,80 @@ func _on_draw() -> void:
 		var br := Rect2(float(CardBattleConstants.BOARD_X), float(CardBattleConstants.EFFRONT_Y) - 4.0,
 			float(CardBattleConstants.BOARD_W), float(CardBattleConstants.EFREAR_Y) + CardBattleConstants.ROW_H - float(CardBattleConstants.EFFRONT_Y) + 8.0)
 		_view.draw_rect(br, Color(0.25, 0.55, 1.0), false, 2.0)
+	if _mode == Mode.CHOOSE_ALLY_TARGET:
+		var ar := Rect2(float(CardBattleConstants.BOARD_X), float(CardBattleConstants.PFFRONT_Y) - 4.0,
+			float(CardBattleConstants.BOARD_W), float(CardBattleConstants.PFREAR_Y) + CardBattleConstants.ROW_H - float(CardBattleConstants.PFFRONT_Y) + 8.0)
+		_view.draw_rect(ar, Color(0.25, 0.88, 0.32), false, 2.0)
 
 	if _toast_timer > 0.0: _draw_toast()
 	if _modal_open:        _draw_modal()
 
 
 func _paint_attack_arrow_overlay(ci: CanvasItem) -> void:
-	if _ended or not is_player_turn:
+	# ── Player attack arrow (drag-to-attack mode) ──────────────────
+	if not _ended and is_player_turn \
+			and _mode == Mode.ATTACKING and _sel_idx >= 0 and _sel_idx < player_front.size() \
+			and _atk_show_attack_arrow():
+		var start: Vector2 = CardBattleLayout.board_world_pos(_get_row(true, true), true, true, _sel_idx)
+		_draw_arrow_on(ci, start, _mouse_pos, CardBattleConstants.C_SEL)
+		if not _hover_card.is_empty() and _hover_state.has("data"):
+			var att_sub: String = player_front[_sel_idx]["data"].get("subtype", "")
+			var def_sub: String = _hover_card.get("subtype", "")
+			var bonus: int = _type_advantage(att_sub, def_sub)
+			if bonus > 0:
+				var mid: Vector2 = (start + _mouse_pos) * 0.5
+				_str_c_on(ci, "Type Adv +%d dmg" % bonus, mid.x, mid.y - 10.0, 10, CardBattleConstants.C_HP_RED)
+
+	# ── Enemy attack preview arrow ─────────────────────────────────
+	if _ended or _enemy_atk_from_idx < 0 or _enemy_atk_from_idx >= enemy_front.size():
 		return
-	if _mode != Mode.ATTACKING or _sel_idx < 0 or _sel_idx >= player_front.size():
-		return
-	if not _atk_show_attack_arrow():
-		return
-	var start: Vector2 = CardBattleLayout.board_world_pos(_get_row(true, true), true, true, _sel_idx)
-	_draw_arrow_on(ci, start, _mouse_pos, CardBattleConstants.C_SEL)
-	if not _hover_card.is_empty() and _hover_state.has("data"):
-		var att_sub: String = player_front[_sel_idx]["data"].get("subtype", "")
-		var def_sub: String = _hover_card.get("subtype", "")
-		var bonus: int = _type_advantage(att_sub, def_sub)
-		if bonus > 0:
-			var mid: Vector2 = (start + _mouse_pos) * 0.5
-			_str_c_on(ci, "Type Adv +%d dmg" % bonus, mid.x, mid.y - 10.0, 10, CardBattleConstants.C_HP_RED)
+	var e_start: Vector2 = CardBattleLayout.board_world_pos(enemy_front, false, true, _enemy_atk_from_idx)
+	var e_end: Vector2
+	match _enemy_atk_target_type:
+		"face":
+			e_end = Vector2(
+				float(CardBattleConstants.LEFT_W) * 0.5,
+				float(CardBattleConstants.PINFO_Y) + float(CardBattleConstants.PINFO_H) * 0.5)
+		"front":
+			if _enemy_atk_target_idx < 0 or _enemy_atk_target_idx >= player_front.size():
+				return
+			e_end = CardBattleLayout.board_world_pos(player_front, true, true, _enemy_atk_target_idx)
+			# Highlight the targeted player card
+			var tgt_r: Rect2 = CardBattleLayout.mini_rect(player_front, CardBattleConstants.PFFRONT_Y, _enemy_atk_target_idx)
+			ci.draw_rect(tgt_r, CardBattleConstants.C_TURN_AI, false, 2.0)
+		"rear":
+			if _enemy_atk_target_idx < 0 or _enemy_atk_target_idx >= player_rear.size():
+				return
+			e_end = CardBattleLayout.board_world_pos(player_rear, true, false, _enemy_atk_target_idx)
+			# Highlight the targeted player card
+			var tgt_r2: Rect2 = CardBattleLayout.mini_rect(player_rear, CardBattleConstants.PFREAR_Y, _enemy_atk_target_idx)
+			ci.draw_rect(tgt_r2, CardBattleConstants.C_TURN_AI, false, 2.0)
+		_:
+			return
+	_draw_arrow_on(ci, e_start, e_end, CardBattleConstants.C_TURN_AI)
+	# Type advantage label
+	if _enemy_atk_target_type in ["front", "rear"]:
+		var tgt_row: Array = player_front if _enemy_atk_target_type == "front" else player_rear
+		if _enemy_atk_target_idx >= 0 and _enemy_atk_target_idx < tgt_row.size():
+			var att_sub: String = enemy_front[_enemy_atk_from_idx]["data"].get("subtype", "")
+			var def_sub: String = tgt_row[_enemy_atk_target_idx]["data"].get("subtype", "")
+			var e_bonus: int = _type_advantage(att_sub, def_sub)
+			if e_bonus > 0:
+				var e_mid: Vector2 = (e_start + e_end) * 0.5
+				_str_c_on(ci, "Type Adv +%d dmg" % e_bonus, e_mid.x, e_mid.y - 10.0, 10, CardBattleConstants.C_HP_RED)
+
+
+func _draw_enemy_spell_preview() -> void:
+	const CX: float = float(CardBattleConstants.BOARD_X) + float(CardBattleConstants.BOARD_W) * 0.5
+	const CY: float = (float(CardBattleConstants.EFREAR_Y) + float(CardBattleConstants.BOARD_DIV_Y)) * 0.5
+	var cx: float = CX - CardZoomDraw.ZOOM_W * 0.5
+	var cy: float = CY - CardZoomDraw.ZOOM_H * 0.5
+	_view.draw_rect(Rect2(float(CardBattleConstants.BOARD_X), 0.0,
+		float(CardBattleConstants.BOARD_W), float(CardBattleConstants.BOARD_DIV_Y)),
+		Color(0.0, 0.0, 0.0, 0.55))
+	var r := Rect2(cx, cy, CardZoomDraw.ZOOM_W, CardZoomDraw.ZOOM_H)
+	CardZoomDraw.draw(_view, _fnt(), r, _enemy_spell_preview, {})
+	_str_c("ENEMY CASTS", CX, cy - 14.0, 8, Color(1.0, 0.85, 0.3))
 
 
 func _draw_chrome() -> void:
@@ -2509,14 +2869,15 @@ func _draw_left_panel() -> void:
 	_view.draw_rect(CardBattleLayout.log_rect(), CardBattleConstants.C_LOG_BORDER, false, 2.0)
 	_str("Log", CardBattleConstants.LOG_TITLE_X, float(CardBattleConstants.LOG_Y) + CardBattleConstants.LOG_TITLE_Y, 10, CardBattleConstants.C_LOG_TITLE)
 	_clamp_log_scroll()
-	var flat: Array[String] = _log_flat_lines()
+	var flat: Array = _log_flat_lines()
 	var total_lines: int = flat.size()
 	var max_scroll: int = maxi(0, total_lines - CardBattleConstants.LOG_VISIBLE)
 	var start: int = clampi(_log_scroll, 0, max_scroll)
 	var vis_count: int = mini(CardBattleConstants.LOG_VISIBLE, total_lines - start)
 	for i in vis_count:
 		var y_line: float = float(CardBattleConstants.LOG_Y) + CardBattleConstants.LOG_BODY_Y0 + float(i) * float(CardBattleConstants.LOG_LINE_H)
-		_draw_log_line_at(flat[start + i], y_line, 8, CardBattleConstants.C_LOG_BODY)
+		var flat_item: Dictionary = flat[start + i]
+		_draw_log_line_at(flat_item["text"], y_line, 8, flat_item["color"])
 	if total_lines > CardBattleConstants.LOG_VISIBLE:
 		var track_h: float = float(CardBattleConstants.LOG_H) - 9.0
 		var thumb_h: float = maxf(8.0, track_h * float(CardBattleConstants.LOG_VISIBLE) / float(total_lines))
@@ -2571,14 +2932,17 @@ func _draw_board() -> void:
 		_draw_mini_card(CardBattleLayout.mini_rect(enemy_front, CardBattleConstants.EFFRONT_Y, i), enemy_front[i],
 			ef_tgt, false)
 	for i in enemy_rear.size():
-		var er_tgt: bool = (_mode == Mode.ATTACKING and enemy_front.is_empty()) or _mode == Mode.CHOOSE_ENEMY_TARGET
+		var _sel_aerial: bool = _mode == Mode.ATTACKING and _sel_idx >= 0 and _sel_idx < player_front.size() \
+			and player_front[_sel_idx].get("aerial", false)
+		var er_tgt: bool = (_mode == Mode.ATTACKING and (enemy_front.is_empty() or _sel_aerial)) or _mode == Mode.CHOOSE_ENEMY_TARGET
 		_draw_mini_card(CardBattleLayout.mini_rect(enemy_rear, CardBattleConstants.EFREAR_Y, i), enemy_rear[i], er_tgt, false)
+	var ally_pick: bool = _mode == Mode.CHOOSE_ALLY_TARGET
 	for i in player_front.size():
 		var sel: bool = (_ctx_idx == i and _ctx_is_front) or (_mode == Mode.ATTACKING and _sel_idx == i)
-		_draw_mini_card(CardBattleLayout.mini_rect(player_front, CardBattleConstants.PFFRONT_Y, i), player_front[i], false, sel)
+		_draw_mini_card(CardBattleLayout.mini_rect(player_front, CardBattleConstants.PFFRONT_Y, i), player_front[i], ally_pick, sel)
 	for i in player_rear.size():
 		var sel_rear: bool = _ctx_idx == i and not _ctx_is_front
-		_draw_mini_card(CardBattleLayout.mini_rect(player_rear, CardBattleConstants.PFREAR_Y, i), player_rear[i], false, sel_rear)
+		_draw_mini_card(CardBattleLayout.mini_rect(player_rear, CardBattleConstants.PFREAR_Y, i), player_rear[i], ally_pick, sel_rear)
 
 	# Click minion: green outline + MOVE / EFF. only (no attack arrow)
 	if _ctx_idx >= 0:
@@ -2807,10 +3171,7 @@ func _draw_hand_card(r: Rect2, card: Dictionary, selected: bool, grayed: bool) -
 	if nm.length() > 8: nm = nm.left(8) + "..."
 	_str(nm, r.position.x + 5.0, r.position.y + 2.0, 8, CardBattleConstants.C_TEXT)
 
-	var art_bg: Color = CardBattleConstants.C_DEMON_BG if is_dem else CardBattleConstants.C_SPELL_BG
 	var art := Rect2(r.position.x + 8.0, r.position.y + CardBattleConstants.MINI_ART_TOP, CardBattleConstants.MINI_ART_SIZE, CardBattleConstants.MINI_ART_SIZE)
-	_view.draw_rect(art, Color(art_bg.r * 0.84, art_bg.g * 0.84, art_bg.b * 0.84))
-	_view.draw_rect(art, _mix_white(CardBattleConstants.C_MINI_BORDER, 0.35), false, 1.0)
 	var _art_hand: Texture2D = CardArt.card_art_1x(str(card.get("id", "")), card.get("foil", false))
 	if _art_hand != null:
 		_view.draw_texture_rect(_art_hand, art, false)

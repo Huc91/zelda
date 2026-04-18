@@ -111,6 +111,7 @@ func _ensure_binder() -> void:
 		return
 	_binder = CollectionBinder.new()
 	get_parent().add_child(_binder)
+	_binder.closed.connect(_on_binder_closed)
 
 
 func _on_open_pack_requested() -> void:
@@ -125,6 +126,11 @@ func _on_binder_requested() -> void:
 	_ensure_binder()
 	deck_inventory.hide()
 	_binder.open_binder()
+
+
+func _on_binder_closed() -> void:
+	deck_inventory.refresh_decks()
+	deck_inventory.show()
 
 
 func _on_pack_opening_finished() -> void:

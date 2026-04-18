@@ -1,0 +1,126 @@
+- cerberus cat: cost 2, 3/3, no effect.
+- Mummy: cost 4.
+- Ice crawler -> Crystal crawler: 2/2, divine shield.
+- Iron Djin -> buff HP instead
+- Dusk Faerie. 1/1
+- Medusa. 2/5.
+- Arcane Tome. Can be pitched for 2 mana
+- Elder Tome. Can be pitched for 2 mana. If played draw 1.
+- Thousand Eye. Can be pitched for 2 mana. If played draw 2.
+- Komainu. Rare.
+- Chaos Ouroborus. the life it set is 5 not 8.
+- Twin fury. Cost 3.
+- Grave glutton. Epic. change art.
+- Carrion beetle. Mythic.
+- Soul collector. Work only on your turn and once.
+- Blood cultist. Change art, rarity epic.
+- Iron warden. rare.
+- Thunder Drake --> Thunder Amalgam. 2/2. Haste.
+- Radian sentinel, regen 2.
+- Star prophet. Legendary.
+- Ligtning herald. 1/2.
+- Gleaming Drake -> Macho Rooster. 3/3 cost 4. Target demon get +2/+2
+- Angelic Guardian -> Kamestoise.
+- Seraph, change image
+- Ember Thief, epic.
+- Lava Golem, cost 4, 2/4
+- Infernal Drake, remove.
+- Magma Titan, cost 4, 4/4.
+- Hellfire imp, cost 2, 1/1, deathrattle: draw 1.
+- Cinder Scholar -> Maced Troll, cost 3 2/3 whenever attacks a demon gets +2 until end of turn, common.
+- Lava drake -> Green Mamba, cost 1, poison. When kills a demon both players lose 1 life.
+- Fire Elemental -> Wormoyf, cost 1, 0/1. has +1/+1 for each creature type (Obscura, Regalia, Terrastra, Neutra) and for each spell in both gy. (this is for ai)So for example i have 2 terra, 1 obscura, 5 spells. Enemy has 3 neutral, 1 spell. gets: +3, +2 = +5.
+- Molten Giant -> Gajasura, deal damage to ALL demons even mine.
+- Tidal Terror, cost 7, 5/5 cost 1 less for each spell in your Graveyard.
+- Ice Barrier -> Trick Wall.
+- Leachtrio, 1/3
+- Glacial Colossus -> Sea Serpent
+- River Sprite -> Channeling Plant, cost 2.
+- Kraken Spawn -> Giant Crab
+- Deep Lurker -> Deep Lurkers, epic. 4/4.
+- Stampeding Bull -> Sabertooth, 3/1.
+- Giant Spider -> Giant Wasp, aerial (can attack freely in the rears even if there is an enemy in the front), remove taunt and poisonus, 2/2.
+- Sabertooth -> Dinobeast, cost 3, 3/3.
+- Thunderous Rex, cost 5, 5/4, aerial, haste
+- Elder dragon, cost 5, 6/6, aerial
+- Dire wolf, cost 2, 2/2 target demon get +1/+0 untile end of turn.
+- Ancient Tortoise, 1/7.
+- Primal dragon, remove
+- Forest Colossus -> Armored Beetle, 3/6 remove taunt, remove lifesteal,
+- Nest Warden, 2, 1/1, aerial,keep dearhtrattle effect.
+- Magma Golem -> Parasitex, 2/2 Taunt.
+- Inferno Drake -> Assualt Skeleton, 3, 4/1 haste.
+- Ember phoenix, remove.
+- Volcano lord remove.
+- Frost rat, remove.
+- Blizzard imp, remove.
+- Glacier Drake, remove.
+- Frost wraith, remove.
+- Permafrost Titan, remove.
+- Glacial Sovereing, remove.
+- Spark imp, remove.
+- Storm hound, remove.
+- Tempest Knight, remove.
+- Thunderdrake, remove.
+- Stormcaller, remove.
+- Thundersovereing, remove.
+- Roger card: never add to packs.
+- Fireball: 2 damages
+- Soul drain: destroy taget demon, cost 4.
+- Dark pact, epic.
+- Inferno, cost 4.
+- Blood Shield: cost 1.
+- Resurrection, mythic, return target demon from your GY to battlefield.
+- Mana surge, remove.
+- Doom, cost 4.
+- Chain lightning, epic.
+- Soul harvest: epic, cost 3.
+- Arcane bolt, mythic.
+- Bloody moon, epic. Permanent buff for all demon on the battlefield when cast.
+- Plague, mythic.
+- Final hour, cost 6. destroy all your demons, then return from GY to battlefield randomly demons until all slots are filled, rear and front.
+- Soul recall, remove.
+- Dark Ritual -> Dark Lotus, mythic. Only one per deck can be played.
+- Blood Prince, remove.
+- Ancient rites, remove.
+- mana convergence, destroy all your demons, get 2 mana, cost 1, epic.
+- Soul barter, remove.
+- Rite of power, remove.
+- Essence surge, remove.
+- Bolt, cost 0, deal 1 damage to target demon.
+- Shock, cost 1, epic, deal 1 damage to enemy.
+- Lava Burst remove,
+- VOlcanic Blast remove,
+- Pyroclasm, cost 3, epic.
+- Searing Touch, remove.
+- Fire Storm, remove.
+- Chaos bolt, deal 1 to 4 random damage to a random target (even you or your demon can be target).
+- Death toll remove.
+- Twin bolt remove.
+- Ember rain, epic.
+- Frost nova, epic.
+- Disruption, rare.
+- Drain life, 2hp, gain 2 hp, cost 3.
+- Wrath, mithic.
+- Silence, remove.
+- Dark Transformation -> Transformation, Transform target...ecc.., rare.
+- Blood draw, rare, I lose 5hp, draw 2
+- Arcane study, cost 5, draw 2.
+- Rally cost 3, until end of turn
+- Battle frenzy, like rally but +2, cost 5. rare.
+- Divine favor, heal all your demons of 1.
+- Spectral shield, cost 2.
+- Battle Hardened cost 4.
+- Reanimate dead remove.
+- Curse ground, until end of turn.
+- Soul link remove
+- Magma burst remove
+- Blizzard: deal 2 damage and freeze all demons, cost 4, epic.
+- Lava shield remove,
+- Toxic cloud remove,
+- Venom strike remove
+- Cure remove.
+- Plague surge remove.
+- Lightning bolt duplicated, remove.
+- Chain lightning duplicated, remove.
+- Thunder ward remove.

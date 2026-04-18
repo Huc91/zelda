@@ -60,7 +60,7 @@ var _pack_y_off: float = 0.0
 
 var _view: Control
 var _font: Font
-var _hint_text: String = "TAP TO OPEN"
+var _hint_text: String = "CLICK TO OPEN"
 var _hint_alpha: float = 1.0
 
 
@@ -88,7 +88,7 @@ func open_pack() -> void:
 	_pack_scale = 0.5
 	_pack_alpha = 0.0
 	_pack_y_off = 0.0
-	_hint_text = "TAP TO OPEN"
+	_hint_text = "CLICK TO OPEN"
 	_hint_alpha = 1.0
 	for i in CARDS_TOTAL:
 		_card_alpha[i] = 1.0
@@ -159,25 +159,43 @@ func _on_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb: InputEventMouseButton = event as InputEventMouseButton
 		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
-			_handle_tap()
+			_handle_click(mb.position)
 	elif event is InputEventKey:
 		var ek: InputEventKey = event as InputEventKey
 		if ek.pressed and (ek.keycode == KEY_SPACE or ek.keycode == KEY_ENTER or ek.keycode == KEY_Z):
-			_handle_tap()
+			_handle_click(null)
 
 
-func _handle_tap() -> void:
+func _handle_click(click_pos: Variant) -> void:
 	match _state:
 		_State.PACK_SHOW:
 			_do_open_animation()
 		_State.REVEAL:
-			if _revealed_count < CARDS_TOTAL:
-				_reveal_next_card()
+			var target: int = -1
+			if click_pos == null:
+				target = _next_unrevealed()
 			else:
-				_state = _State.DONE
-				_hint_text = "COLLECT"
+				var hit: int = -1
+				for i in CARDS_TOTAL:
+					if _card_rect(i).has_point(click_pos):
+						hit = i; break
+				if hit >= 0:
+					if not _card_face_visible[hit]:
+						target = hit
+					# already revealed — do nothing
+				else:
+					target = _next_unrevealed()
+			if target >= 0:
+				_reveal_card(target)
 		_State.DONE:
 			_collect_all()
+
+
+func _next_unrevealed() -> int:
+	for i in CARDS_TOTAL:
+		if not _card_face_visible[i]:
+			return i
+	return -1
 
 
 func _do_open_animation() -> void:
@@ -191,7 +209,7 @@ func _do_open_animation() -> void:
 	tw.parallel().tween_property(self, "_pack_alpha", 0.0, 0.4)
 	tw.tween_callback(func() -> void:
 		_state = _State.REVEAL
-		_hint_text = "TAP TO REVEAL"
+		_hint_text = "CLICK TO REVEAL"
 		_animating = false
 	)
 
@@ -201,8 +219,8 @@ func _shake_pack(t: float) -> void:
 	_view.queue_redraw()
 
 
-func _reveal_next_card() -> void:
-	var idx: int = _revealed_count
+func _reveal_card(idx: int) -> void:
+	if _card_face_visible[idx]: return
 	_animating = true
 	_hint_text = ""
 	_card_face_visible[idx] = true
@@ -219,10 +237,10 @@ func _reveal_next_card() -> void:
 			_spawn_particles(idx, is_foil, is_leg, is_myth)
 		_revealed_count += 1
 		if _revealed_count >= CARDS_TOTAL:
-			_hint_text = "TAP TO COLLECT"
+			_hint_text = "CLICK TO COLLECT"
 			_state = _State.DONE
 		else:
-			_hint_text = "TAP TO REVEAL"
+			_hint_text = "CLICK TO REVEAL"
 		_animating = false
 	)
 

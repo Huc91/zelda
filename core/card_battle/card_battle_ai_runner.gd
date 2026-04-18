@@ -47,6 +47,9 @@ func play_phase() -> void:
 				b.ai_enemy_summon(card, to_front)
 				b.ai_log_line("Enemy plays %s!" % card["name"])
 			else:
+				b.ai_show_enemy_spell_preview(card)
+				await b.get_tree().create_timer(2.0, true).timeout
+				b.ai_clear_enemy_spell_preview()
 				b.ai_enemy_resolve_spell(card)
 				b.enemy_gy.append(card)
 				b.ai_log_line("Enemy casts %s!" % card["name"])
@@ -341,22 +344,48 @@ func attack_phase() -> void:
 		attacker["attacked"] += 1
 		var max_atk: int = 2 if attacker.get("double_attack", false) else 1
 		attacker["exhausted"] = attacker["attacked"] >= max_atk
-		do_attack(a_idx)
-		b.ai_queue_redraw()
+		await _do_attack_with_preview(a_idx)
 		if await b.ai_check_game_over_co(): return
-		await b.get_tree().create_timer(0.35, true).timeout
-		
+		await b.get_tree().create_timer(0.15, true).timeout
+
 		if b.ai_is_battle_ended(): return
 		if not attacker["exhausted"] and b.enemy_front.has(attacker):
 			a_idx = b.enemy_front.find(attacker)
 			if a_idx >= 0:
 				attacker["attacked"] += 1
 				attacker["exhausted"] = true
-				do_attack(a_idx)
-				b.ai_queue_redraw()
+				await _do_attack_with_preview(a_idx)
 				if await b.ai_check_game_over_co(): return
-				await b.get_tree().create_timer(0.35, true).timeout
+				await b.get_tree().create_timer(0.15, true).timeout
 				if b.ai_is_battle_ended(): return
+
+
+## Shows the attack arrow for ~0.45 s, then resolves the attack.
+func _do_attack_with_preview(a_idx: int) -> void:
+	if a_idx >= b.enemy_front.size(): return
+	var tgt: Dictionary = pick_attack_target(a_idx)
+	b.ai_set_enemy_atk_preview(a_idx, tgt.get("type", ""), tgt.get("idx", -1))
+	b.ai_queue_redraw()
+	await b.get_tree().create_timer(0.45, true).timeout
+	b.ai_clear_enemy_atk_preview()
+	do_attack(a_idx)
+	b.ai_queue_redraw()
+
+
+## Returns { type: "face"/"front"/"rear", idx: int } for the attack at `a_idx` without resolving it.
+func pick_attack_target(a_idx: int) -> Dictionary:
+	if a_idx >= b.enemy_front.size(): return {"type": "face", "idx": -1}
+	var att: Dictionary = b.enemy_front[a_idx]
+	if att.get("unblockable", false):
+		return {"type": "face", "idx": -1}
+	var taunt_idx: int = b.ai_find_taunt(b.player_front)
+	if taunt_idx >= 0:
+		return {"type": "front", "idx": taunt_idx}
+	if not b.player_front.is_empty():
+		return {"type": "front", "idx": pick_target(b.player_front)}
+	if b.ai_get_ai_type() == "aggro" or b.player_rear.is_empty():
+		return {"type": "face", "idx": -1}
+	return {"type": "rear", "idx": pick_target(b.player_rear)}
 
 
 func do_attack(a_idx: int) -> void:

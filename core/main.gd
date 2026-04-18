@@ -33,13 +33,35 @@ func _ready():
 	if _headless_battle_smoke_requested():
 		call_deferred("_run_headless_battle_smoke")
 		return
+	call_deferred("_show_title_screen")
+
+
+func _show_title_screen() -> void:
+	var title: TitleScreen = TitleScreen.new()
+	add_child(title)
+	var choice: TitleScreen.Choice = await title.chosen
+	title.queue_free()
+	await title.tree_exited
+	match choice:
+		TitleScreen.Choice.CONTINUE:
+			Global.load_game()
+		TitleScreen.Choice.NEW_GAME:
+			Global.reset_new_game()
+		TitleScreen.Choice.DEV_MODE:
+			Global.reset_new_game()
+			Global.dev_mode = true
+			Global._apply_dev_mode()
 	_ensure_player()
+	await ScreenFX.fade_white_in()
 	initialize_scene(STARTING_MAP, STARTING_ENTRANCE)
 	# UI must be a sibling of Screen, not a child of SubViewportContainer, or mouse hits the
 	# embedded SubViewport first and Control buttons (e.g. deck DELETE) never receive clicks.
 	add_child(_ensure_ui())
 	_ensure_ui().initialize(_ensure_player())
+	_ensure_player().restore_items_from_global()
 	Global.card_battle_requested.connect(_on_card_battle_requested)
+	Global.bonfire_rested.connect(_on_bonfire_rested)
+
 
 
 func _run_headless_battle_smoke() -> void:
@@ -156,6 +178,12 @@ func _spawn_guide_npc() -> void:
 	# Enemies on the overworld are placed via the map's SpawnLayer tiles in the editor.
 
 
+func _on_bonfire_rested() -> void:
+	# Enemies respawn naturally when the player leaves and re-enters the map,
+	# since initialize_scene always creates fresh instances.
+	pass
+
+
 func _on_card_battle_requested(p_first: bool, enemy: Node) -> void:
 	Global.in_battle = true
 	# Disconnect to prevent re-entry while battle is active
@@ -186,9 +214,36 @@ func _on_battle_ended(player_won: bool, battle: Node, enemy: Node) -> void:
 		await ScreenFX.fade_white_out()
 		Global.card_battle_requested.connect(_on_card_battle_requested)
 	else:
-		# Player lost — game over
-		await ScreenFX.fade_white_out()
-		_show_game_over()
+		# Player lost — consume a life
+		var game_over: bool = Global.lose_life()
+		if game_over:
+			await ScreenFX.fade_white_out()
+			_show_game_over()
+		else:
+			# Lives remain — just unfreeze and stay in place.
+			if is_instance_valid(enemy) and enemy is Actor:
+				(enemy as Actor).in_battle = false
+			for actor in get_tree().get_nodes_in_group("actor"):
+				if is_instance_valid(actor) and actor is Actor:
+					actor.set_physics_process(true)
+					(actor as Actor).in_battle = false
+			_ensure_player().invulnerable_timer = 3.0
+			await ScreenFX.fade_white_out()
+			Global.card_battle_requested.connect(_on_card_battle_requested)
+
+
+func _respawn_at_bonfire() -> void:
+	var p: Actor = _ensure_player()
+	p.sprite.show()
+	if Global.last_bonfire_position != null:
+		p.position = Global.last_bonfire_position as Vector2
+		p.last_safe_position = p.position
+	else:
+		# No bonfire activated yet — fall back to starting entrance
+		p.position = current_scene.map.map_to_local(STARTING_ENTRANCE)
+		p.last_safe_position = p.position
+	p.invulnerable_timer = 3.0
+	await ScreenFX.fade_white_out()
 
 
 func _show_game_over() -> void:
@@ -226,7 +281,6 @@ func _show_game_over() -> void:
 		elif event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
 			do_restart = true
 		if do_restart:
-			Global.money = 10
 			Global.in_battle = false
 			get_tree().reload_current_scene()
 	)

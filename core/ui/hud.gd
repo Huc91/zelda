@@ -14,6 +14,7 @@ func _ready() -> void:
 	Global.money_changed.connect(func(_r: int) -> void: queue_redraw())
 
 
+
 func _draw() -> void:
 	draw_texture(HUD_TEXTURE, Vector2.ZERO)
 

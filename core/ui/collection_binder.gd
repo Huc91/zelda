@@ -3,6 +3,8 @@
 class_name CollectionBinder
 extends CanvasLayer
 
+signal closed
+
 # ── Layout ────────────────────────────────────────────────────────────
 const W: int = 640
 const H: int = 576
@@ -39,7 +41,8 @@ func _ready() -> void:
 	_view = Control.new()
 	_view.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_view.mouse_filter = Control.MOUSE_FILTER_STOP
-	_view.focus_mode = Control.FOCUS_CLICK
+	_view.focus_mode = Control.FOCUS_NONE
+	_view.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(_view)
 	_view.draw.connect(_on_draw)
 	_view.gui_input.connect(_on_input)
@@ -50,7 +53,6 @@ func open_binder() -> void:
 	_build_layout()
 	_scroll_y = 0.0
 	show()
-	_view.grab_focus()
 	_view.queue_redraw()
 
 
@@ -64,6 +66,8 @@ func _build_layout() -> void:
 	for c in CardDB.ALL_CARDS:
 		var id: String = str(c.get("id", ""))
 		if id.is_empty() or id.begins_with("token_"):
+			continue
+		if c.get("no_pack", false):
 			continue
 		_cards.append(c)
 	_cards.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
@@ -84,7 +88,7 @@ func _process(_dt: float) -> void:
 	_view.queue_redraw()
 
 
-func _unhandled_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
 	if not visible:
 		return
 	if event is InputEventKey:
@@ -92,6 +96,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if ek.pressed:
 			if ek.keycode == KEY_ESCAPE or ek.keycode == KEY_TAB:
 				hide()
+				closed.emit()
 				get_viewport().set_input_as_handled()
 			elif ek.keycode == KEY_UP or ek.keycode == KEY_W:
 				_scroll_y = maxf(0.0, _scroll_y - 40.0)
@@ -110,7 +115,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 
 
-func _on_input(event: InputEvent) -> void:
+func _on_input(_event: InputEvent) -> void:
 	pass
 
 

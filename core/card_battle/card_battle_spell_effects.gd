@@ -172,9 +172,31 @@ static func resolve(b: CardBattle, card: Dictionary, is_player: bool) -> void:
 			else:
 				if b.player_hp <= val: b._deal_damage_to_player(val)
 		"chaos_damage":
-			var r: int = randi_range(1, 8)
-			if is_player: b._deal_damage_to_enemy(r)
-			else:         b._deal_damage_to_player(r)
+			var r: int = randi_range(1, 4)
+			var all_targets: Array = []
+			all_targets.append({"type": "player_face"})
+			all_targets.append({"type": "enemy_face"})
+			for dd in b.player_front: all_targets.append({"type": "demon", "d": dd, "owner": true})
+			for dd in b.player_rear:  all_targets.append({"type": "demon", "d": dd, "owner": true})
+			for dd in b.enemy_front:  all_targets.append({"type": "demon", "d": dd, "owner": false})
+			for dd in b.enemy_rear:   all_targets.append({"type": "demon", "d": dd, "owner": false})
+			if not all_targets.is_empty():
+				var tgt: Dictionary = all_targets[randi() % all_targets.size()]
+				if tgt["type"] == "player_face":
+					b._deal_damage_to_player(r)
+					b._log("Chaos bolt hits player face for %d!" % r)
+				elif tgt["type"] == "enemy_face":
+					b._deal_damage_to_enemy(r)
+					b._log("Chaos bolt hits enemy face for %d!" % r)
+				else:
+					b._hit_demon(tgt["d"], r, false)
+					b._log("Chaos bolt hits %s for %d!" % [tgt["d"]["data"].get("name","?"), r])
+					if tgt["owner"]:
+						b._process_deaths(b.player_front, true, true)
+						b._process_deaths(b.player_rear, true, false)
+					else:
+						b._process_deaths(b.enemy_front, false, true)
+						b._process_deaths(b.enemy_rear, false, false)
 		"freeze_all_enemy":
 			for dd in of_: b._apply_freeze(dd)
 			for dd in or_: b._apply_freeze(dd)
@@ -278,14 +300,21 @@ static func resolve(b: CardBattle, card: Dictionary, is_player: bool) -> void:
 			b._process_deaths(b.enemy_front, false, true)
 			b._process_deaths(b.enemy_rear, false, false)
 		"resurrect":
-			if gy_local.is_empty():
+			var best_res_ii: int = -1
+			var best_res_co: int = -1
+			for i in gy_local.size():
+				var gc_res: Dictionary = gy_local[i]
+				if gc_res.get("type", "") != "demon": continue
+				var co_res: int = gc_res.get("cost", 0)
+				if co_res > best_res_co:
+					best_res_co = co_res
+					best_res_ii = i
+			if best_res_ii < 0:
 				b._check_auto_lose_no_resources(is_player)
 				return
-			var top: Dictionary = gy_local.pop_back()
-			if own_hand.size() >= CardBattleConstants.MAX_HAND:
-				gy_local.append(top)
-				return
-			own_hand.append(top)
+			var pulled_res: Dictionary = gy_local[best_res_ii]
+			gy_local.remove_at(best_res_ii)
+			b._summon(pulled_res, is_player, true)
 		"resurrect_all":
 			for i in range(gy_local.size() - 1, -1, -1):
 				if own_hand.size() >= CardBattleConstants.MAX_HAND:
@@ -329,5 +358,83 @@ static func resolve(b: CardBattle, card: Dictionary, is_player: bool) -> void:
 			else:         b._deal_damage_to_player(val)
 		"double_next_spell":
 			b._log("Arcane Mastery — double cast not implemented here; no effect.")
+		"blizzard_freeze_dmg":
+			for dd in of_.duplicate(): b._hit_demon(dd, 2, false)
+			for dd in or_.duplicate(): b._hit_demon(dd, 2, false)
+			b._process_deaths(of_, not is_player, true)
+			b._process_deaths(or_, not is_player, false)
+			for dd in of_: b._apply_freeze(dd)
+			for dd in or_: b._apply_freeze(dd)
+		"final_hour":
+			var fh_gy: Array = b.player_gy if is_player else b.enemy_gy
+			var fh_pf: Array = b.player_front if is_player else b.enemy_front
+			var fh_pr: Array = b.player_rear  if is_player else b.enemy_rear
+			var fh_front_cap: int = CardBattleConstants.MAX_ROW
+			var fh_rear_cap: int = CardBattleConstants.MAX_ROW
+			for dd in fh_pf.duplicate():
+				dd["hp"] = 0
+			for dd in fh_pr.duplicate():
+				dd["hp"] = 0
+			b._process_deaths(fh_pf, is_player, true)
+			b._process_deaths(fh_pr, is_player, false)
+			var fh_demons: Array = []
+			for c_fh in fh_gy:
+				if c_fh.get("type", "") == "demon":
+					fh_demons.append(c_fh)
+			fh_demons.shuffle()
+			for c_fh in fh_demons:
+				if fh_pf.size() < fh_front_cap:
+					b._summon(c_fh, is_player, true)
+				elif fh_pr.size() < fh_rear_cap:
+					b._summon(c_fh, is_player, false)
+				else:
+					break
+		"destroy_own_get_mana":
+			var dom_pf: Array = b.player_front if is_player else b.enemy_front
+			var dom_pr: Array = b.player_rear  if is_player else b.enemy_rear
+			var dom_count: int = dom_pf.size() + dom_pr.size()
+			for dd in dom_pf.duplicate(): dd["hp"] = 0
+			for dd in dom_pr.duplicate(): dd["hp"] = 0
+			b._process_deaths(dom_pf, is_player, true)
+			b._process_deaths(dom_pr, is_player, false)
+			if dom_count > 0:
+				if is_player: b.player_mana = mini(b.player_mana + 2, 10)
+				else:         b.enemy_mana  = mini(b.enemy_mana  + 2, 10)
+		"damage_random_demon":
+			var rnd_pool: Array = []
+			for dd in of_: rnd_pool.append({"d": dd, "front": true})
+			for dd in or_: rnd_pool.append({"d": dd, "front": false})
+			if not rnd_pool.is_empty():
+				var pick_r: Dictionary = rnd_pool[randi() % rnd_pool.size()]
+				b._hit_demon(pick_r["d"], val, false)
+				if pick_r["front"]:
+					b._process_deaths(of_, not is_player, true)
+				else:
+					b._process_deaths(or_, not is_player, false)
+		"blood_moon_buff":
+			for dd in b.player_front:
+				dd["atk_intrinsic"] = dd.get("atk_intrinsic", int(dd["data"].get("atk", 0))) + val
+				dd["hp_intrinsic"] = dd.get("hp_intrinsic", int(dd["data"].get("hp", 1))) + val
+				dd["hp"] += val
+				dd["data"]["atk"] = dd.get("atk_intrinsic", 0)
+				dd["data"]["hp"] = dd.get("hp_intrinsic", 0)
+			for dd in b.player_rear:
+				dd["atk_intrinsic"] = dd.get("atk_intrinsic", int(dd["data"].get("atk", 0))) + val
+				dd["hp_intrinsic"] = dd.get("hp_intrinsic", int(dd["data"].get("hp", 1))) + val
+				dd["hp"] += val
+				dd["data"]["atk"] = dd.get("atk_intrinsic", 0)
+				dd["data"]["hp"] = dd.get("hp_intrinsic", 0)
+			for dd in b.enemy_front:
+				dd["atk_intrinsic"] = dd.get("atk_intrinsic", int(dd["data"].get("atk", 0))) + val
+				dd["hp_intrinsic"] = dd.get("hp_intrinsic", int(dd["data"].get("hp", 1))) + val
+				dd["hp"] += val
+				dd["data"]["atk"] = dd.get("atk_intrinsic", 0)
+				dd["data"]["hp"] = dd.get("hp_intrinsic", 0)
+			for dd in b.enemy_rear:
+				dd["atk_intrinsic"] = dd.get("atk_intrinsic", int(dd["data"].get("atk", 0))) + val
+				dd["hp_intrinsic"] = dd.get("hp_intrinsic", int(dd["data"].get("hp", 1))) + val
+				dd["hp"] += val
+				dd["data"]["atk"] = dd.get("atk_intrinsic", 0)
+				dd["data"]["hp"] = dd.get("hp_intrinsic", 0)
 	b._check_game_over()
 	b._check_auto_lose_no_resources(is_player)

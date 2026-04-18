@@ -1,0 +1,17 @@
+- why a card when i play it from hand stays in hand? i click on it to play it stays in hand this creates UX problem, put in the terrain (if did not choose a terrain you have the UI to show were to play) and is the same as from arsenal...
+- Komainu not working effect
+- I still see cards i scrapped in the card list. recheck res://core/ui/card-nerf, new power, art change.md for removed cards
+- Arcan Tome has not effect: When pitched pitch for 2. This effect have Elder Tome and Thousand Eyes. Make it an ability/keyword: pitcher.
+- Belzebuub, add aerial as well.
+- Legendary card: only one per deck.
+- Move this card to epic slot: wrath, thunderous rex, elder dragon, Sea Serpent, Tidal Terror, Wormoyf, Seraph, Chimera, Thousand Eyes
+- foil card need to have animated foil on the zoomed card, like cosmo foil or little sparkles, need to look foil and premium.
+- if i open a legendary i want a super effect with more orange and red sparkle.
+- For the 1000time you did not made collection page scroll with wheel mouse or trackpad, just arrow, i want mouse support. https://docs.godotengine.org/en/4.4/classes/class_scrollcontainer.html
+  https://docs.godotengine.org/en/4.4/classes/class_scrollbar.html
+- enemy moves weird, they like change direction constantly when aggroing they face the player mainly but also need to avoid obstacle and be smart to walk around them and reach me. I think you need to implement pathfinding. They pathfind from their tile to mine, avoiding obastacle. check this article: https://casraf.dev/2024/09/pathfinding-guide-for-2d-top-view-tiles-in-godot-4-3/
+- change NPC sprite, use the one inside npc/sprites.
+- make an NPC for every sprite, change existing one.
+- Merchant: use merchant sprite, is in the merchant dir
+- NPC should persist forever, never remove them from game state, never move them. they disappear now, never move them. If they have something important to say they have a black baloon on top of their head with a "!" (it's a flag). If I start the conversation remove the "!" forever. Will use this system for quests as well.
+- make an easy way in the code like a file were for each NPC i can easily create with code the dialogues, and what the NPC do after a certain dialog or answer from the player, i can also put player possible answers.

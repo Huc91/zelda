@@ -28,6 +28,8 @@ var ray: RayCast2D
 var hitbox: Area2D
 
 var in_battle := false
+## Seconds of post-respawn invulnerability remaining. Enemies cannot trigger battle while > 0.
+var invulnerable_timer: float = 0.0
 
 signal on_hit
 
@@ -71,7 +73,13 @@ func _init_hitbox() -> void:
 	add_child(hitbox)
 
 
-func _physics_process(delta) -> void:
+func _physics_process(delta: float) -> void:
+	if invulnerable_timer > 0.0:
+		invulnerable_timer = maxf(0.0, invulnerable_timer - delta)
+		# Blink ~8 times/sec while invulnerable; restore when done.
+		sprite.visible = int(invulnerable_timer * 16.0) % 2 == 0
+		if invulnerable_timer == 0.0:
+			sprite.visible = true
 	_state_process(delta)
 
 
@@ -186,7 +194,10 @@ func _check_collisions():
 
 	for other in hitbox.get_overlapping_bodies():
 		if other is Actor:
-			if other.actor_type != actor_type and other.damage > 0:
+			var other_actor: Actor = other as Actor
+			if other_actor.actor_type != actor_type and other_actor.damage > 0:
+				if invulnerable_timer > 0.0 or other_actor.invulnerable_timer > 0.0:
+					continue
 				_on_attacked(other)
 
 

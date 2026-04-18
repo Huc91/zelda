@@ -1,0 +1,85 @@
+[gd_scene load_steps=11 format=3 uid="uid://en_easy3_sc"]
+
+[ext_resource type="Script" uid="uid://humanoid0001" path="res://data/actors/enemies/humanoid.gd" id="1_easy3"]
+[ext_resource type="Texture2D" uid="uid://en_easy3_tx" path="res://data/actors/enemies/enemy_easy_3.png" id="2_easy3"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_easy3d0"]
+atlas = ExtResource("2_easy3")
+region = Rect2(0, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_easy3d1"]
+atlas = ExtResource("2_easy3")
+region = Rect2(16, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_easy3s0"]
+atlas = ExtResource("2_easy3")
+region = Rect2(32, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_easy3s1"]
+atlas = ExtResource("2_easy3")
+region = Rect2(48, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_easy3u0"]
+atlas = ExtResource("2_easy3")
+region = Rect2(64, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_easy3u1"]
+atlas = ExtResource("2_easy3")
+region = Rect2(80, 0, 16, 16)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_easy3"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_easy3d0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_easy3d1")
+}],
+"loop": true,
+"name": &"WalkDown",
+"speed": 8.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_easy3s0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_easy3s1")
+}],
+"loop": true,
+"name": &"WalkSide",
+"speed": 8.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_easy3u0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_easy3u1")
+}],
+"loop": true,
+"name": &"WalkUp",
+"speed": 8.0
+}]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_easy3"]
+size = Vector2(8, 8)
+
+[node name="EnemyEasy3" type="CharacterBody2D"]
+motion_mode = 1
+script = ExtResource("1_easy3")
+actor_type = 0
+speed = 48.0
+hearts = 0.5
+damage = 0.5
+difficulty = "easy"
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+sprite_frames = SubResource("SpriteFrames_easy3")
+animation = &"WalkDown"
+autoplay = "WalkDown"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+rotation = 0.785398
+shape = SubResource("RectangleShape2D_easy3")

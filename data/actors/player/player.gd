@@ -13,7 +13,7 @@ const ENTRY_DISTANCE = 64 # how far from the map entrance you must walk to exit 
 signal item_received
 
 func _physics_process(delta) -> void:
-	_state_process(delta)
+	super._physics_process(delta)
 	if not has_entered:
 		has_entered = position.distance_squared_to(last_safe_position) > ENTRY_DISTANCE
 
@@ -92,8 +92,28 @@ func _pickup(pickup) -> void:
 			items["A"] = pickup.item
 	else:
 		items["B"] = pickup.item
+	_sync_items_to_global()
 	item_received.emit(items)
 	pickup.queue_free()
+
+
+func _sync_items_to_global() -> void:
+	var serialized: Dictionary = {}
+	for slot: Variant in items:
+		var it: ItemResource = items[slot] as ItemResource
+		if it != null and it.resource_path != "":
+			serialized[str(slot)] = it.resource_path
+	Global.player_items = serialized
+
+
+func restore_items_from_global() -> void:
+	items.clear()
+	for slot: String in Global.player_items:
+		var path: String = Global.player_items[slot]
+		if ResourceLoader.exists(path):
+			items[slot] = load(path) as ItemResource
+	if not items.is_empty():
+		item_received.emit(items)
 
 
 func _respawn() -> void:

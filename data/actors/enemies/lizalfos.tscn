@@ -1,0 +1,85 @@
+[gd_scene load_steps=11 format=3 uid="uid://dvf03s230d0c"]
+
+[ext_resource type="Script" uid="uid://humanoid0001" path="res://data/actors/enemies/humanoid.gd" id="1_liz01"]
+[ext_resource type="Texture2D" uid="uid://en_normal1_tx" path="res://data/actors/enemies/enemy_normal_1.png" id="2_liz01"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ld0"]
+atlas = ExtResource("2_liz01")
+region = Rect2(0, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ld1"]
+atlas = ExtResource("2_liz01")
+region = Rect2(16, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ls0"]
+atlas = ExtResource("2_liz01")
+region = Rect2(32, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ls1"]
+atlas = ExtResource("2_liz01")
+region = Rect2(48, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_lu0"]
+atlas = ExtResource("2_liz01")
+region = Rect2(64, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_lu1"]
+atlas = ExtResource("2_liz01")
+region = Rect2(80, 0, 16, 16)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_liz"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ld0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ld1")
+}],
+"loop": true,
+"name": &"WalkDown",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ls0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ls1")
+}],
+"loop": true,
+"name": &"WalkSide",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_lu0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_lu1")
+}],
+"loop": true,
+"name": &"WalkUp",
+"speed": 10.0
+}]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_liz"]
+size = Vector2(8, 8)
+
+[node name="Lizalfos" type="CharacterBody2D"]
+motion_mode = 1
+script = ExtResource("1_liz01")
+actor_type = 0
+speed = 56.0
+hearts = 1.0
+damage = 0.5
+difficulty = "normal"
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+sprite_frames = SubResource("SpriteFrames_liz")
+animation = &"WalkDown"
+autoplay = "WalkDown"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+rotation = 0.785398
+shape = SubResource("RectangleShape2D_liz")

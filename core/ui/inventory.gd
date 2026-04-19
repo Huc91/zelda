@@ -26,9 +26,10 @@ var input_direction:
 signal inventory_changed(items)
 
 
-func _process(_delta):
-	if not ScreenFX.playing:
-		_handle_input_actions()
+func _process(_delta: float) -> void:
+	if not visible or ScreenFX.playing:
+		return
+	_handle_input_actions()
 
 
 func _draw():

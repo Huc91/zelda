@@ -1,6 +1,6 @@
 class_name Bonfire extends Area2D
 
-const INTERACT_ACTION: String = "b"
+const INTERACT_ACTION: String = "interact"
 
 @onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
 

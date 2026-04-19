@@ -255,7 +255,7 @@ func _reveal_card(idx: int) -> void:
 		var is_leg: bool = rarity == "legendary"
 		var is_myth: bool = rarity == "mythic"
 		var is_epic: bool = rarity == "epic"
-		if is_foil or is_leg or is_myth:
+		if is_foil or is_leg or is_myth or is_epic:
 			_spawn_particles(idx, is_foil, is_leg, is_myth)
 		if is_leg or is_foil:
 			Sound.play(preload("res://data/sfx/to use/1up.wav"))

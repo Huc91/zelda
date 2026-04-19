@@ -17,7 +17,6 @@ extends StaticBody2D
 ## 0 = first frame (left), 1 = second, … along `sprites/<sprite_name>.png` (16×16 cells in a row).
 @export_range(0, 15) var sprite_frame: int = 0
 
-var _dialogue_index: int = 0
 var _ui_open: bool = false
 var _cooldown_frames: int = 0
 var _flag_dismissed: bool = false
@@ -39,7 +38,6 @@ func _ready() -> void:
 
 
 func _build_visuals() -> void:
-	## Editor-only preview node; runtime builds the real sprite in code.
 	var ph: Node = get_node_or_null("PlaceholderSprite")
 	if ph != null:
 		ph.queue_free()
@@ -84,7 +82,7 @@ func _physics_process(_delta: float) -> void:
 	if player == null:
 		return
 	if player.position.distance_to(position) < INTERACT_RADIUS:
-		if Input.is_action_just_pressed("a") or Input.is_action_just_pressed("b"):
+		if Input.is_action_just_pressed("interact") or Input.is_action_just_pressed("b"):
 			_talk()
 
 
@@ -95,25 +93,22 @@ func _find_player() -> Node:
 	return null
 
 
-func _calcPlayerPos(player: Node) -> int:
-	var x_dist = position.x - player.position.x
-	var y_dist = position.y - player.position.y
-
-	if x_dist > 0 and x_dist < 16 and y_dist > -8 and y_dist < 8:
+func _calc_player_dir(player: Node) -> int:
+	var dx: float = position.x - player.position.x
+	var dy: float = position.y - player.position.y
+	if dx > 0 and dx < 16 and dy > -8 and dy < 8:
 		return 2
-	elif x_dist < 0 and x_dist > -16 and y_dist > -8 and y_dist < 8:
+	elif dx < 0 and dx > -16 and dy > -8 and dy < 8:
 		return 0
-	elif y_dist > 0 and x_dist > -8 and x_dist < 8:
+	elif dy > 0 and dx > -8 and dx < 8:
 		return 1
-	else:
-		return 0
+	return 0
 
 
 func _talk() -> void:
 	var player: Node = _find_player()
 	if player == null:
 		return
-
 	_ui_open = true
 	get_tree().paused = true
 
@@ -122,24 +117,26 @@ func _talk() -> void:
 		_flag_label.visible = false
 		Global.npc_flags_dismissed[dialogue_id] = true
 
+	_set_sprite_region_column(_calc_player_dir(player))
 
-	# Face the player.
-	var talk_col: int = _calcPlayerPos(player)
-	_set_sprite_region_column(talk_col)
-
-	var db: Dictionary = NPCDialogues.DB.get(dialogue_id, NPCDialogues.DB.get("default", {}))
-	var lines: Array = db.get("lines", ["..."])
-	var line: String = lines[_dialogue_index % lines.size()]
-	_dialogue_index = (_dialogue_index + 1) % lines.size()
+	var seq_idx: int = Global.npc_progress.get(dialogue_id, 0)
+	var sequence: Dictionary = NPCDialogues.get_sequence(dialogue_id, seq_idx)
+	var speaker: String = NPCDialogues.get_speaker_name(dialogue_id)
 
 	var dialog_box: DialogueBox = DialogueBox.new()
-	dialog_box.show_line(line)
 	dialog_box.finished.connect(_on_dialogue_done)
 	get_tree().root.add_child(dialog_box)
+	dialog_box.show_sequence(sequence, speaker)
 
 
-func _on_dialogue_done() -> void:
+func _on_dialogue_done(event: String) -> void:
 	_ui_open = false
 	_cooldown_frames = 6
 	get_tree().paused = false
 	_apply_sprite_frame()
+
+	var seq_idx: int = Global.npc_progress.get(dialogue_id, 0)
+	Global.npc_progress[dialogue_id] = NPCDialogues.advance_sequence(dialogue_id, seq_idx)
+
+	if event != "":
+		Global.dialogue_event.emit(event, dialogue_id)

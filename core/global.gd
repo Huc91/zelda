@@ -1,5 +1,7 @@
 extends Node
 
+const SoulItem = preload("res://core/soul_item.gd")
+
 const MAX_DECKS: int = 3
 
 ## ── Dev flag ─────────────────────────────────────────────────────────
@@ -10,16 +12,12 @@ var dev_mode: bool = _DEV_OVERRIDE \
 	or OS.get_environment("ZELDA_DEV") == "1" \
 	or "--dev" in OS.get_cmdline_user_args()
 
-var Item = {
-	Sword = preload("res://data/items/sword.tres")
-}
-
 ## True while a card battle overlay is active (overworld inventory blocked).
 var in_battle: bool = false
 
-## Player lives. Reaching 0 triggers game over.
-var lives: int = 3
-const MAX_LIVES: int = 3
+## Player HP. Reaching 0 triggers game over. 12 HP = 3 hearts.
+var player_hp: int = 12
+var player_max_hp: int = 12
 
 ## World position of the last activated bonfire (null = use starting entrance).
 var last_bonfire_position = null
@@ -28,7 +26,24 @@ var last_bonfire_map: String = ""
 ## All lit bonfire positions keyed by map path — persists across map transitions.
 var lit_bonfires: Dictionary = {}  ## { map_path: Array[Vector2] }
 
+## Backward-compat: emitted alongside hp_changed.
 signal lives_changed(new_lives: int)
+signal hp_changed(new_hp: int, max_hp: int)
+
+## Soul catalogue — populated in _init_souls().
+var SOULS: Dictionary = {}
+
+## Equipped soul IDs per slot (empty string = none).
+var equipped_soul_red: String = ""
+var equipped_soul_blue: String = ""
+var equipped_soul_green: String = ""
+
+## soul_id -> count owned.
+var soul_collection: Dictionary = {}
+## soul_id -> true; can only catch one of each type.
+var caught_souls: Dictionary = {}
+
+signal soul_changed
 
 ## Saved deck slots: each `{ "name": String, "color": String, "card_ids": Array[String] }`.
 var player_decks: Array[Dictionary] = []
@@ -54,7 +69,13 @@ var collected_pickups: Dictionary = {}  # { map_path: Array[Vector2] }
 ## NPC dialogue_ids whose "!" flag has been dismissed by the player.
 var npc_flags_dismissed: Dictionary = {}  # { dialogue_id: true }
 
-## Player inventory slots serialized as resource paths. { "B": "res://...", "A": "res://..." }
+## NPC dialogue sequence progress: { dialogue_id: current_sequence_index }.
+var npc_progress: Dictionary = {}
+
+## Fired when a dialogue sequence ends with an event string.
+signal dialogue_event(event_name: String, npc_id: String)
+
+## Legacy: kept as empty dict so any code still referencing player_items doesn't crash.
 var player_items: Dictionary = {}
 
 # ── Economy constants ────────────────────────────────────────────────
@@ -78,6 +99,7 @@ signal bonfire_rested
 
 
 func _ready() -> void:
+	_init_souls()
 	if player_decks.is_empty():
 		_init_default_decks()
 	_init_card_collection()
@@ -113,7 +135,13 @@ func toggle_dev_mode() -> void:
 func reset_new_game() -> void:
 	dev_mode = false
 	money = 10
-	lives = MAX_LIVES
+	player_hp = 12
+	player_max_hp = 12
+	equipped_soul_red = ""
+	equipped_soul_blue = ""
+	equipped_soul_green = ""
+	soul_collection.clear()
+	caught_souls.clear()
 	last_bonfire_position = null
 	last_bonfire_map = ""
 	lit_bonfires.clear()
@@ -127,7 +155,8 @@ func reset_new_game() -> void:
 	_init_default_decks()
 	_init_card_collection()
 	money_changed.emit(money)
-	lives_changed.emit(lives)
+	hp_changed.emit(player_hp, get_effective_max_hp())
+	lives_changed.emit(_hp_to_lives())
 
 
 func _apply_dev_mode() -> void:
@@ -147,6 +176,198 @@ func _init_card_collection() -> void:
 		counts[id] = counts.get(id, 0) + 1
 	for id in counts:
 		card_collection[id] = counts[id]
+
+
+func _init_souls() -> void:
+	var sword: SoulItem = SoulItem.new()
+	sword.soul_id = "sword"
+	sword.slot = "red"
+	sword.name = "Soul Sword"
+	sword.description = "A blade imbued with a hero's spirit."
+	sword.is_weapon = true
+	var sword_scene: Variant = load("res://data/actors/attacks/sword.tscn")
+	if sword_scene != null:
+		sword.weapon_scene = sword_scene as PackedScene
+	var sword_icon: Variant = load("res://data/items/sword-icon.png")
+	if sword_icon != null:
+		sword.icon = sword_icon as Texture2D
+	SOULS["sword"] = sword
+
+	var stone: SoulItem = SoulItem.new()
+	stone.soul_id = "stone"
+	stone.slot = "blue"
+	stone.name = "Stone Soul"
+	stone.description = "+1 max HP."
+	stone.max_hp_bonus = 1
+	SOULS["stone"] = stone
+
+	var tree: SoulItem = SoulItem.new()
+	tree.soul_id = "tree"
+	tree.slot = "green"
+	tree.name = "Tree Soul"
+	tree.description = "+4 HP healed at end of battle."
+	tree.heal_after_battle = 4
+	SOULS["tree"] = tree
+
+	var flower: SoulItem = SoulItem.new()
+	flower.soul_id = "flower"
+	flower.slot = "green"
+	flower.name = "Flower Soul"
+	flower.description = "+1 Luck."
+	flower.luck_bonus = 1
+	SOULS["flower"] = flower
+
+
+## Returns the sum of luck_bonus from all equipped souls plus foil card count, clamped 0–42.
+func get_total_luck() -> int:
+	var total: int = 0
+	var red_soul: SoulItem = get_equipped_soul("red")
+	if red_soul != null:
+		total += red_soul.luck_bonus
+	var blue_soul: SoulItem = get_equipped_soul("blue")
+	if blue_soul != null:
+		total += blue_soul.luck_bonus
+	var green_soul: SoulItem = get_equipped_soul("green")
+	if green_soul != null:
+		total += green_soul.luck_bonus
+	# Count total foil cards owned.
+	for card_id: String in foil_collection:
+		total += int(foil_collection.get(card_id, 0))
+	return clampi(total, 0, 42)
+
+
+## Returns the sum of initiative_bonus from all equipped souls.
+func get_total_initiative_bonus() -> int:
+	var total: int = 0
+	var red_soul: SoulItem = get_equipped_soul("red")
+	if red_soul != null:
+		total += red_soul.initiative_bonus
+	var blue_soul: SoulItem = get_equipped_soul("blue")
+	if blue_soul != null:
+		total += blue_soul.initiative_bonus
+	var green_soul: SoulItem = get_equipped_soul("green")
+	if green_soul != null:
+		total += green_soul.initiative_bonus
+	return total
+
+
+## Roll 1–42; returns true if player is lucky (total_luck >= roll).
+func roll_luck() -> bool:
+	var roll: int = randi_range(1, 42)
+	return get_total_luck() >= roll
+
+
+## Returns player_max_hp plus any max_hp_bonus from equipped souls.
+func get_effective_max_hp() -> int:
+	var bonus: int = 0
+	var red_soul: SoulItem = get_equipped_soul("red")
+	if red_soul != null:
+		bonus += red_soul.max_hp_bonus
+	var blue_soul: SoulItem = get_equipped_soul("blue")
+	if blue_soul != null:
+		bonus += blue_soul.max_hp_bonus
+	var green_soul: SoulItem = get_equipped_soul("green")
+	if green_soul != null:
+		bonus += green_soul.max_hp_bonus
+	return player_max_hp + bonus
+
+
+func _hp_to_lives() -> int:
+	return ceili(float(player_hp) / 4.0)
+
+
+func _emit_hp_signals() -> void:
+	hp_changed.emit(player_hp, get_effective_max_hp())
+	lives_changed.emit(_hp_to_lives())
+
+
+func add_hp(amount: int) -> void:
+	player_hp = clampi(player_hp + amount, 0, get_effective_max_hp())
+	_emit_hp_signals()
+
+
+func damage_hp(amount: int) -> void:
+	player_hp = clampi(player_hp - amount, 0, get_effective_max_hp())
+	_emit_hp_signals()
+
+
+func set_hp(amount: int) -> void:
+	player_hp = clampi(amount, 0, get_effective_max_hp())
+	_emit_hp_signals()
+
+
+func restore_lives() -> void:
+	player_hp = get_effective_max_hp()
+	_emit_hp_signals()
+
+
+## Damage 4 HP. Returns true if player_hp has reached 0 (game over).
+func lose_life() -> bool:
+	damage_hp(4)
+	return player_hp <= 0
+
+
+## Returns the SoulItem equipped in the given slot, or null.
+func get_equipped_soul(slot: String) -> SoulItem:
+	var soul_id: String = ""
+	if slot == "red":
+		soul_id = equipped_soul_red
+	elif slot == "blue":
+		soul_id = equipped_soul_blue
+	elif slot == "green":
+		soul_id = equipped_soul_green
+	if soul_id.is_empty():
+		return null
+	var soul: Variant = SOULS.get(soul_id, null)
+	if soul == null:
+		return null
+	return soul as SoulItem
+
+
+func equip_soul(soul_id: String) -> void:
+	var soul: Variant = SOULS.get(soul_id, null)
+	if soul == null:
+		return
+	var s: SoulItem = soul as SoulItem
+	if s.slot == "red":
+		equipped_soul_red = soul_id
+	elif s.slot == "blue":
+		equipped_soul_blue = soul_id
+	elif s.slot == "green":
+		equipped_soul_green = soul_id
+	soul_changed.emit()
+	_emit_hp_signals()
+
+
+func unequip_soul(slot: String) -> void:
+	if slot == "red":
+		equipped_soul_red = ""
+	elif slot == "blue":
+		equipped_soul_blue = ""
+	elif slot == "green":
+		equipped_soul_green = ""
+	soul_changed.emit()
+	_emit_hp_signals()
+
+
+func add_soul_to_collection(soul_id: String) -> void:
+	soul_collection[soul_id] = int(soul_collection.get(soul_id, 0)) + 1
+	soul_changed.emit()
+
+
+## Returns total heal_after_battle HP from all equipped souls.
+func get_heal_after_battle() -> int:
+	var total: int = 0
+	var red_soul: SoulItem = get_equipped_soul("red")
+	if red_soul != null:
+		total += red_soul.heal_after_battle
+	var blue_soul: SoulItem = get_equipped_soul("blue")
+	if blue_soul != null:
+		total += blue_soul.heal_after_battle
+	var green_soul: SoulItem = get_equipped_soul("green")
+	if green_soul != null:
+		total += green_soul.heal_after_battle
+	return total
 
 
 func _init_default_decks() -> void:
@@ -207,17 +428,6 @@ func notify_deck_removed_at(removed_index: int) -> void:
 	battle_deck_index = clampi(battle_deck_index, 0, maxi(0, player_decks.size() - 1))
 
 
-func lose_life() -> bool:
-	lives = maxi(0, lives - 1)
-	lives_changed.emit(lives)
-	return lives <= 0
-
-
-func restore_lives() -> void:
-	lives = MAX_LIVES
-	lives_changed.emit(lives)
-
-
 func activate_bonfire(world_pos: Vector2, map_path: String) -> void:
 	last_bonfire_position = world_pos
 	last_bonfire_map = map_path
@@ -254,7 +464,13 @@ func save_game() -> void:
 	var pickups_serial: Dictionary = _serialize_vec2_dict(collected_pickups)
 	var data: Dictionary = {
 		"money": money,
-		"lives": lives,
+		"player_hp": player_hp,
+		"player_max_hp": player_max_hp,
+		"equipped_soul_red": equipped_soul_red,
+		"equipped_soul_blue": equipped_soul_blue,
+		"equipped_soul_green": equipped_soul_green,
+		"soul_collection": soul_collection.duplicate(),
+		"caught_souls": caught_souls.duplicate(),
 		"last_bonfire_position": bp,
 		"last_bonfire_map": last_bonfire_map,
 		"card_collection": card_collection.duplicate(),
@@ -263,7 +479,6 @@ func save_game() -> void:
 		"battle_deck_index": battle_deck_index,
 		"collected_pickups": pickups_serial,
 		"lit_bonfires": _serialize_vec2_dict(lit_bonfires),
-		"player_items": player_items.duplicate(),
 	}
 	data["dev_mode"] = dev_mode
 	var f: FileAccess = FileAccess.open(_active_save_path(), FileAccess.WRITE)
@@ -283,7 +498,17 @@ func load_game() -> bool:
 		return false
 	var data: Dictionary = parsed as Dictionary
 	money = int(data.get("money", 10))
-	lives = int(data.get("lives", MAX_LIVES))
+	player_hp = int(data.get("player_hp", 12))
+	player_max_hp = int(data.get("player_max_hp", 12))
+	equipped_soul_red = str(data.get("equipped_soul_red", ""))
+	equipped_soul_blue = str(data.get("equipped_soul_blue", ""))
+	equipped_soul_green = str(data.get("equipped_soul_green", ""))
+	var sc: Variant = data.get("soul_collection", {})
+	if typeof(sc) == TYPE_DICTIONARY:
+		soul_collection = sc as Dictionary
+	var cs: Variant = data.get("caught_souls", {})
+	if typeof(cs) == TYPE_DICTIONARY:
+		caught_souls = cs as Dictionary
 	last_bonfire_map = str(data.get("last_bonfire_map", ""))
 	var bp: Variant = data.get("last_bonfire_position", null)
 	if bp != null and typeof(bp) == TYPE_DICTIONARY:
@@ -309,11 +534,9 @@ func load_game() -> bool:
 	var lb: Variant = data.get("lit_bonfires", {})
 	if typeof(lb) == TYPE_DICTIONARY:
 		lit_bonfires = _deserialize_vec2_dict(lb as Dictionary)
-	var pi: Variant = data.get("player_items", {})
-	if typeof(pi) == TYPE_DICTIONARY:
-		player_items = pi as Dictionary
 	money_changed.emit(money)
-	lives_changed.emit(lives)
+	hp_changed.emit(player_hp, get_effective_max_hp())
+	lives_changed.emit(_hp_to_lives())
 	return true
 
 

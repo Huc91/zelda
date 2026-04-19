@@ -58,7 +58,7 @@ func _show_title_screen() -> void:
 	# embedded SubViewport first and Control buttons (e.g. deck DELETE) never receive clicks.
 	add_child(_ensure_ui())
 	_ensure_ui().initialize(_ensure_player())
-	_ensure_player().restore_items_from_global()
+	_ensure_player().restore_state_from_global()
 	Global.card_battle_requested.connect(_on_card_battle_requested)
 	Global.bonfire_rested.connect(_on_bonfire_rested)
 
@@ -138,15 +138,21 @@ func _on_bonfire_rested() -> void:
 
 func _on_card_battle_requested(p_first: bool, enemy: Node) -> void:
 	Global.in_battle = true
-	# Disconnect to prevent re-entry while battle is active
 	Global.card_battle_requested.disconnect(_on_card_battle_requested)
-	# Freeze all actors
 	for actor in get_tree().get_nodes_in_group("actor"):
 		actor.set_physics_process(false)
 	await ScreenFX.fade_white_in()
+	# Initiative screen
+	var init_screen: InitiativeScreen = InitiativeScreen.new()
+	add_child(init_screen)
+	init_screen.setup(p_first, enemy)
+	await ScreenFX.fade_white_out()
+	var actual_first: bool = await init_screen.result_ready
+	await ScreenFX.fade_white_in()
+	init_screen.queue_free()
 	var battle := CardBattle.new()
 	add_child(battle)
-	battle.setup(p_first, enemy)
+	battle.setup(actual_first, enemy)
 	battle.battle_ended.connect(_on_battle_ended.bind(battle, enemy))
 	await ScreenFX.fade_white_out()
 
@@ -157,6 +163,10 @@ func _on_battle_ended(player_won: bool, battle: Node, enemy: Node) -> void:
 	battle.queue_free()
 	if player_won and is_instance_valid(enemy):
 		_give_battle_reward(enemy)
+		# Apply post-battle heals from soul items
+		var heal: int = Global.get_heal_after_battle()
+		if heal > 0:
+			Global.add_hp(heal)
 		enemy.queue_free()
 		# Unfreeze all living actors and reset battle flag
 		for actor in get_tree().get_nodes_in_group("actor"):
@@ -166,13 +176,18 @@ func _on_battle_ended(player_won: bool, battle: Node, enemy: Node) -> void:
 		await ScreenFX.fade_white_out()
 		Global.card_battle_requested.connect(_on_card_battle_requested)
 	else:
-		# Player lost — consume a life
-		var game_over: bool = Global.lose_life()
-		if game_over:
+		# Player lost
+		var diff: String = "easy"
+		if is_instance_valid(enemy) and "difficulty" in enemy:
+			diff = str(enemy.difficulty)
+		var lethal: bool = diff == "hard" or diff == "boss"
+		if lethal:
+			Global.set_hp(0)
 			await ScreenFX.fade_white_out()
 			_show_game_over()
 		else:
-			# Lives remain — just unfreeze and stay in place.
+			# Skirmish loss — survive at 1 HP
+			Global.set_hp(1)
 			if is_instance_valid(enemy) and enemy is Actor:
 				(enemy as Actor).in_battle = false
 			for actor in get_tree().get_nodes_in_group("actor"):
@@ -249,6 +264,8 @@ func _give_battle_reward(enemy: Node) -> void:
 		diff = str(enemy.difficulty)
 	var reward_table: Dictionary = Global.REWARD_BY_DIFF.get(diff, Global.REWARD_BY_DIFF["easy"])
 	var amount: int = randi_range(int(reward_table["min"]), int(reward_table["max"]))
+	if Global.roll_luck():
+		amount += 10
 	_spawn_coins(enemy.position, amount)
 	# Card drop chance by difficulty
 	var card_drop_chance: float = 0.02

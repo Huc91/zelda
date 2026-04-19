@@ -219,6 +219,7 @@ func _start_battle() -> void:
 		diff = str(enemy_actor.difficulty)
 	enemy_deck  = CardDB.enemy_deck_for_difficulty(diff)
 	_ai_type    = _ai_runner.detect_ai_type_from_deck(enemy_deck)
+	player_hp = Global.player_hp
 	if not _draw_mandatory_refresh(player_hand, player_deck, CardBattleConstants.STARTING_HAND, true): return
 	if not _draw_mandatory_refresh(enemy_hand, enemy_deck, CardBattleConstants.STARTING_HAND, false): return
 	_log("Battle started!")
@@ -273,6 +274,7 @@ func _schedule_empty_resources_loss(is_player_side: bool) -> void:
 		_show_toast("Enemy out!")
 	_view.queue_redraw()
 	var player_won: bool = not is_player_side
+	Global.set_hp(player_hp)
 	get_tree().create_timer(2.5, true, false, true).timeout.connect(func (): battle_ended.emit(player_won))
 
 
@@ -726,6 +728,15 @@ func _resolve_battlecry(d: Dictionary, is_player: bool) -> void:
 	elif "battlecry_damage_player_2"   in ab:
 		if is_player: _deal_damage_to_enemy(2)
 		else:         _deal_damage_to_player(2)
+	elif "battlecry_aoe_all_1"         in ab:
+		for o in of_.duplicate(): _hit_demon(o, 1, false)
+		for o in or_.duplicate(): _hit_demon(o, 1, false)
+		for o in pf.duplicate():
+			if o != d: _hit_demon(o, 1, false)
+		for o in pr.duplicate():
+			if o != d: _hit_demon(o, 1, false)
+		_process_deaths(of_, not is_player, true); _process_deaths(or_, not is_player, false)
+		_process_deaths(pf, is_player, true); _process_deaths(pr, is_player, false)
 	elif "battlecry_aoe_1"             in ab:
 		for o in of_.duplicate(): _hit_demon(o, 1, false)
 		for o in or_.duplicate(): _hit_demon(o, 1, false)
@@ -810,15 +821,6 @@ func _resolve_battlecry(d: Dictionary, is_player: bool) -> void:
 			var tgt: Dictionary = pool_a[randi() % pool_a.size()]
 			tgt["atk_intrinsic"] = tgt.get("atk_intrinsic", int(tgt["data"].get("atk", 0))) + 1
 			_log("%s gives +1 ATK to %s." % [d["data"].get("name", "?"), tgt["data"].get("name", "?")])
-	elif "battlecry_aoe_all_1" in ab:
-		for o in of_.duplicate(): _hit_demon(o, 1, false)
-		for o in or_.duplicate(): _hit_demon(o, 1, false)
-		for o in pf.duplicate():
-			if o != d: _hit_demon(o, 1, false)
-		for o in pr.duplicate():
-			if o != d: _hit_demon(o, 1, false)
-		_process_deaths(of_, not is_player, true); _process_deaths(or_, not is_player, false)
-		_process_deaths(pf, is_player, true); _process_deaths(pr, is_player, false)
 	elif "wormoyf_power" in ab:
 		var subtypes_seen: Dictionary = {}
 		for row_w: Array in [pf, pr, of_, or_]:
@@ -933,6 +935,7 @@ func _schedule_instant_win(msg: String) -> void:
 	_log(msg)
 	_show_toast("YOU WIN!")
 	_view.queue_redraw()
+	Global.set_hp(player_hp)
 	get_tree().create_timer(2.5, true, false, true).timeout.connect(func (): battle_ended.emit(true))
 
 
@@ -942,6 +945,7 @@ func _schedule_instant_lose(msg: String) -> void:
 	_log(msg)
 	_show_toast("YOU LOSE...")
 	_view.queue_redraw()
+	Global.set_hp(0)
 	get_tree().create_timer(2.5, true, false, true).timeout.connect(func (): battle_ended.emit(false))
 
 
@@ -1433,7 +1437,7 @@ func _process_global_death_triggers(dead: Dictionary, dead_owner_is_player: bool
 		_log("%s %s drains from the grave!" % [dead_who, dead_name])
 		if dead_owner_is_player: _deal_damage_to_enemy(1)
 		else: _deal_damage_to_player(1)
-	if "any_death_draw" in dead_ab:
+	if "any_death_draw" in dead_ab and "any_death_draw_own_turn" not in dead_ab:
 		_log("%s %s draws from the grave!" % [dead_who, dead_name])
 		if dead_owner_is_player: _draw_one(player_hand, player_deck)
 		else: _draw_one(enemy_hand, enemy_deck)
@@ -1700,7 +1704,7 @@ func _resolve_deathrattle(d: Dictionary, is_player: bool, is_front: bool) -> voi
 
 func _heal_player(n: int) -> void:
 	if n <= 0: return
-	player_hp = mini(player_hp + n, CardBattleConstants.STARTING_HP)
+	player_hp = mini(player_hp + n, Global.get_effective_max_hp())
 	Sound.play(preload("res://data/sfx/to use/Drink.wav"))
 
 
@@ -1734,12 +1738,14 @@ func _check_game_over() -> bool:
 		_show_toast("YOU WIN!")
 		_view.queue_redraw()
 		await get_tree().create_timer(2.5, true).timeout
+		Global.set_hp(player_hp)
 		battle_ended.emit(true); return true
 	if player_hp <= 0:
 		_ended = true; _log("YOU LOSE!")
 		_show_toast("YOU LOSE...")
 		_view.queue_redraw()
 		await get_tree().create_timer(2.5, true).timeout
+		Global.set_hp(player_hp)
 		battle_ended.emit(false); return true
 	return false
 

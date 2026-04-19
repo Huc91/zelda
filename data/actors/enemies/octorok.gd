@@ -1,16 +1,30 @@
 extends Actor
 
-## Color-coded difficulty modulate (applied in _ready after sprite init).
 const DIFF_MODULATE: Dictionary = {
-	"easy":   Color(0.5, 1.0, 0.5),   ## green tint
-	"normal": Color(0.5, 0.7, 1.0),   ## blue tint
-	"hard":   Color(1.0, 0.4, 0.4),   ## red tint
+	"easy":   Color(0.5, 1.0, 0.5),
+	"normal": Color(0.5, 0.7, 1.0),
+	"hard":   Color(1.0, 0.4, 0.4),
 }
+
+const ROK_PROJECTILE: PackedScene = preload("res://data/actors/attacks/rok.tscn")
+
+@export var move_time: float = 1.0
+@export var wait1_time: float = 1.0
+@export var wait2_time: float = 1.0
+@export var aggro_range: float = 96.0
+
+var move_direction: Vector2 = Vector2.DOWN
+var _player: Actor = null
+
+var _path: PackedVector2Array = PackedVector2Array()
+var _path_idx: int = 0
+var _path_timer: float = 0.0
+const PATH_REFRESH: float = 0.4
+const WAYPOINT_REACH: float = 6.0
 
 
 func _ready() -> void:
 	super._ready()
-	# Apply difficulty color tint and scale HP/speed with difficulty
 	var mod: Color = DIFF_MODULATE.get(difficulty, DIFF_MODULATE["easy"])
 	sprite.modulate = mod
 	match difficulty:
@@ -28,45 +42,113 @@ func _on_attacked(_source: Node) -> void:
 	in_battle = true
 	Global.request_card_battle(true, self)
 
-const ROK_PROJECTILE = preload("res://data/actors/attacks/rok.tscn")
 
-@export var move_time : float = 1.0
-@export var wait1_time : float = 1.0
-@export var wait2_time : float = 1.0
+func _get_player() -> Actor:
+	if _player != null and is_instance_valid(_player):
+		return _player
+	for node: Node in get_tree().get_nodes_in_group("actor"):
+		if node is Actor and (node as Actor).actor_type == 1:
+			_player = node as Actor
+			return _player
+	return null
 
-var move_direction = Vector2.DOWN
 
+func _get_map() -> Map:
+	var p: Node = get_parent()
+	if p is Map:
+		return p as Map
+	return null
+
+
+# ── States ─────────────────────────────────────────────────────────
 
 func state_default() -> void:
+	var p: Actor = _get_player()
+	if p != null and position.distance_to(p.position) <= aggro_range:
+		_path = PackedVector2Array()
+		_path_idx = 0
+		_path_timer = 0.0
+		_change_state(state_chase)
+		return
 	move_direction = _get_random_direction()
-	_change_state(state_move)
+	_change_state(state_wander)
 
 
-func state_move() -> void:
+func state_wander() -> void:
 	if is_on_wall():
-		move_direction = -move_direction
-	
+		move_direction = _get_random_direction()
+
 	velocity = move_direction * speed
 	move_and_slide()
-	
 	_check_collisions()
 	_update_sprite_direction(move_direction)
 	_play_animation("Walk")
 	sprite.flip_v = (sprite_direction == "Up")
-	
+
+	var p: Actor = _get_player()
+	if p != null and position.distance_to(p.position) <= aggro_range:
+		_path = PackedVector2Array()
+		_path_idx = 0
+		_path_timer = 0.0
+		_change_state(state_chase)
+		return
+
 	if elapsed_state_time > move_time:
-		_change_state(state_wait1)
+		_change_state(state_default)
 
 
-func state_wait1() -> void:
-	sprite.stop()
-	_check_collisions()
+func state_chase() -> void:
+	var p: Actor = _get_player()
+	if p == null:
+		_change_state(state_default)
+		return
+
+	var dt: float = get_process_delta_time()
+	_path_timer -= dt
+
+	if _path_timer <= 0.0 or _path_idx >= _path.size():
+		_path_timer = PATH_REFRESH
+		var map: Map = _get_map()
+		if map != null:
+			_path = map.nav_find_path(position, p.position)
+			_path_idx = 0
+			if _path.size() > 0 and position.distance_to(_path[0]) < WAYPOINT_REACH:
+				_path_idx = 1
+
+	var dir: Vector2 = Vector2.ZERO
+	if _path_idx < _path.size():
+		var target: Vector2 = _path[_path_idx]
+		dir = (target - position).normalized()
+		if position.distance_to(target) < WAYPOINT_REACH:
+			_path_idx += 1
+	else:
+		dir = (p.position - position).normalized()
+
+	if dir != Vector2.ZERO:
+		velocity = dir * speed
+		move_and_slide()
+		_check_collisions()
+		_update_sprite_direction(dir)
+		_play_animation("Walk")
+		sprite.flip_v = (sprite_direction == "Up")
+		move_direction = dir
+
+	# Fire rok periodically while chasing
 	if elapsed_state_time > wait1_time:
-		_use_item(ROK_PROJECTILE)
-		_change_state(state_wait2)
+		_change_state(state_fire)
+
+	if position.distance_to(p.position) > aggro_range * 1.6:
+		_path = PackedVector2Array()
+		_path_idx = 0
+		_change_state(state_default)
+
+
+func state_fire() -> void:
+	_use_item(ROK_PROJECTILE)
+	_change_state(state_wait2)
 
 
 func state_wait2() -> void:
 	_check_collisions()
 	if elapsed_state_time > wait2_time:
-		_change_state(state_default)
+		_change_state(state_chase)

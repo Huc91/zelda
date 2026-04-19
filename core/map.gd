@@ -182,21 +182,54 @@ func slash(cell: Vector2i) -> void:
 
 
 func _try_grass_drop(world_pos: Vector2) -> void:
+	# Luck affects all thresholds
+	var luck_bonus: float = float(Global.get_total_luck()) / 42.0 * 0.05
 	var roll: float = randf()
-	# 3% chance: money drop
-	if roll < 0.03:
+	# Money drop (base 3%, +luck bonus)
+	if roll < 0.03 + luck_bonus:
 		var amount: int = randi_range(Global.MONEY_GRASS_MIN, Global.MONEY_GRASS_MAX)
+		if Global.roll_luck():
+			amount += 10
 		Global.add_money(amount)
 		_spawn_drop_label(world_pos, "+%d" % amount, Color(1.0, 0.9, 0.2))
 		return
-	# 0.5% chance: card drop
-	if roll < 0.035:
+	# Card drop (base 0.5%)
+	if roll < 0.035 + luck_bonus * 0.3:
 		var ids: Array[String] = CardDB.all_collectible_ids()
 		if not ids.is_empty():
 			var dropped: String = ids[randi() % ids.size()]
 			Global.collect_card(dropped, false)
 			var card: Dictionary = CardDB.get_card(dropped)
 			_spawn_drop_label(world_pos, card.get("name", "Card") + "!", Color(0.4, 0.8, 1.0))
+
+
+## Returns the soul type of the tile at cell, or "" if not soulable.
+## Checks STATIC layer for custom data "soulable" (String: "stone"/"tree"/"flower").
+## Checks DYNAMIC layer for is_cuttable (flower).
+func get_soulable_type(cell: Vector2i) -> String:
+	# Dynamic layer: grass/flower
+	var dyn: TileData = get_cell_tile_data(Layer.DYNAMIC, cell)
+	if dyn != null and dyn.get_custom_data("is_cuttable"):
+		return "flower"
+	# Static layer: custom soulable data
+	var st: TileData = get_cell_tile_data(Layer.STATIC, cell)
+	if st != null:
+		var stype: String = str(st.get_custom_data("soulable"))
+		if stype != "" and stype != "null":
+			return stype
+	return ""
+
+
+func show_label(world_pos: Vector2, text: String, col: Color) -> void:
+	var lbl: Label = Label.new()
+	lbl.text = text
+	lbl.position = world_pos - Vector2(16, 16)
+	lbl.add_theme_color_override("font_color", col)
+	lbl.add_theme_font_size_override("font_size", 8)
+	add_child(lbl)
+	var tw: Tween = lbl.create_tween()
+	tw.tween_property(lbl, "position", world_pos - Vector2(16, 32), 0.8)
+	tw.tween_callback(lbl.queue_free)
 
 
 func _spawn_drop_label(world_pos: Vector2, text: String, col: Color) -> void:
@@ -208,5 +241,4 @@ func _spawn_drop_label(world_pos: Vector2, text: String, col: Color) -> void:
 	add_child(lbl)
 	var tw: Tween = lbl.create_tween()
 	tw.tween_property(lbl, "position", world_pos - Vector2(16, 32), 0.8)
-	tw.parallel().tween_property(lbl, "modulate:a", 0.0, 0.8)
 	tw.tween_callback(lbl.queue_free)

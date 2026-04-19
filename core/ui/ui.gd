@@ -1,11 +1,13 @@
 class_name UI extends CanvasLayer
 
-var target
-@onready var hud = $HUD
-@onready var hearts = $HUD/Hearts
-@onready var inventory = $Inventory
-@onready var deck_inventory = $DeckInventory
+const SoulInventory = preload("res://core/ui/soul_inventory.gd")
 
+var target: Actor
+@onready var hud: Node2D = $HUD
+@onready var hearts: Node2D = $HUD/Hearts
+@onready var deck_inventory: Control = $DeckInventory
+
+var _soul_inventory: SoulInventory
 var _deck_editor: Control
 var _deck_editor_layer: CanvasLayer
 var _pack_opening: PackOpening
@@ -13,25 +15,87 @@ var _binder: CollectionBinder
 
 
 func _ready() -> void:
-	# Deferred delivery: runs after EDIT/NEW finishes input, safe while paused.
 	if not deck_inventory.deckbuilding_requested.is_connected(_on_deckbuilding_requested):
 		deck_inventory.deckbuilding_requested.connect(_on_deckbuilding_requested, CONNECT_DEFERRED)
 	if not deck_inventory.open_pack_requested.is_connected(_on_open_pack_requested):
 		deck_inventory.open_pack_requested.connect(_on_open_pack_requested, CONNECT_DEFERRED)
 	if not deck_inventory.binder_requested.is_connected(_on_binder_requested):
 		deck_inventory.binder_requested.connect(_on_binder_requested, CONNECT_DEFERRED)
+	if not deck_inventory.soul_system_requested.is_connected(_on_soul_system_requested):
+		deck_inventory.soul_system_requested.connect(_on_soul_system_requested, CONNECT_DEFERRED)
 	_ensure_pack_opening()
 	_ensure_binder()
+	_ensure_soul_inventory()
 
 
-func initialize(_target : Actor):
+func initialize(_target: Actor) -> void:
 	target = _target
-	_inventory_changed(target.items)
-	inventory.inventory_changed.connect(_inventory_changed)
-	target.item_received.connect(_inventory_changed)
 
 
-## Called from DeckInventory (EDIT / NEW DECK). Prefer this over relying on signal delivery alone.
+func _process(_delta: float) -> void:
+	if ScreenFX.playing:
+		return
+	# Deck editor: only handle its own close.
+	if _deck_editor_layer != null and _deck_editor_layer.visible and _deck_editor != null:
+		if Input.is_action_just_pressed("pause"):
+			_deck_editor.close_cancel()
+		return
+	# Soul inventory open: ESC closes everything back to game.
+	if _soul_inventory != null and _soul_inventory.visible:
+		if Input.is_action_just_pressed("pause"):
+			_close_all_menus()
+		return
+	# Deck inventory open: ESC closes back to game.
+	if deck_inventory.visible:
+		if Input.is_action_just_pressed("pause"):
+			_close_all_menus()
+		return
+	# Game — open inventory on "I".
+	if Input.is_action_just_pressed("inventory"):
+		if Global.in_battle:
+			return
+		_open_deck_inventory()
+
+
+# ── Deck Inventory ──────────────────────────────────────────────────
+
+func _open_deck_inventory() -> void:
+	get_tree().paused = true
+	Sound.play(preload("res://data/sfx/Menu_In.wav"))
+	await ScreenFX.fade_white_in()
+	deck_inventory.refresh_decks()
+	deck_inventory.show()
+	ScreenFX.fade_white_out()
+
+
+func _close_all_menus() -> void:
+	Sound.play(preload("res://data/sfx/Menu_Out.wav"))
+	await ScreenFX.fade_white_in()
+	if _soul_inventory != null:
+		_soul_inventory.visible = false
+	deck_inventory.hide()
+	await ScreenFX.fade_white_out()
+	get_tree().paused = false
+
+
+# ── Soul Inventory ──────────────────────────────────────────────────
+
+func _ensure_soul_inventory() -> void:
+	if _soul_inventory != null:
+		return
+	_soul_inventory = SoulInventory.new()
+	_soul_inventory.visible = false
+	get_tree().root.add_child(_soul_inventory)
+	_soul_inventory.closed.connect(_close_all_menus)
+
+
+func _on_soul_system_requested() -> void:
+	deck_inventory.hide()
+	_soul_inventory.visible = true
+
+
+# ── Deck Editor ─────────────────────────────────────────────────────
+
 func open_deck_editor(deck_index: int) -> void:
 	if deck_index < 0 or deck_index >= Global.player_decks.size():
 		push_error("open_deck_editor: invalid deck_index %s (decks: %s)" % [deck_index, Global.player_decks.size()])
@@ -46,33 +110,10 @@ func open_deck_editor(deck_index: int) -> void:
 	_deck_editor.open(deck_index)
 
 
-func _process(_delta):
-	if ScreenFX.playing:
-		return
-	if _deck_editor_layer != null and _deck_editor_layer.visible and _deck_editor != null:
-		if Input.is_action_just_pressed("pause"):
-			_deck_editor.close_cancel()
-		return
-	if Input.is_action_just_pressed("inventory"):
-		if Global.in_battle:
-			return
-		if deck_inventory.visible:
-			_close_deck_inventory()
-		else:
-			_open_deck_inventory()
-		return
-	if Input.is_action_just_pressed("pause"):
-		# ESC closes the deck inventory if open; CardBattle handles it internally.
-		if Global.in_battle:
-			return
-		if deck_inventory.visible:
-			_close_deck_inventory()
-
-
 func _ensure_deck_editor() -> void:
 	if _deck_editor != null:
 		return
-	var main := get_parent()
+	var main: Node = get_parent()
 	if main == null:
 		push_error("UI: expected parent Main for deck editor layer")
 		return
@@ -87,7 +128,6 @@ func _ensure_deck_editor() -> void:
 
 
 func _on_deckbuilding_requested(deck_index: int) -> void:
-	# CONNECT_DEFERRED on the signal already defers this call.
 	open_deck_editor(deck_index)
 
 
@@ -96,7 +136,11 @@ func _on_deck_editor_closed() -> void:
 		_deck_editor_layer.hide()
 	deck_inventory.refresh_decks()
 	deck_inventory.show()
+	# Return to deck list sub-screen, not hub.
+	deck_inventory._show_deck_list()
 
+
+# ── Pack Opening / Binder ────────────────────────────────────────────
 
 func _ensure_pack_opening() -> void:
 	if _pack_opening != null:
@@ -117,7 +161,7 @@ func _ensure_binder() -> void:
 func _on_open_pack_requested() -> void:
 	_ensure_pack_opening()
 	if Global.money < Global.PACK_COST:
-		return  # not enough money — deck_inventory should disable the button
+		return
 	deck_inventory.hide()
 	_pack_opening.open_pack()
 
@@ -136,43 +180,3 @@ func _on_binder_closed() -> void:
 func _on_pack_opening_finished() -> void:
 	deck_inventory.refresh_decks()
 	deck_inventory.show()
-
-
-func _inventory_changed(new_items):
-	inventory.items = new_items # redundant
-	target.items = new_items
-	hud.items = new_items
-	hud.queue_redraw()
-
-
-func _open_deck_inventory() -> void:
-	get_tree().paused = true
-	Sound.play(preload("res://data/sfx/Menu_In.wav"))
-	await ScreenFX.fade_white_in()
-	deck_inventory.refresh_decks()
-	deck_inventory.show()
-	ScreenFX.fade_white_out()
-
-
-func _close_deck_inventory() -> void:
-	Sound.play(preload("res://data/sfx/Menu_Out.wav"))
-	await ScreenFX.fade_white_in()
-	deck_inventory.hide()
-	await ScreenFX.fade_white_out()
-	get_tree().paused = false
-
-
-func _open_inventory():
-	get_tree().paused = true
-	Sound.play(preload("res://data/sfx/Menu_In.wav"))
-	await ScreenFX.fade_white_in()
-	inventory.show()
-	ScreenFX.fade_white_out()
-
-
-func _close_inventory():
-	Sound.play(preload("res://data/sfx/Menu_Out.wav"))
-	await ScreenFX.fade_white_in()
-	inventory.hide()
-	await ScreenFX.fade_white_out()
-	get_tree().paused = false

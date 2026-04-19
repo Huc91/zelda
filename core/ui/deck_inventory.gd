@@ -42,10 +42,10 @@ const CARDS: Array = [
 	},
 ]
 
-const CARD_W:   int = 128
-const CARD_H:   int = 200
-const CARD_GAP: int = 20
-const CARD_Y:   int = 160
+const CARD_W:   int = 220
+const CARD_H:   int = 160
+const CARD_GAP: int = 24
+const GRID_Y:   int = 120
 
 var _hub: Control
 var _deck_list: Control
@@ -100,13 +100,18 @@ func _build_hub() -> void:
 	_hub.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_hub)
 
-	var total_w: int = 4 * CARD_W + 3 * CARD_GAP
+	var total_w: int = 2 * CARD_W + CARD_GAP
 	var start_x: int = (640 - total_w) / 2
+	var total_h: int = 2 * CARD_H + CARD_GAP
+	var start_y: int = (576 - total_h) / 2 + 20
 
 	for i: int in CARDS.size():
 		var card_def: Dictionary = CARDS[i] as Dictionary
-		var cx: int = start_x + i * (CARD_W + CARD_GAP)
-		_hub.add_child(_make_card(card_def, cx, CARD_Y, i))
+		var col: int = i % 2
+		var row: int = i / 2
+		var cx: int = start_x + col * (CARD_W + CARD_GAP)
+		var cy: int = start_y + row * (CARD_H + CARD_GAP)
+		_hub.add_child(_make_card(card_def, cx, cy, i))
 
 
 func _make_card(def: Dictionary, cx: int, cy: int, idx: int) -> Control:
@@ -145,20 +150,10 @@ func _make_card(def: Dictionary, cx: int, cy: int, idx: int) -> Control:
 
 	btn.pressed.connect(_on_card_pressed.bind(idx))
 
-	# Deckbox icon
-	var icon_key: String = def["icon"] as String
-	var tex_rect := TextureRect.new()
-	tex_rect.texture = DECKBOX[icon_key] as Texture2D
-	tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	tex_rect.position = Vector2i(16, 28)
-	tex_rect.size = Vector2i(CARD_W - 32, 96)
-	tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	btn.add_child(tex_rect)
-
 	# Card label
 	var lbl := Label.new()
 	lbl.text = def["label"] as String
-	lbl.position = Vector2i(0, 132)
+	lbl.position = Vector2i(0, 52)
 	lbl.size = Vector2i(CARD_W, 28)
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.add_theme_font_override("font", FONT)
@@ -170,7 +165,7 @@ func _make_card(def: Dictionary, cx: int, cy: int, idx: int) -> Control:
 	# Description
 	var desc := Label.new()
 	desc.text = def["desc"] as String
-	desc.position = Vector2i(8, 162)
+	desc.position = Vector2i(8, 86)
 	desc.size = Vector2i(CARD_W - 16, 34)
 	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	desc.add_theme_font_override("font", FONT)

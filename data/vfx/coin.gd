@@ -1,5 +1,8 @@
 class_name Coin extends Node2D
 
+const COIN_TEX: Texture2D = preload("res://GUI_plugin/items/rpgItems.png")
+const FRAME_SIZE: int = 16
+
 ## Money value this coin is worth. Visual tier: >=50=gold, >=10=silver, else copper.
 var value: int = 1
 
@@ -7,6 +10,7 @@ var _area: Area2D
 
 
 func _ready() -> void:
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_area = Area2D.new()
 	var cs: CollisionShape2D = CollisionShape2D.new()
 	var shape: CircleShape2D = CircleShape2D.new()
@@ -49,7 +53,13 @@ func _coin_color() -> Color:
 
 
 func _draw() -> void:
-	var col: Color = _coin_color()
-	draw_circle(Vector2.ZERO, 4.0, col)
-	draw_arc(Vector2.ZERO, 4.0, 0.0, TAU, 12, col.darkened(0.3), 1.0)
-	draw_circle(Vector2(-1.0, -1.0), 1.2, Color(1.0, 1.0, 1.0, 0.5))
+	var src_col: int
+	if value >= 50:
+		src_col = 1   # col 2 → index 1 (gold)
+	elif value >= 10:
+		src_col = 2   # col 3 → index 2 (silver)
+	else:
+		src_col = 3   # col 4 → index 3 (copper)
+	var src: Rect2 = Rect2(src_col * FRAME_SIZE, 5 * FRAME_SIZE, FRAME_SIZE, FRAME_SIZE)
+	var dst: Rect2 = Rect2(-FRAME_SIZE / 2, -FRAME_SIZE / 2, FRAME_SIZE, FRAME_SIZE)
+	draw_texture_rect_region(COIN_TEX, dst, src)

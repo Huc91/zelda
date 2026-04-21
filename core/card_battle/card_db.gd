@@ -69,6 +69,15 @@ static func _build(ids: Array) -> Array:
 	return _build_raw(ids)
 
 
+## Runtime enemy deck: never use player STARTER_DECK (skeletons) as fallback.
+static func _build_enemy(ids: Array) -> Array:
+	_ensure_init()
+	if not deck_ids_legal(ids):
+		push_error("CardDB._build_enemy: illegal deck %s — falling back to ENEMY_DECK." % str(ids.slice(0, 5)))
+		return _build_raw(ENEMY_DECK.duplicate())
+	return _build_raw(ids)
+
+
 static func _build_raw(ids: Array) -> Array:
 	_ensure_init()
 	var deck: Array = []
@@ -122,7 +131,7 @@ static func roll_pack() -> Array:
 
 
 static func _roll_foil() -> bool:
-	return randf() < 1.0
+	return randf() < 0.025
 
 
 static func _roll_pack_fifth(all_pool: Array) -> Dictionary:
@@ -177,20 +186,20 @@ static func enemy_deck_for_difficulty(difficulty: String) -> Array:
 		"hard": pool = HARD_DECKS
 		_: pool = EASY_DECKS
 	var chosen: Array = pool[randi() % pool.size()]
-	return _build(chosen.duplicate())
+	return _build_enemy(chosen.duplicate())
 
-# EASY decks (7) — low cost, few spells
+# EASY decks (10) — low cost, few spells
 const EASY_01 = [
 	"demon_001", "demon_001", "demon_002", "demon_002", "demon_003", "demon_003",
 	"demon_004", "demon_004", "demon_014", "demon_014", "demon_005", "demon_005",
 	"demon_008", "demon_008", "spell_002", "spell_002", "spell_001", "spell_001",
-	"spell_013", "spell_013",
+	"spell_013", "spell_009",
 ]
 const EASY_02 = [
 	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004",
 	"demon_018", "demon_018", "demon_006", "demon_006", "demon_008", "demon_008",
 	"demon_014", "demon_014", "spell_016", "spell_016", "spell_006", "spell_006",
-	"spell_013", "spell_013",
+	"spell_013", "spell_004",
 ]
 const EASY_03 = [
 	"demon_002", "demon_002", "demon_003", "demon_003", "demon_005", "demon_005",
@@ -201,7 +210,7 @@ const EASY_03 = [
 const EASY_04 = [
 	"demon_001", "demon_001", "demon_004", "demon_004", "demon_018", "demon_018",
 	"demon_003", "demon_003", "demon_006", "spell_001", "spell_001", "spell_002",
-	"spell_002", "spell_013", "spell_013", "demon_008", "demon_008", "demon_005",
+	"spell_002", 	"spell_013", "spell_009", "demon_008", "demon_008", "demon_005",
 	"demon_014", "demon_014",
 ]
 const EASY_05 = [
@@ -211,22 +220,43 @@ const EASY_05 = [
 	"demon_008", "demon_008",
 ]
 const EASY_06 = [
-	"demon_001", "demon_001", "demon_001", "demon_002", "demon_002", "demon_003",
+	"demon_001", "demon_001", "demon_006", "demon_002", "demon_002", "demon_003",
 	"demon_003", "demon_004", "demon_004", "demon_018", "demon_018", "demon_005",
-	"demon_014", "spell_013", "spell_013", "spell_002", "spell_002", "spell_016",
+	"demon_014", "spell_013", "spell_006", "spell_002", "spell_002", "spell_016",
 	"spell_001", "demon_008",
 ]
 const EASY_07 = [
 	"demon_024", "demon_024", "demon_001", "demon_001", "demon_003", "demon_003",
 	"demon_002", "demon_002", "demon_018", "demon_018", "demon_008", "demon_008",
 	"demon_014", "demon_014", "spell_004", "spell_009", "spell_009", "spell_013",
-	"spell_013", "demon_006",
+	"spell_016", "demon_006",
 ]
-const EASY_DECKS: Array = [EASY_01, EASY_02, EASY_03, EASY_04, EASY_05, EASY_06, EASY_07]
+## Nest / swarm: cheap bodies, Imp Matron, Nest Warden, mana + free Imps.
+const EASY_08 = [
+	"demon_001", "demon_001", "demon_040", "demon_040", "demon_105", "demon_105",
+	"demon_003", "demon_003", "demon_077", "demon_077", "demon_018", "demon_018",
+	"demon_024", "demon_024",
+	"spell_016", "spell_016", "spell_009", "spell_009", "spell_048", "spell_048",
+]
+## Great Wall: taunt stack + heals and Hex to stall while chipping.
+const EASY_09 = [
+	"demon_011", "demon_011", "demon_009", "demon_009", "demon_091", "demon_091",
+	"demon_108", "demon_108", "demon_014", "demon_014", "demon_004", "demon_004",
+	"spell_002", "spell_002", "spell_006", "spell_006", "spell_001", "spell_001",
+	"spell_007", "spell_007",
+]
+## Through the line: Specters + chip damage + Tomes and mana to keep pressure.
+const EASY_10 = [
+	"demon_006", "demon_006", "demon_001", "demon_001", "demon_002", "demon_002",
+	"demon_003", "demon_003", "demon_018", "demon_018", "demon_024", "demon_024",
+	"spell_001", "spell_001", "spell_026", "spell_026", "spell_009", "spell_009",
+	"spell_016", "spell_016",
+]
+const EASY_DECKS: Array = [EASY_01, EASY_02, EASY_03, EASY_04, EASY_05, EASY_06, EASY_07, EASY_08, EASY_09, EASY_10]
 
-# NORMAL decks (7) — mid-range, more powerful demons, some synergies
+# NORMAL decks (12) — mid-range, more powerful demons, some synergies
 const NORMAL_01 = [
-	"demon_007", "demon_007", "demon_011", "demon_011", "demon_013", "demon_013",
+	"demon_007", "demon_010", "demon_011", "demon_011", "demon_013", "demon_013",
 	"demon_015", "demon_015", "demon_016", "demon_012", "demon_012", "demon_017",
 	"spell_004", "spell_004", "spell_007", "spell_007", "spell_005", "spell_005",
 	"demon_027", "demon_027",
@@ -252,11 +282,11 @@ const NORMAL_04 = [
 const NORMAL_05 = [
 	"demon_027", "demon_027", "demon_028", "demon_028", "demon_011", "demon_011",
 	"demon_009", "demon_009", "demon_012", "demon_013", "demon_013", "demon_017",
-	"spell_012", "spell_012", "spell_008", "spell_008", "spell_014", "spell_014",
+	"spell_012", "spell_012", "spell_008", "spell_003", "spell_014", "spell_014",
 	"demon_016", "demon_030",
 ]
 const NORMAL_06 = [
-	"demon_024", "demon_024", "demon_025", "demon_025", "demon_007", "demon_007",
+	"demon_024", "demon_024", "demon_025", "demon_025", "demon_007", "demon_019",
 	"demon_018", "demon_018", "demon_013", "demon_013", "demon_015", "demon_015",
 	"spell_004", "spell_004", "spell_009", "spell_009", "spell_011", "spell_011",
 	"demon_017", "demon_016",
@@ -264,16 +294,50 @@ const NORMAL_06 = [
 const NORMAL_07 = [
 	"demon_037", "demon_037", "demon_036", "demon_036", "demon_016", "demon_016",
 	"demon_019", "demon_019", "demon_020", "demon_010", "demon_012", "demon_012",
-	"spell_010", "spell_010", "spell_007", "spell_007", "spell_015", "spell_015",
+	"spell_010", "spell_010", "spell_007", "spell_007", "spell_015", "spell_011",
 	"demon_039", "demon_040",
 ]
-const NORMAL_DECKS: Array = [NORMAL_01, NORMAL_02, NORMAL_03, NORMAL_04, NORMAL_05, NORMAL_06, NORMAL_07]
+## Hive: rats, wasps, beetles, Nest Warden, Beelzebub + Carrion Beetle + Wormoyf; mana / draw / bodies to cast them.
+const NORMAL_08 = [
+	"demon_003", "demon_003", "demon_047", "demon_022", "demon_081", "demon_096", "demon_096",
+	"demon_104", "demon_104", "demon_105", "demon_105",
+	"spell_009", "spell_009", "spell_016", "spell_016", "spell_048", "spell_048",
+	"spell_023", "spell_023", "spell_004",
+]
+## Leyline ramp: Channeling Plant, Elder Treant, taunts, Fallen Goddess draw, Cultist aura, mana rituals.
+const NORMAL_09 = [
+	"demon_089", "demon_089", "demon_094", "demon_094", "demon_009", "demon_009",
+	"demon_091", "demon_091", "demon_007", "demon_013", "demon_013", "demon_027", "demon_027",
+	"spell_009", "spell_009", "spell_021", "spell_021", "spell_023", "spell_023", "spell_048",
+]
+## Death by a thousand cuts: Death Knell + deathrattle bodies + burn to face.
+const NORMAL_10 = [
+	"demon_030", "demon_030", "demon_005", "demon_005", "demon_077", "demon_077",
+	"demon_014", "demon_014", "demon_016", "demon_016", "demon_017", "demon_017",
+	"spell_003", "spell_003", "spell_010", "spell_010", "spell_034", "spell_034",
+	"spell_005", "spell_005",
+]
+## Skies and tricks: Wasps, Goblin Assassins, Medusa, reach spells.
+const NORMAL_11 = [
+	"demon_096", "demon_096", "demon_036", "demon_036", "demon_019", "demon_019",
+	"demon_020", "demon_020", "demon_010", "demon_010", "demon_013", "demon_013",
+	"spell_007", "spell_007", "spell_001", "spell_001", "spell_026", "spell_026",
+	"spell_033", "spell_033",
+]
+## Front-line buff: Cultist + Komainu auras, bruisers, cheap combat tricks.
+const NORMAL_12 = [
+	"demon_027", "demon_027", "demon_028", "demon_028", "demon_013", "demon_013",
+	"demon_015", "demon_015", "demon_012", "demon_012", "demon_011", "demon_011",
+	"spell_006", "spell_006", "spell_012", "spell_012", "spell_007", "spell_007",
+	"spell_001", "spell_001",
+]
+const NORMAL_DECKS: Array = [NORMAL_01, NORMAL_02, NORMAL_03, NORMAL_04, NORMAL_05, NORMAL_06, NORMAL_07, NORMAL_08, NORMAL_09, NORMAL_10, NORMAL_11, NORMAL_12]
 
-# HARD decks (6) — mythics, legendaries, powerful combos
+# HARD decks (12) — mythics, legendaries, powerful combos
 const HARD_01 = [
 	"demon_021", "demon_022", "demon_023", "demon_042", "demon_043", "demon_019",
 	"demon_019", "demon_020", "demon_016", "demon_016", "demon_017", "demon_017",
-	"spell_003", "spell_003", "spell_010", "spell_010", "spell_015", "spell_015",
+	"spell_003", "spell_003", "spell_010", "spell_010", "spell_015", "spell_017",
 	"demon_030", "demon_030",
 ]
 const HARD_02 = [
@@ -285,7 +349,7 @@ const HARD_02 = [
 const HARD_03 = [
 	"demon_023", "demon_021", "demon_022", "demon_042", "demon_043", "demon_039",
 	"demon_039", "demon_020", "demon_020", "demon_016", "demon_016", "demon_019",
-	"spell_010", "spell_010", "spell_015", "spell_015", "spell_003", "spell_003",
+	"spell_010", "spell_010", "spell_015", "spell_018", "spell_003", "spell_003",
 	"demon_030", "demon_030",
 ]
 const HARD_04 = [
@@ -306,7 +370,49 @@ const HARD_06 = [
 	"spell_017", "spell_018", "spell_015", "spell_010", "spell_003", "spell_003",
 	"demon_030", "demon_040",
 ]
-const HARD_DECKS: Array = [HARD_01, HARD_02, HARD_03, HARD_04, HARD_05, HARD_06]
+## Burn / super-aggro: only Haste demons + direct damage spells (face, bolt, AoE burn).
+## Curve is max speed: eight 1-drops (Lava Imp, Shade, Blaze Imp, Herald) + two 2-drop Amalgams.
+const HARD_07 = [
+	"demon_106", "demon_106", "demon_060", "demon_060", "demon_063", "demon_063",
+	"demon_067", "demon_067", "demon_072", "demon_072",
+	"spell_001", "spell_001", "spell_005", "spell_010", "spell_010", "spell_013",
+	"spell_026", "spell_026", "spell_035", "spell_035",
+]
+## Big hive: same bug core + poison threats; Ancient Rites / Soul Barter to slam 4-drops fast.
+const HARD_08 = [
+	"demon_003", "demon_003", "demon_047", "demon_022", "demon_081", "demon_096", "demon_096",
+	"demon_104", "demon_104", "demon_105", "demon_105", "demon_058", "demon_058", "demon_055", "demon_055",
+	"spell_009", "spell_009", "spell_023", "spell_023", "spell_021",
+]
+## Chaos / high-rarity: sixteen epics (draw, AoE, Pyroclasm, Wrath) + four one-of legendaries (Baphomet, Arcane Bolt, Plague, Final Hour).
+## Booster copy refers to epics as "mythic"; all these high slots use rarity "epic" in data.
+const HARD_09 = [
+	"demon_023", "demon_026", "demon_026", "demon_046", "demon_046", "demon_081", "demon_081",
+	"demon_052", "demon_052", "spell_004", "spell_004", "spell_011", "spell_011", "spell_030", "spell_030",
+	"spell_041", "spell_041", "spell_013", "spell_015", "spell_017",
+]
+## Abyssal wave: sea epics + Seraph + Lich; recursion and burn from hand.
+const HARD_10 = [
+	"demon_021", "demon_088", "demon_088", "demon_092", "demon_092", "demon_083", "demon_083",
+	"demon_070", "demon_070",
+	"spell_008", "spell_018", "spell_036", "spell_036", "spell_027", "spell_027",
+	"spell_012", "spell_012", "spell_004", "spell_004", "spell_025",
+]
+## Undying horde: Lich + wisps + undying fiends + removal and big burn.
+const HARD_11 = [
+	"demon_021", "demon_051", "demon_051", "demon_059", "demon_059", "demon_005", "demon_005",
+	"demon_014", "demon_014", "demon_030", "demon_030", "demon_016",
+	"spell_008", "spell_018", "spell_003", "spell_003", "spell_010", "spell_010",
+	"spell_005", "spell_005",
+]
+## Colossus ramp: pitch + draw into Chimera / Tidal Terror; Fallen Goddess refills hand.
+const HARD_12 = [
+	"demon_043", "demon_043", "demon_083", "demon_083", "demon_026", "demon_026",
+	"demon_025", "demon_025", "demon_024", "demon_024", "demon_018", "demon_018",
+	"demon_007",
+	"spell_024", "spell_024", "spell_021", "spell_021", "spell_023", "spell_023", "spell_004",
+]
+const HARD_DECKS: Array = [HARD_01, HARD_02, HARD_03, HARD_04, HARD_05, HARD_06, HARD_07, HARD_08, HARD_09, HARD_10, HARD_11, HARD_12]
 
 # ── test decks ─────────────────
 const TEST_1 = [
@@ -362,11 +468,11 @@ const ALL_CARDS = [
 	{"id": "demon_003", "name": "Plague Rat", "type": "demon", "subtype": "terresta", "cost": 1, "mana_value": 1, "atk": 1, "hp": 1, "rarity": "common", "ability": "poisonous", "ability_desc": "Poisonous — kills any demon it damages.", "desc": "One scratch is enough."},
 	{"id": "demon_018", "name": "Dusk Faerie", "type": "demon", "subtype": "obscura", "cost": 1, "mana_value": 1, "atk": 1, "hp": 1, "rarity": "common", "ability": "battlecry_draw_1", "ability_desc": "Battlecry: Draw 1 card.", "desc": "Worth playing for the card it brings."},
 	{"id": "demon_002", "name": "Hellhound", "type": "demon", "subtype": "obscura", "cost": 2, "mana_value": 1, "atk": 3, "hp": 2, "rarity": "common", "ability": "haste", "ability_desc": "Haste — can attack immediately.", "desc": "Bites hard and fast."},
-	{"id": "demon_004", "name": "Shadow Hound", "type": "demon", "subtype": "obscura", "cost": 2, "mana_value": 1, "atk": 3, "hp": 3, "rarity": "common", "ability": "", "ability_desc": "", "desc": "A reliable fighter with no tricks."},
+	{"id": "demon_004", "name": "Shadow Hound", "type": "demon", "subtype": "obscura", "cost": 3, "mana_value": 1, "atk": 3, "hp": 3, "rarity": "common", "ability": "", "ability_desc": "", "desc": "A reliable fighter with no tricks."},
 	{"id": "demon_006", "name": "Specter", "type": "demon", "subtype": "obscura", "cost": 2, "mana_value": 1, "atk": 2, "hp": 2, "rarity": "common", "ability": "unblockable", "ability_desc": "Unblockable — can always attack the enemy directly.", "desc": "Slips past any defence."},
 	{"id": "demon_007", "name": "Fallen Goddess", "type": "demon", "subtype": "obscura", "cost": 2, "mana_value": 1, "atk": 1, "hp": 3, "rarity": "legendary", "ability": "battlecry_draw_2", "ability_desc": "Battlecry: Draw 2 cards.", "desc": "She fell from grace. Drew two cards on the way down."},
-	{"id": "demon_008", "name": "Wing Imp", "type": "demon", "subtype": "obscura", "cost": 2, "mana_value": 1, "atk": 2, "hp": 3, "rarity": "common", "ability": "lifesteal", "ability_desc": "Lifesteal — heals you for damage it deals.", "desc": "Swoops in and drains life with every strike."},
-	{"id": "demon_005", "name": "Bone Knight", "type": "demon", "subtype": "obscura", "cost": 3, "mana_value": 1, "atk": 3, "hp": 4, "rarity": "common", "ability": "deathrattle_damage_2", "ability_desc": "Deathrattle: Deal 2 damage to the enemy when destroyed.", "desc": "Even in death it strikes."},
+	{"id": "demon_008", "name": "Wing Imp", "type": "demon", "subtype": "obscura", "cost": 2, "mana_value": 1, "atk": 2, "hp": 2, "rarity": "rare", "ability": "aerial lifesteal", "ability_desc": "Aerial. Lifesteal — heals you for damage it deals.", "desc": "Swoops in and drains life with every strike."},
+	{"id": "demon_005", "name": "Bone Knight", "type": "demon", "subtype": "obscura", "cost": 3, "mana_value": 1, "atk": 3, "hp": 3, "rarity": "common", "ability": "deathrattle_damage_2", "ability_desc": "Deathrattle: Deal 2 damage to the enemy when destroyed.", "desc": "Even in death it strikes."},
 	{"id": "demon_011", "name": "Banshee", "type": "demon", "subtype": "obscura", "cost": 3, "mana_value": 1, "atk": 1, "hp": 5, "rarity": "common", "ability": "taunt", "ability_desc": "Taunt — enemies must attack this first.", "desc": "Its wail forces every eye towards it."},
 	{"id": "demon_013", "name": "Ifrit", "type": "demon", "subtype": "regalia", "cost": 3, "mana_value": 1, "atk": 3, "hp": 3, "rarity": "common", "ability": "battlecry_aoe_1", "ability_desc": "Battlecry: Deal 1 damage to all enemy demons.", "desc": "Born of smokeless fire. Scorches all on arrival."},
 	{"id": "demon_014", "name": "Mummy", "type": "demon", "subtype": "terresta", "cost": 4, "mana_value": 1, "atk": 4, "hp": 4, "rarity": "common", "ability": "", "ability_desc": "", "desc": "Wrapped tight. Hits harder than it looks."},
@@ -382,7 +488,7 @@ const ALL_CARDS = [
 	{"id": "demon_022", "name": "Beelzebub", "type": "demon", "subtype": "obscura", "cost": 4, "mana_value": 1, "atk": 3, "hp": 5, "rarity": "legendary", "ability": "battlecry_summon_imps aerial", "ability_desc": "Aerial. Battlecry: Summon 2 Imps (1/1 Haste).", "desc": "Lord of Flies — never alone."},
 	{"id": "demon_023", "name": "Baphomet", "type": "demon", "subtype": "regalia", "cost": 4, "mana_value": 1, "atk": 5, "hp": 5, "rarity": "legendary", "ability": "battlecry_destroy_all", "ability_desc": "Battlecry: Destroy all enemy demons.", "desc": "Dark god of annihilation."},
 	{"id": "spell_009", "name": "Mana Surge", "type": "spell", "cost": 0, "mana_value": 1, "rarity": "common", "effect": "mana_boost", "value": 2, "ability_desc": "Gain 2 mana this turn.", "no_pack": true},
-	{"id": "spell_004", "name": "Dark Pact", "type": "spell", "cost": 1, "mana_value": 1, "rarity": "epic", "effect": "draw", "value": 2, "ability_desc": "Draw 2 cards."},
+	{"id": "spell_004", "name": "Dark Pact", "type": "spell", "cost": 2, "mana_value": 1, "rarity": "epic", "effect": "draw", "value": 2, "ability_desc": "Draw 2 cards."},
 	{"id": "spell_016", "name": "Summon Familiar", "type": "spell", "cost": 0, "mana_value": 1, "rarity": "common", "effect": "summon_imp", "value": 0, "ability_desc": "Summon an Imp (1/1)."},
 	{"id": "spell_002", "name": "Heal", "type": "spell", "cost": 1, "mana_value": 1, "rarity": "common", "effect": "heal", "value": 2, "ability_desc": "Restore 2 life."},
 	{"id": "spell_006", "name": "Blood Shield", "type": "spell", "cost": 1, "mana_value": 1, "rarity": "common", "effect": "buff_hp", "value": 2, "ability_desc": "Give a friendly demon +2 HP."},
@@ -435,13 +541,13 @@ const ALL_CARDS = [
 	{"id": "demon_056", "name": "Specter Assassin", "type": "demon", "subtype": "obscura", "cost": 3, "mana_value": 1, "atk": 3, "hp": 3, "rarity": "rare", "ability": "battlecry_destroy_weak", "ability_desc": "Battlecry: Destroy an enemy demon with 3 or less HP.", "desc": "It picks off the wounded first."},
 	{"id": "demon_057", "name": "Mind Shredder", "type": "demon", "subtype": "obscura", "cost": 3, "mana_value": 1, "atk": 2, "hp": 4, "rarity": "common", "ability": "battlecry_discard_enemy", "ability_desc": "Battlecry: Enemy discards their top card.", "desc": "Tears knowledge from the mind."},
 	{"id": "demon_058", "name": "Dusk Predator", "type": "demon", "subtype": "obscura", "cost": 3, "mana_value": 1, "atk": 4, "hp": 2, "rarity": "rare", "ability": "haste_poisonous", "ability_desc": "Haste. Poisonous.", "desc": "One scratch. One corpse."},
-	{"id": "demon_059", "name": "Undying Fiend", "type": "demon", "subtype": "obscura", "cost": 3, "mana_value": 1, "atk": 4, "hp": 3, "rarity": "rare", "ability": "deathrattle_return_hand", "ability_desc": "Deathrattle: Return this to your hand when destroyed.", "desc": "It refuses to stay dead."},
-	{"id": "demon_060", "name": "Larcenous Shade", "type": "demon", "subtype": "obscura", "cost": 1, "mana_value": 1, "atk": 1, "hp": 1, "rarity": "common", "ability": "haste_face_mana", "ability_desc": "Haste. When this deals face damage, gain 1 mana.", "desc": "Steals more than just HP."},
+	{"id": "demon_059", "name": "Undying Fiend", "type": "demon", "subtype": "obscura", "cost": 5, "mana_value": 1, "atk": 4, "hp": 3, "rarity": "rare", "ability": "deathrattle_return_hand", "ability_desc": "Deathrattle: Return this to your hand when destroyed.", "desc": "It refuses to stay dead."},
+	{"id": "demon_060", "name": "Larcenous Shade", "type": "demon", "subtype": "obscura", "cost": 1, "mana_value": 1, "atk": 1, "hp": 1, "rarity": "common", "ability": "face_damage_mana", "ability_desc": "When this deals face damage, gain 1 mana.", "desc": "Steals more than just HP."},
 	{"id": "demon_061", "name": "Iron Warden", "type": "demon", "subtype": "terresta", "cost": 2, "mana_value": 1, "atk": 2, "hp": 2, "rarity": "rare", "ability": "tax_spells", "ability_desc": "Enemy spells cost 1 extra mana.", "desc": "Her presence alone slows the enemy."},
 	{"id": "demon_062", "name": "Kappa Samurai", "type": "demon", "subtype": "regalia", "cost": 3, "mana_value": 1, "atk": 2, "hp": 3, "rarity": "common", "ability": "battlecry_heal_3", "ability_desc": "Battlecry: Restore 3 HP.", "desc": "Blessed by the stars."},
 	{"id": "demon_063", "name": "Thunder Amalgam", "type": "demon", "subtype": "regalia", "cost": 2, "mana_value": 1, "atk": 2, "hp": 2, "rarity": "common", "ability": "haste", "ability_desc": "Haste.", "desc": "Fast as a bolt."},
 	{"id": "demon_064", "name": "Radiant Sentinel", "type": "demon", "subtype": "regalia", "cost": 3, "mana_value": 1, "atk": 1, "hp": 4, "rarity": "rare", "ability": "taunt_regen_2", "ability_desc": "Taunt. Restores 2 HP to itself at end of your turn.", "desc": "Endures through sheer divine will."},
-	{"id": "demon_065", "name": "Star Prophet", "type": "demon", "subtype": "regalia", "cost": 2, "mana_value": 1, "atk": 1, "hp": 2, "rarity": "legendary", "ability": "draw_pings", "ability_desc": "During your turn: whenever you draw a card, deal 1 damage to the enemy.", "desc": "Each revelation strikes like a blade."},
+	{"id": "demon_065", "name": "Star Prophet", "type": "demon", "subtype": "regalia", "cost": 2, "mana_value": 1, "atk": 1, "hp": 2, "rarity": "legendary", "ability": "draw_pings", "ability_desc": "During your turn: whenever you draw a card (not your opening or refreshed hand), deal 1 damage to the enemy.", "desc": "Each revelation strikes like a blade."},
 	{"id": "demon_066", "name": "Holy Knight", "type": "demon", "subtype": "regalia", "cost": 4, "mana_value": 1, "atk": 3, "hp": 4, "rarity": "rare", "ability": "divine_shield", "ability_desc": "Divine Shield — absorbs the first hit.", "desc": "No blade has yet drawn its blood."},
 	{"id": "demon_067", "name": "Lightning Herald", "type": "demon", "subtype": "regalia", "cost": 1, "mana_value": 1, "atk": 1, "hp": 2, "rarity": "common", "ability": "haste", "ability_desc": "Haste.", "desc": "Arrives with the speed of thunder."},
 	{"id": "demon_068", "name": "Macho Rooster", "type": "demon", "subtype": "regalia", "cost": 4, "mana_value": 1, "atk": 3, "hp": 3, "rarity": "rare", "ability": "battlecry_buff_target_2_2", "ability_desc": "Battlecry: Give a random friendly demon +2/+2.", "desc": "Crows loudly and pumps up the crew."},
@@ -455,14 +561,14 @@ const ALL_CARDS = [
 	{"id": "demon_076", "name": "Magma Titan", "type": "demon", "subtype": "regalia", "cost": 4, "mana_value": 1, "atk": 4, "hp": 4, "rarity": "rare", "ability": "battlecry_aoe_rear_2", "ability_desc": "Battlecry: Deal 2 damage to all enemy rear row demons.", "desc": "Reaches over the front line."},
 	{"id": "demon_077", "name": "Hellfire Imp", "type": "demon", "subtype": "regalia", "cost": 2, "mana_value": 1, "atk": 1, "hp": 1, "rarity": "common", "ability": "deathrattle_draw_1", "ability_desc": "Deathrattle: Draw 1 card when destroyed.", "desc": "Burns out fast, but leaves a gift."},
 	{"id": "demon_078", "name": "Maced Troll", "type": "demon", "subtype": "regalia", "cost": 3, "mana_value": 1, "atk": 2, "hp": 3, "rarity": "common", "ability": "on_attack_buff_2", "ability_desc": "Whenever this attacks a demon, gain +2 ATK until end of turn.", "desc": "Gets faster the more it swings."},
-	{"id": "demon_079", "name": "Phoenix", "type": "demon", "subtype": "terresta", "cost": 4, "mana_value": 1, "atk": 3, "hp": 3, "rarity": "rare", "ability": "deathrattle_return_hand", "ability_desc": "Deathrattle: Return this to your hand when destroyed.", "desc": "Rises from its own ashes."},
+	{"id": "demon_079", "name": "Phoenix", "type": "demon", "subtype": "terresta", "cost": 4, "mana_value": 1, "atk": 2, "hp": 2, "rarity": "rare", "ability": "deathrattle_return_hand", "ability_desc": "Deathrattle: Return this to your hand when destroyed.", "desc": "Rises from its own ashes."},
 	{"id": "demon_080", "name": "Green Mamba", "type": "demon", "subtype": "terresta", "cost": 1, "mana_value": 1, "atk": 1, "hp": 1, "rarity": "common", "ability": "poisonous on_kill_both_lose_life", "ability_desc": "Poisonous. When it kills a demon, both players lose 1 life.", "desc": "One bite ends everything."},
 	{"id": "demon_081", "name": "Wormoyf", "type": "demon", "subtype": "neutra", "cost": 1, "mana_value": 1, "atk": 0, "hp": 1, "rarity": "epic", "ability": "wormoyf_power", "ability_desc": "Battlecry: Gains +1/+1 for each unique creature subtype on the field and each spell in both graveyards.", "desc": "It feeds on chaos and variety."},
 	{"id": "demon_082", "name": "Gajasura", "type": "demon", "subtype": "terresta", "cost": 5, "mana_value": 1, "atk": 5, "hp": 5, "rarity": "rare", "ability": "battlecry_aoe_all_1", "ability_desc": "Battlecry: Deal 1 damage to ALL demons on the field, including your own.", "desc": "The ground cracks beneath its steps."},
 	{"id": "demon_083", "name": "Tidal Terror", "type": "demon", "subtype": "terresta", "cost": 7, "mana_value": 1, "atk": 5, "hp": 5, "rarity": "epic", "ability": "spell_cost_reduce_per_spell_gy", "ability_desc": "Costs 1 less for each spell in your graveyard (min 0).", "desc": "The tide rises with every spell cast."},
 	{"id": "demon_084", "name": "Frost Mage", "type": "demon", "subtype": "regalia", "cost": 2, "mana_value": 1, "atk": 1, "hp": 3, "rarity": "common", "ability": "battlecry_freeze_target", "ability_desc": "Battlecry: Exhaust (freeze) one enemy demon for a turn.", "desc": "A touch and the enemy slows."},
 	{"id": "demon_085", "name": "Trick Wall", "type": "demon", "subtype": "terresta", "cost": 3, "mana_value": 1, "atk": 0, "hp": 6, "rarity": "rare", "ability": "divine_shield taunt", "ability_desc": "Divine Shield — absorbs the first hit. Taunt.", "desc": "It looks like an opening. It is not."},
-	{"id": "demon_086", "name": "Sea Serpent", "type": "demon", "subtype": "terresta", "cost": 4, "mana_value": 1, "atk": 4, "hp": 4, "rarity": "common", "ability": "unblockable", "ability_desc": "Unblockable.", "desc": "Slithers through every defence."},
+	{"id": "demon_086", "name": "Ocean Lancer", "type": "demon", "subtype": "terresta", "cost": 4, "mana_value": 1, "atk": 3, "hp": 2, "rarity": "common", "ability": "unblockable", "ability_desc": "Unblockable.", "desc": "Strikes through the line where the sea meets the shore."},
 	{"id": "demon_087", "name": "Leachtrio", "type": "demon", "subtype": "neutra", "cost": 2, "mana_value": 1, "atk": 1, "hp": 3, "rarity": "common", "ability": "lifesteal", "ability_desc": "Lifesteal.", "desc": "Drains the arcane from the living."},
 	{"id": "demon_088", "name": "Sea Serpent", "type": "demon", "subtype": "terresta", "cost": 7, "mana_value": 1, "atk": 6, "hp": 8, "rarity": "epic", "ability": "battlecry_freeze_all", "ability_desc": "Battlecry: Exhaust all enemy demons.", "desc": "Rises from the deep. None may stop it."},
 	{"id": "demon_089", "name": "Channeling Plant", "type": "demon", "subtype": "terresta", "cost": 2, "mana_value": 1, "atk": 0, "hp": 2, "rarity": "common", "ability": "mana_per_turn", "ability_desc": "At the start of your turn, gain 1 mana.", "desc": "Roots into the ley line. Feeds power upward."},
@@ -509,7 +615,7 @@ const ALL_CARDS = [
 	{"id": "spell_044", "name": "Frost Bolt", "type": "spell", "cost": 1, "mana_value": 1, "rarity": "common", "effect": "freeze_one_demon", "value": 0, "ability_desc": "Exhaust one enemy demon for a turn."},
 	{"id": "spell_045", "name": "Execute", "type": "spell", "cost": 1, "mana_value": 1, "rarity": "rare", "effect": "destroy_damaged", "value": 0, "ability_desc": "Destroy an enemy demon that has taken damage this turn."},
 	{"id": "spell_046", "name": "Terror", "type": "spell", "cost": 1, "mana_value": 1, "rarity": "common", "effect": "destroy_low_atk", "value": 2, "ability_desc": "Destroy an enemy demon with 2 or less ATK."},
-	{"id": "spell_047", "name": "Blood Draw", "type": "spell", "cost": 0, "mana_value": 1, "rarity": "rare", "effect": "hp_for_draw", "value": 5, "ability_desc": "Lose 5 HP. Draw 2 cards."},
+	{"id": "spell_047", "name": "Blood Draw", "type": "spell", "cost": 0, "mana_value": 1, "rarity": "rare", "effect": "hp_for_draw", "value": 8, "ability_desc": "Lose 8 HP. Draw 2 cards."},
 	{"id": "spell_048", "name": "Cantrip", "type": "spell", "cost": 0, "mana_value": 1, "rarity": "common", "effect": "draw", "value": 1, "ability_desc": "Draw 1 card."},
 	{"id": "spell_049", "name": "Arcane Study", "type": "spell", "cost": 5, "mana_value": 1, "rarity": "common", "effect": "draw", "value": 2, "ability_desc": "Draw 2 cards."},
 	{"id": "spell_050", "name": "Rally", "type": "spell", "cost": 3, "mana_value": 1, "rarity": "rare", "effect": "buff_all_stats", "value": 1, "ability_desc": "Give all your demons +1/+1 until end of turn."},

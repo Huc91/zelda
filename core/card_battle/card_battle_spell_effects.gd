@@ -125,7 +125,8 @@ static func resolve(b: CardBattle, card: Dictionary, is_player: bool) -> void:
 		"hp_for_draw":
 			if is_player: b.player_hp -= val
 			else:         b.enemy_hp  -= val
-			for _i in val: b._draw_one(own_hand, own_deck)
+			b._draw_one(own_hand, own_deck)
+			b._draw_one(own_hand, own_deck)
 		"mana_per_demon":
 			var add_m: int = (pf.size() + pr.size()) * val
 			if is_player: b.player_mana = mini(b.player_mana + add_m, 10)

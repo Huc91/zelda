@@ -300,6 +300,22 @@ func _make_deck_slot(index: int, deck: Dictionary) -> Control:
 	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_child(name_lbl)
 
+	if Global.dev_mode:
+		var p: Dictionary = Global.get_deck_power_breakdown(index)
+		var power_lbl := Label.new()
+		power_lbl.text = "PWR %.2f  (R %.2f x W %.2f)" % [
+			float(p.get("final_power", 0.0)),
+			float(p.get("rarity_power", 0.0)),
+			float(p.get("raw_power", 0.0)),
+		]
+		power_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		power_lbl.custom_minimum_size = Vector2(120, 20)
+		power_lbl.add_theme_font_override("font", FONT)
+		power_lbl.add_theme_font_size_override("font_size", 8)
+		power_lbl.add_theme_color_override("font_color", Color(0.75, 0.95, 0.75))
+		power_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		col.add_child(power_lbl)
+
 	var use_btn := Button.new()
 	var is_battle: bool = index == Global.battle_deck_index
 	use_btn.text = "✓ BATTLE" if is_battle else "USE"

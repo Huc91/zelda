@@ -215,9 +215,12 @@ func _unhandled_input(event: InputEvent) -> void:
 func _start_battle() -> void:
 	player_deck = CardDB.deck_from_card_ids(Global.get_battle_deck_card_ids())
 	var diff: String = "easy"
+	var prebuilt_enemy_deck: Array = []
 	if is_instance_valid(enemy_actor) and "difficulty" in enemy_actor:
 		diff = str(enemy_actor.difficulty)
-	enemy_deck  = CardDB.enemy_deck_for_difficulty(diff)
+		if enemy_actor.has_method("get_battle_deck"):
+			prebuilt_enemy_deck = enemy_actor.call("get_battle_deck")
+	enemy_deck  = prebuilt_enemy_deck if not prebuilt_enemy_deck.is_empty() else CardDB.enemy_deck_for_difficulty(diff)
 	_ai_type    = _ai_runner.detect_ai_type_from_deck(enemy_deck)
 	player_hp = Global.player_hp
 	if not _draw_mandatory_refresh(player_hand, player_deck, CardBattleConstants.STARTING_HAND, true): return
@@ -292,15 +295,18 @@ func _draw_one(hand: Array, deck: Array) -> void:
 	if not deck.is_empty(): hand.append(deck.pop_front())
 	if hand == player_hand:
 		_check_osiris_combo_win()
-		for row in [player_front, player_rear]:
-			for obs in row:
-				if "draw_pings" in str(obs["data"].get("ability", "")):
-					_deal_damage_to_enemy(1)
+		# Star Prophet: only during your turn (not opening draw or end-of-turn hand refresh).
+		if is_player_turn:
+			for row in [player_front, player_rear]:
+				for obs in row:
+					if "draw_pings" in str(obs["data"].get("ability", "")):
+						_deal_damage_to_enemy(1)
 	elif hand == enemy_hand:
-		for row in [enemy_front, enemy_rear]:
-			for obs in row:
-				if "draw_pings" in str(obs["data"].get("ability", "")):
-					_deal_damage_to_player(1)
+		if not is_player_turn:
+			for row in [enemy_front, enemy_rear]:
+				for obs in row:
+					if "draw_pings" in str(obs["data"].get("ability", "")):
+						_deal_damage_to_player(1)
 
 
 func _log(s: String) -> void:
@@ -1387,6 +1393,10 @@ func _refresh_mimic_minions_and_front_atk_auras() -> void:
 					continue
 				if "aura_front_atk_1" in str(pf[j]["data"].get("ability", "")):
 					atk_b += 1
+			# Same as Komainu: Cultist aura applies from rear row too (Regalia often sits back).
+			for j in range(pr.size()):
+				if "aura_front_atk_1" in str(pr[j]["data"].get("ability", "")):
+					atk_b += 1
 			var hp_b: int = 0
 			for j in range(pf.size()):
 				if i == j:
@@ -1417,6 +1427,11 @@ func _refresh_mimic_minions_and_front_atk_auras() -> void:
 				if "aura_front_haste" in str(pf[j]["data"].get("ability", "")):
 					warlord_haste = true
 					break
+			if not warlord_haste:
+				for j in range(pr.size()):
+					if "aura_front_haste" in str(pr[j]["data"].get("ability", "")):
+						warlord_haste = true
+						break
 			if warlord_haste and not d.get("frozen", false):
 				var max_atk: int = 2 if d.get("double_attack", false) else 1
 				if int(d.get("attacked", 0)) < max_atk:
@@ -1555,7 +1570,7 @@ func _face_attack_followup(att: Dictionary, attacker_is_player: bool) -> void:
 			_draw_one(player_hand, player_deck)
 		else:
 			_draw_one(enemy_hand, enemy_deck)
-	if "haste_face_mana" in ab:
+	if "haste_face_mana" in ab or "face_damage_mana" in ab:
 		_log("%s %s gains +1 mana after face attack!" % [who, aname])
 		if attacker_is_player:
 			player_mana = mini(player_mana + 1, 10)

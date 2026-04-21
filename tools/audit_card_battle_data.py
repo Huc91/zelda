@@ -77,6 +77,7 @@ def main() -> None:
         "haste_lifesteal",
         "haste_unblockable",
         "haste_face_mana",
+        "face_damage_mana",
         "haste_face_draw",
         "taunt_poisonous",
         "taunt_lifesteal",

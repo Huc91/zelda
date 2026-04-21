@@ -92,6 +92,12 @@ const REWARD_BY_DIFF: Dictionary = {
 	"hard":   {"min": 50,  "max": 80},
 	"boss":   {"min": 200, "max": 200},
 }
+const _RARITY_POWER_POINTS: Dictionary = {
+	"common": 1,
+	"rare": 3,
+	"epic": 5,
+	"legendary": 8,
+}
 
 signal card_battle_requested(player_first: bool, enemy: Node)
 signal money_changed(new_amount: int)
@@ -410,6 +416,69 @@ func get_battle_deck_card_ids() -> Array:
 		push_warning("Active deck is invalid — falling back to starter deck.")
 		return CardDB.STARTER_DECK.duplicate()
 	return ids.duplicate()
+
+
+## Computes deck power score based on rarity and demon efficiency.
+## - rarity_power = sum(rarity points)/20
+## - raw_power = sum(demon power)/sum(demon mana), where demon power = atk + 1 if has ability
+## - final_power = rarity_power * raw_power
+func get_deck_power_breakdown(deck_index: int) -> Dictionary:
+	if deck_index < 0 or deck_index >= player_decks.size():
+		return _empty_deck_power_breakdown()
+	var raw_ids: Variant = player_decks[deck_index].get("card_ids", [])
+	if typeof(raw_ids) != TYPE_ARRAY:
+		return _empty_deck_power_breakdown()
+	return get_deck_power_breakdown_for_card_ids(raw_ids as Array)
+
+
+func get_deck_power_breakdown_for_card_ids(card_ids: Array) -> Dictionary:
+	var rarity_sum: int = 0
+	var demon_power_sum: int = 0
+	var demon_mana_sum: int = 0
+	for idv: Variant in card_ids:
+		if typeof(idv) != TYPE_STRING:
+			continue
+		var card: Dictionary = CardDB.get_card(idv as String)
+		if card.is_empty():
+			continue
+		var rarity: String = str(card.get("rarity", "common")).to_lower()
+		rarity_sum += int(_RARITY_POWER_POINTS.get(rarity, 1))
+		if str(card.get("type", "")) != "demon":
+			continue
+		var atk: int = int(card.get("atk", 0))
+		var mana: int = int(card.get("cost", 0))
+		demon_power_sum += atk + _deck_card_ability_power(card)
+		demon_mana_sum += mana
+	var rarity_power: float = float(rarity_sum) / 20.0
+	var raw_power: float = 0.0
+	if demon_mana_sum > 0:
+		raw_power = float(demon_power_sum) / float(demon_mana_sum)
+	return {
+		"rarity_power": rarity_power,
+		"raw_power": raw_power,
+		"final_power": rarity_power * raw_power,
+		"rarity_sum": rarity_sum,
+		"demon_power_sum": demon_power_sum,
+		"demon_mana_sum": demon_mana_sum,
+	}
+
+
+func _empty_deck_power_breakdown() -> Dictionary:
+	return {
+		"rarity_power": 0.0,
+		"raw_power": 0.0,
+		"final_power": 0.0,
+		"rarity_sum": 0,
+		"demon_power_sum": 0,
+		"demon_mana_sum": 0,
+	}
+
+
+func _deck_card_ability_power(card: Dictionary) -> int:
+	var ability: String = str(card.get("ability", "")).strip_edges()
+	if ability == "skeleton_horde":
+		return 0
+	return 0 if ability.is_empty() else 1
 
 
 func apply_deck_edit(deck_index: int, deck_name: String, card_ids: Array) -> void:

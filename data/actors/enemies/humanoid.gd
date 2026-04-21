@@ -18,6 +18,7 @@ var _path_idx: int = 0
 var _path_timer: float = 0.0
 const PATH_REFRESH: float = 0.35
 const WAYPOINT_REACH: float = 6.0
+const SPEED_MULT: float = 0.8
 
 
 func _ready() -> void:
@@ -30,6 +31,7 @@ func _ready() -> void:
 		"hard":
 			hearts = 2.0
 			speed = 72.0
+	speed *= SPEED_MULT
 	health = hearts
 
 
@@ -73,8 +75,6 @@ func state_default() -> void:
 func state_wander() -> void:
 	if is_on_wall():
 		move_direction = _get_random_direction()
-		_change_state(state_wander)
-		return
 
 	velocity = move_direction * speed
 	move_and_slide()
@@ -133,3 +133,4 @@ func state_chase() -> void:
 		_path = PackedVector2Array()
 		_path_idx = 0
 		_change_state(state_default)
+

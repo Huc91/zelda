@@ -7,15 +7,22 @@ const DIFF_MODULATE: Dictionary = {
 	"hard":   Color(1.0, 0.35, 0.35),
 }
 
+const SWORD_SCENE: PackedScene = preload("res://data/actors/attacks/sword.tscn")
+const ATTACK_RANGE: float = 36.0
+const ATTACK_COOLDOWN: float = 0.9
+
 @export var aggro_range: float = 80.0
 @export var wander_time: float = 1.4
 
 var move_direction: Vector2 = Vector2.DOWN
 var _player: Actor = null
+## Per-scene damage applies to sword swings only; body contact uses 0 (see _ready).
+var _sword_damage: float = 0.5
 
 var _path: PackedVector2Array = PackedVector2Array()
 var _path_idx: int = 0
 var _path_timer: float = 0.0
+var _attack_cooldown: float = 0.0
 const PATH_REFRESH: float = 0.35
 const WAYPOINT_REACH: float = 6.0
 const SPEED_MULT: float = 0.8
@@ -33,6 +40,8 @@ func _ready() -> void:
 			speed = 72.0
 	speed *= SPEED_MULT
 	health = hearts
+	_sword_damage = damage
+	damage = 0.0
 
 
 func _on_attacked(_source: Node) -> void:
@@ -58,6 +67,15 @@ func _get_map() -> Map:
 	return null
 
 
+func get_sword_damage() -> float:
+	return _sword_damage
+
+
+func _on_sword_swing_finished() -> void:
+	_attack_cooldown = ATTACK_COOLDOWN
+	_change_state(state_chase)
+
+
 # ── States ────────────────────────────────────────────────────
 
 func state_default() -> void:
@@ -73,6 +91,8 @@ func state_default() -> void:
 
 
 func state_wander() -> void:
+	if Global.in_battle:
+		return
 	if is_on_wall():
 		move_direction = _get_random_direction()
 
@@ -94,13 +114,34 @@ func state_wander() -> void:
 		_change_state(state_default)
 
 
+func state_swing() -> void:
+	if Global.in_battle:
+		return
+	# Hold last walk frame; sword.tscn provides the blade motion.
+	sprite.stop()
+
+
 func state_chase() -> void:
+	if Global.in_battle:
+		return
 	var p: Actor = _get_player()
 	if p == null:
 		_change_state(state_default)
 		return
 
 	var dt: float = get_process_delta_time()
+	_attack_cooldown = maxf(0.0, _attack_cooldown - dt)
+
+	if _attack_cooldown <= 0.0 and position.distance_to(p.position) <= ATTACK_RANGE:
+		var to_p: Vector2 = p.position - position
+		if to_p.length_squared() > 0.0001:
+			_update_sprite_direction(to_p.normalized())
+			move_direction = to_p.normalized()
+		var sw: Node = SWORD_SCENE.instantiate()
+		get_parent().add_child(sw)
+		(sw as Attack).activate(self)
+		return
+
 	_path_timer -= dt
 
 	if _path_timer <= 0.0 or _path_idx >= _path.size():

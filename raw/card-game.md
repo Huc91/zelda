@@ -5,7 +5,7 @@
 - deck of 30 cards.
 - Who goes second start with an extra mana free mana.
 - draw 5 start of game
-- you have 15 life points.
+- you have 12 life points.
 - every card has a cost
 - to play a card you must pay the cost
 - every card can be pitched to generate 1 mana.

@@ -29,7 +29,10 @@ var target_cell_position : Vector2i:
 func activate(u) -> void:
 	user = u
 	actor_type = user.actor_type
-	damage = 0.5
+	if user.has_method("get_sword_damage"):
+		damage = user.get_sword_damage()
+	else:
+		damage = 0.5
 	user.current_state = user.state_swing
 	user.connect("on_hit", queue_free)
 	user.ray.add_exception(self)
@@ -40,7 +43,10 @@ func activate(u) -> void:
 
 
 func _on_swing_finished() -> void:
-	user.current_state = user.state_default
+	if user != null and user.has_method("_on_sword_swing_finished"):
+		user._on_sword_swing_finished()
+	else:
+		user.current_state = user.state_default
 	queue_free()
 
 

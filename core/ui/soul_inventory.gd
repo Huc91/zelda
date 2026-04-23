@@ -35,8 +35,9 @@ const VISIBLE_ROWS: int = 12
 var _list: Array[String] = []
 var _cursor: int = 0
 var _font: Font
+var _back_rect: Rect2 = Rect2(16, 24, 92, 28)
 
-signal closed
+signal back_requested
 
 class _View extends Control:
 	var b: SoulInventory
@@ -44,6 +45,8 @@ class _View extends Control:
 		b._on_draw()
 	func _process(_dt: float) -> void:
 		b._handle_input()
+	func _gui_input(event: InputEvent) -> void:
+		b._handle_gui_input(event)
 
 var _view: _View
 
@@ -85,8 +88,16 @@ func _handle_input() -> void:
 		_try_equip()
 	elif Input.is_action_just_pressed("interact") or Input.is_action_just_pressed("b"):
 		_try_unequip_selected_soul()
-	elif Input.is_action_just_pressed("pause"):
-		closed.emit()
+
+
+func _handle_gui_input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if event is InputEventMouseButton:
+		var mb: InputEventMouseButton = event as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT and _back_rect.has_point(mb.position):
+			request_back()
+			_view.accept_event()
 
 
 func _try_equip() -> void:
@@ -124,9 +135,13 @@ func _on_draw() -> void:
 	if _font == null:
 		return
 
+	_draw_header_button()
+
 	# Title
-	_view.draw_string(_font, Vector2(32, 32), "SOUL INVENTORY",
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 20, C_TEXT)
+	var title: String = "SOUL SYSTEM"
+	var title_w: float = _font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x
+	_view.draw_string(_font, Vector2((float(W) - title_w) * 0.5, 40.0),
+		title, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, C_TEXT)
 
 	# ── Equipped slots ──────────────────────────────────────────
 	var total_slots_w: int = 3 * SLOT_W + 2 * SLOT_PAD
@@ -217,5 +232,16 @@ func _on_draw() -> void:
 	# ── Hints ───────────────────────────────────────────────────
 	_view.draw_line(Vector2(32, H - 40), Vector2(W - 32, H - 40), BORDER, 2.0)
 	_view.draw_string(_font, Vector2(32, H - 18),
-		"UP/DOWN: navigate    X: equip    Z: unequip    I: cards    Esc: close",
+		"UP/DOWN: move    X: equip    Z: unequip    ESC: back    I: close",
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 11, C_MUTED)
+
+
+func request_back() -> void:
+	back_requested.emit()
+
+
+func _draw_header_button() -> void:
+	_view.draw_rect(_back_rect, Color(0.24, 0.20, 0.34))
+	_view.draw_rect(_back_rect, C_TEXT, false, 2.0)
+	_view.draw_string(_font, Vector2(28, 43), "< BACK",
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 10, C_TEXT)

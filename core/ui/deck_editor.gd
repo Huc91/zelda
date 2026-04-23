@@ -45,6 +45,7 @@ var _rect_next: Rect2 = Rect2()
 var _rect_cancel: Rect2 = Rect2()
 var _rect_save: Rect2 = Rect2()
 var _rect_deck_list_area: Rect2 = Rect2()
+var _rect_back: Rect2 = Rect2()
 
 var _save_err_msg: String = ""
 var _save_err_t: float = 0.0
@@ -381,6 +382,10 @@ func _draw() -> void:
 	_rects_collection.clear()
 	draw_rect(Rect2(0, 0, float(CardBattleConstants.W), float(CardBattleConstants.H)), CardBattleConstants.C_BG)
 	draw_rect(Rect2(0, 0, float(LEFT_W), float(CardBattleConstants.H)), CardBattleConstants.C_LEFT_BG)
+	_rect_back = Rect2(8.0, 6.0, 90.0, 24.0)
+	draw_rect(_rect_back, Color(0.24, 0.20, 0.34))
+	draw_rect(_rect_back, CardBattleConstants.C_TEXT, false, 2.0)
+	_str_in_rect_center("< BACK", _rect_back, 9, CardBattleConstants.C_TEXT)
 
 	var deck_sz: int = _edit_ids.size()
 	_str_r("%d/20" % deck_sz, 168.0, 6.0, 9, CardBattleConstants.C_HP_RED)
@@ -486,6 +491,7 @@ func _draw() -> void:
 	draw_rect(_rect_next, Color(0.88, 0.88, 0.92), false, 2.0)
 	_str_in_rect_center("< Prev", _rect_prev, 8, Color.WHITE)
 	_str_in_rect_center("Next >", _rect_next, 8, Color.WHITE)
+	_str_c("ESC: back    I: close to game", 470.0, fy - 16.0, 7, CardBattleConstants.C_MUTED)
 
 	if not _save_err_msg.is_empty():
 		_str(_save_err_msg, 8.0, fy - 14.0, 7, Color(1.0, 0.35, 0.35))
@@ -558,6 +564,9 @@ func _update_hover(p: Vector2) -> void:
 
 
 func _handle_click(pos: Vector2) -> void:
+	if _rect_back.has_point(pos):
+		close_cancel()
+		return
 	if _rect_cancel.has_point(pos):
 		close_cancel()
 		return

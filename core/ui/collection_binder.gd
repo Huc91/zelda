@@ -32,6 +32,7 @@ var _scroll_y: float = 0.0
 var _max_scroll: float = 0.0
 var _cards: Array = []
 var _grid_x0: float = 0.0
+var _back_rect: Rect2 = Rect2(16, 8, 92, 28)
 
 
 func _ready() -> void:
@@ -98,11 +99,7 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var ek: InputEventKey = event as InputEventKey
 		if ek.pressed:
-			if ek.keycode == KEY_ESCAPE or ek.keycode == KEY_TAB:
-				hide()
-				closed.emit()
-				get_viewport().set_input_as_handled()
-			elif ek.keycode == KEY_UP or ek.keycode == KEY_W:
+			if ek.keycode == KEY_UP or ek.keycode == KEY_W:
 				_scroll(-40.0)
 				get_viewport().set_input_as_handled()
 			elif ek.keycode == KEY_DOWN or ek.keycode == KEY_S:
@@ -132,7 +129,10 @@ func _on_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb: InputEventMouseButton = event as InputEventMouseButton
 		if mb.pressed:
-			if mb.button_index == MOUSE_BUTTON_WHEEL_UP:
+			if mb.button_index == MOUSE_BUTTON_LEFT and _back_rect.has_point(mb.position):
+				request_back()
+				_view.accept_event()
+			elif mb.button_index == MOUSE_BUTTON_WHEEL_UP:
 				_scroll(-32.0)
 				_view.accept_event()
 			elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
@@ -165,6 +165,7 @@ func _on_draw() -> void:
 
 	# Header drawn after cards so it always covers any card overflow
 	_view.draw_rect(Rect2(0, 0, W, HEADER_H), C_HDR)
+	_draw_back_button()
 	_draw_str_c("BASE SET COLLECTION", W * 0.5, 6, 12, Color.WHITE)
 
 	var total_owned: int = 0
@@ -173,7 +174,7 @@ func _on_draw() -> void:
 		if Global.card_collection.get(id, 0) > 0 or Global.foil_collection.get(id, 0) > 0:
 			total_owned += 1
 	_draw_str_r("%d / %d" % [total_owned, _cards.size()], W - 12, 6, 9, Color(0.85, 0.85, 0.85))
-	_draw_str_r("ESC to close", W - 12, 20, 8, Color(0.7, 0.7, 0.7))
+	_draw_str_c("UP/DOWN: scroll    ESC: back    I: close", W * 0.5, H - 20, 8, Color(0.7, 0.7, 0.7))
 
 	if _max_scroll > 0.0:
 		var track_h: float = float(H - HEADER_H - 4)
@@ -223,3 +224,14 @@ func _draw_str_r(text: String, rx: float, y: float, size: int, col: Color) -> vo
 		return
 	var tw: float = _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 	_view.draw_string(_font, Vector2(rx - tw, y + size), text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
+
+
+func request_back() -> void:
+	hide()
+	closed.emit()
+
+
+func _draw_back_button() -> void:
+	_view.draw_rect(_back_rect, Color(0.24, 0.20, 0.34))
+	_view.draw_rect(_back_rect, Color.WHITE, false, 2.0)
+	_draw_str("< BACK", _back_rect.position.x + 12.0, _back_rect.position.y + 7.0, 10, Color.WHITE)

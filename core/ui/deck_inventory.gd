@@ -13,6 +13,7 @@ signal deckbuilding_requested(deck_index: int)
 signal open_pack_requested
 signal binder_requested
 signal soul_system_requested
+signal close_requested
 
 # ── Card definitions ─────────────────────────────────────────────
 const CARDS: Array = [
@@ -46,12 +47,21 @@ const CARD_W:   int = 220
 const CARD_H:   int = 160
 const CARD_GAP: int = 24
 const GRID_Y:   int = 120
+const HUB_CARD_BG: Color = Color(0.18, 0.18, 0.26)
+const HUB_CARD_BORDER: Color = Color(0.44, 0.46, 0.60)
+const HUB_CARD_FOCUS: Color = Color(0.90, 0.85, 0.20)
+const HEADER_BTN_BG: Color = Color(0.24, 0.20, 0.34)
 
 var _hub: Control
 var _deck_list: Control
 var _slots_row: HBoxContainer
 var _new_deck_btn: Button
 var _money_lbl_dl: Label
+var _title_lbl: Label
+var _hint_lbl: Label
+var _header_action_btn: Button
+var _hub_buttons: Array[Button] = []
+var _hub_cursor: int = 0
 
 
 func _ready() -> void:
@@ -64,6 +74,24 @@ func _ready() -> void:
 	_build_hub()
 	_build_deck_list()
 	_show_hub()
+
+
+func _process(_delta: float) -> void:
+	if not visible or ScreenFX.playing:
+		return
+	if not _hub.visible:
+		return
+	if Input.is_action_just_pressed("left"):
+		_move_hub_cursor(-1, 0)
+	elif Input.is_action_just_pressed("right"):
+		_move_hub_cursor(1, 0)
+	elif Input.is_action_just_pressed("up"):
+		_move_hub_cursor(0, -1)
+	elif Input.is_action_just_pressed("down"):
+		_move_hub_cursor(0, 1)
+	elif Input.is_action_just_pressed("attack") or Input.is_action_just_pressed("interact"):
+		if _hub_cursor >= 0 and _hub_cursor < _hub_buttons.size():
+			_hub_buttons[_hub_cursor].emit_signal("pressed")
 
 
 func _build_bg() -> void:
@@ -82,9 +110,17 @@ func _build_bg() -> void:
 	title.add_theme_font_size_override("font_size", 22)
 	title.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
 	add_child(title)
+	_title_lbl = title
+
+	_header_action_btn = Button.new()
+	_header_action_btn.position = Vector2i(16, 24)
+	_header_action_btn.custom_minimum_size = Vector2i(92, 28)
+	_header_action_btn.focus_mode = Control.FOCUS_NONE
+	_style_flat(_header_action_btn, HEADER_BTN_BG)
+	_header_action_btn.pressed.connect(_on_header_action_pressed)
+	add_child(_header_action_btn)
 
 	var hint := Label.new()
-	hint.text = "ESC — back to game"
 	hint.position = Vector2i(0, 544)
 	hint.size = Vector2i(640, 20)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -92,6 +128,7 @@ func _build_bg() -> void:
 	hint.add_theme_font_size_override("font_size", 10)
 	hint.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
 	add_child(hint)
+	_hint_lbl = hint
 
 
 func _build_hub() -> void:
@@ -111,39 +148,44 @@ func _build_hub() -> void:
 		var row: int = i / 2
 		var cx: int = start_x + col * (CARD_W + CARD_GAP)
 		var cy: int = start_y + row * (CARD_H + CARD_GAP)
-		_hub.add_child(_make_card(card_def, cx, cy, i))
+		var card_btn: Button = _make_card(card_def, cx, cy, i)
+		_hub_buttons.append(card_btn)
+		_hub.add_child(card_btn)
 
 
-func _make_card(def: Dictionary, cx: int, cy: int, idx: int) -> Control:
-	var col: Color = def["color"] as Color
-
+func _make_card(def: Dictionary, cx: int, cy: int, idx: int) -> Button:
 	var btn := Button.new()
 	btn.position = Vector2i(cx, cy)
 	btn.custom_minimum_size = Vector2i(CARD_W, CARD_H)
-	btn.focus_mode = Control.FOCUS_NONE
+	btn.focus_mode = Control.FOCUS_ALL
 	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	btn.focus_entered.connect(_on_hub_button_focus_entered.bind(idx))
 
 	# Normal
 	var sb_n := StyleBoxFlat.new()
-	sb_n.bg_color = col
+	sb_n.bg_color = HUB_CARD_BG
 	sb_n.set_corner_radius_all(6)
 	sb_n.border_width_left   = 2
 	sb_n.border_width_right  = 2
 	sb_n.border_width_top    = 2
 	sb_n.border_width_bottom = 2
-	sb_n.border_color = col.lightened(0.15)
+	sb_n.border_color = HUB_CARD_BORDER
 	btn.add_theme_stylebox_override("normal", sb_n)
 
 	# Hover
 	var sb_h := sb_n.duplicate() as StyleBoxFlat
-	sb_h.bg_color = col.lightened(0.18)
-	sb_h.border_color = Color(1, 1, 1)
+	sb_h.bg_color = HUB_CARD_BG.lightened(0.10)
+	sb_h.border_color = HUB_CARD_FOCUS
 	btn.add_theme_stylebox_override("hover", sb_h)
 
 	# Pressed
 	var sb_p := sb_n.duplicate() as StyleBoxFlat
-	sb_p.bg_color = col.darkened(0.18)
+	sb_p.bg_color = HUB_CARD_BG.darkened(0.16)
+	sb_p.border_color = HUB_CARD_FOCUS
 	btn.add_theme_stylebox_override("pressed", sb_p)
+
+	var sb_f := sb_h.duplicate() as StyleBoxFlat
+	btn.add_theme_stylebox_override("focus", sb_f)
 
 	btn.add_theme_color_override("font_color", Color(1, 1, 1))
 	btn.add_theme_font_override("font", FONT)
@@ -194,20 +236,10 @@ func _build_deck_list() -> void:
 	_deck_list.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_deck_list)
 
-	# Back button
-	var back_btn := Button.new()
-	back_btn.text = "← BACK"
-	back_btn.position = Vector2i(16, 64)
-	back_btn.custom_minimum_size = Vector2i(100, 28)
-	back_btn.focus_mode = Control.FOCUS_NONE
-	_style_flat(back_btn, Color(0.25, 0.20, 0.35))
-	back_btn.pressed.connect(_show_hub)
-	_deck_list.add_child(back_btn)
-
 	# "Your Decks" title
 	var sub_title := Label.new()
 	sub_title.text = "DECKBUILDER"
-	sub_title.position = Vector2i(0, 68)
+	sub_title.position = Vector2i(0, 64)
 	sub_title.size = Vector2i(640, 28)
 	sub_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub_title.add_theme_font_override("font", FONT)
@@ -239,7 +271,7 @@ func _build_deck_list() -> void:
 	_new_deck_btn.text = "+ NEW DECK"
 	_new_deck_btn.position = Vector2i(240, 450)
 	_new_deck_btn.custom_minimum_size = Vector2i(160, 30)
-	_new_deck_btn.focus_mode = Control.FOCUS_NONE
+	_new_deck_btn.focus_mode = Control.FOCUS_ALL
 	_style_flat(_new_deck_btn, Color(0.32, 0.10, 0.62))
 	_new_deck_btn.pressed.connect(_on_new_deck_pressed)
 	_deck_list.add_child(_new_deck_btn)
@@ -248,11 +280,18 @@ func _build_deck_list() -> void:
 func _show_hub() -> void:
 	_hub.visible = true
 	_deck_list.visible = false
+	_title_lbl.text = "INVENTORY"
+	_header_action_btn.text = "CLOSE"
+	_hint_lbl.text = "ARROWS: move    X/Z: select    ESC/I: close"
+	_focus_hub_button(_hub_cursor)
 
 
 func _show_deck_list() -> void:
 	_hub.visible = false
 	_deck_list.visible = true
+	_title_lbl.text = "DECKBUILDER"
+	_header_action_btn.text = "< BACK"
+	_hint_lbl.text = "ESC: back    I: close to game"
 	refresh_decks()
 
 
@@ -283,7 +322,7 @@ func _make_deck_slot(index: int, deck: Dictionary) -> Control:
 	icon.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
 	icon.custom_minimum_size = Vector2(96, 130)
 	icon.ignore_texture_size = true
-	icon.focus_mode = Control.FOCUS_NONE
+	icon.focus_mode = Control.FOCUS_ALL
 	if index == Global.battle_deck_index:
 		icon.modulate = Color(1.15, 1.15, 1.0)
 	icon.pressed.connect(_on_deck_icon_pressed.bind(index))
@@ -320,7 +359,7 @@ func _make_deck_slot(index: int, deck: Dictionary) -> Control:
 	var is_battle: bool = index == Global.battle_deck_index
 	use_btn.text = "✓ BATTLE" if is_battle else "USE"
 	use_btn.custom_minimum_size = Vector2(100, 26)
-	use_btn.focus_mode = Control.FOCUS_NONE
+	use_btn.focus_mode = Control.FOCUS_ALL
 	use_btn.disabled = is_battle
 	_style_flat(use_btn, Color(0.08, 0.42, 0.15))
 	use_btn.pressed.connect(_on_deck_icon_pressed.bind(index))
@@ -329,7 +368,7 @@ func _make_deck_slot(index: int, deck: Dictionary) -> Control:
 	var edit_btn := Button.new()
 	edit_btn.text = "EDIT"
 	edit_btn.custom_minimum_size = Vector2(100, 26)
-	edit_btn.focus_mode = Control.FOCUS_NONE
+	edit_btn.focus_mode = Control.FOCUS_ALL
 	_style_flat(edit_btn, Color(0.20, 0.20, 0.38))
 	edit_btn.pressed.connect(_on_edit_pressed.bind(index))
 	col.add_child(edit_btn)
@@ -337,7 +376,7 @@ func _make_deck_slot(index: int, deck: Dictionary) -> Control:
 	var del_btn := Button.new()
 	del_btn.text = "DELETE"
 	del_btn.custom_minimum_size = Vector2(100, 26)
-	del_btn.focus_mode = Control.FOCUS_NONE
+	del_btn.focus_mode = Control.FOCUS_ALL
 	del_btn.disabled = Global.player_decks.size() <= 1
 	_style_flat(del_btn, Color(0.40, 0.08, 0.08))
 	del_btn.pressed.connect(_on_delete_pressed.bind(index))
@@ -357,6 +396,8 @@ func _style_flat(btn: Button, bg: Color) -> void:
 	var sb_p := sb.duplicate() as StyleBoxFlat
 	sb_p.bg_color = bg.darkened(0.15)
 	btn.add_theme_stylebox_override("pressed", sb_p)
+	var sb_f := sb_h.duplicate() as StyleBoxFlat
+	btn.add_theme_stylebox_override("focus", sb_f)
 	var sb_d := sb.duplicate() as StyleBoxFlat
 	sb_d.bg_color = bg.darkened(0.30)
 	btn.add_theme_stylebox_override("disabled", sb_d)
@@ -393,3 +434,49 @@ func _on_new_deck_pressed() -> void:
 	var new_idx: int = Global.player_decks.size() - 1
 	refresh_decks()
 	emit_signal("deckbuilding_requested", new_idx)
+
+
+func is_root_screen() -> bool:
+	return _hub.visible
+
+
+func go_back() -> bool:
+	if _deck_list.visible:
+		_show_hub()
+		return true
+	return false
+
+
+func reset_to_root() -> void:
+	_show_hub()
+
+
+func _move_hub_cursor(dx: int, dy: int) -> void:
+	if _hub_buttons.is_empty():
+		return
+	var col: int = _hub_cursor % 2
+	var row: int = _hub_cursor / 2
+	col = clampi(col + dx, 0, 1)
+	row = clampi(row + dy, 0, 1)
+	var next_idx: int = row * 2 + col
+	if next_idx >= 0 and next_idx < _hub_buttons.size():
+		_focus_hub_button(next_idx)
+		Sound.play(preload("res://data/sfx/LA_Menu_Cursor.wav"))
+
+
+func _focus_hub_button(idx: int) -> void:
+	if idx < 0 or idx >= _hub_buttons.size():
+		return
+	_hub_cursor = idx
+	_hub_buttons[idx].grab_focus()
+
+
+func _on_hub_button_focus_entered(idx: int) -> void:
+	_hub_cursor = idx
+
+
+func _on_header_action_pressed() -> void:
+	if _deck_list.visible:
+		_show_hub()
+		return
+	close_requested.emit()

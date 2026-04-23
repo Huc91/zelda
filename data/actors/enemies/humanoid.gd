@@ -26,6 +26,9 @@ var _attack_cooldown: float = 0.0
 const PATH_REFRESH: float = 0.35
 const WAYPOINT_REACH: float = 6.0
 const SPEED_MULT: float = 0.8
+const ATTACK_ALIGN_SLACK: float = 10.0
+const AXIS_LOCK_BIAS: float = 0.1
+const PLAYER_SPACE_RADIUS: float = 14.0
 
 
 func _ready() -> void:
@@ -71,6 +74,74 @@ func get_sword_damage() -> float:
 	return _sword_damage
 
 
+func _play_humanoid_walk(dir: Vector2) -> void:
+	if dir == Vector2.ZERO:
+		return
+	_update_sprite_direction(dir)
+	_play_animation("Walk")
+	sprite.flip_h = sprite_direction == "Right"
+
+
+func _refresh_path(target_pos: Vector2) -> void:
+	_path_timer = PATH_REFRESH
+	var map: Map = _get_map()
+	if map == null:
+		_path = PackedVector2Array()
+		_path_idx = 0
+		return
+	_path = map.nav_find_path(position, target_pos)
+	_path_idx = 0
+
+
+func _get_chase_direction(target_pos: Vector2) -> Vector2:
+	while _path_idx < _path.size() and position.distance_to(_path[_path_idx]) < WAYPOINT_REACH:
+		_path_idx += 1
+	if _path_idx < _path.size():
+		return (_path[_path_idx] - position).normalized()
+	return (target_pos - position).normalized()
+
+
+func _axis_locked_direction(dir: Vector2) -> Vector2:
+	if dir == Vector2.ZERO:
+		return Vector2.ZERO
+	var abs_x: float = absf(dir.x)
+	var abs_y: float = absf(dir.y)
+	if abs_x > abs_y + AXIS_LOCK_BIAS:
+		return Vector2.RIGHT if dir.x > 0.0 else Vector2.LEFT
+	if abs_y > abs_x + AXIS_LOCK_BIAS:
+		return Vector2.DOWN if dir.y > 0.0 else Vector2.UP
+	if move_direction.x != 0.0:
+		return Vector2.RIGHT if dir.x >= 0.0 else Vector2.LEFT
+	return Vector2.DOWN if dir.y >= 0.0 else Vector2.UP
+
+
+func _can_attack_player(to_p: Vector2) -> bool:
+	var abs_x: float = absf(to_p.x)
+	var abs_y: float = absf(to_p.y)
+	if abs_x >= abs_y:
+		return abs_x <= ATTACK_RANGE and abs_y <= ATTACK_ALIGN_SLACK
+	return abs_y <= ATTACK_RANGE and abs_x <= ATTACK_ALIGN_SLACK
+
+
+func _can_enter_player_space(dir: Vector2, player: Actor, dt: float) -> bool:
+	if dir == Vector2.ZERO:
+		return false
+	var next_pos: Vector2 = position + dir * speed * dt
+	return next_pos.distance_to(player.position) < PLAYER_SPACE_RADIUS
+
+
+func _secondary_chase_direction(to_p: Vector2, primary_dir: Vector2) -> Vector2:
+	if primary_dir.x != 0.0:
+		if absf(to_p.y) <= 0.001:
+			return Vector2.ZERO
+		return Vector2.DOWN if to_p.y > 0.0 else Vector2.UP
+	if primary_dir.y != 0.0:
+		if absf(to_p.x) <= 0.001:
+			return Vector2.ZERO
+		return Vector2.RIGHT if to_p.x > 0.0 else Vector2.LEFT
+	return Vector2.ZERO
+
+
 func _on_sword_swing_finished() -> void:
 	_attack_cooldown = ATTACK_COOLDOWN
 	_change_state(state_chase)
@@ -99,8 +170,7 @@ func state_wander() -> void:
 	velocity = move_direction * speed
 	move_and_slide()
 	_check_collisions()
-	_update_sprite_direction(move_direction)
-	_play_animation("Walk")
+	_play_humanoid_walk(move_direction)
 
 	var p: Actor = _get_player()
 	if p != null and position.distance_to(p.position) <= aggro_range:
@@ -118,7 +188,9 @@ func state_swing() -> void:
 	if Global.in_battle:
 		return
 	# Hold last walk frame; sword.tscn provides the blade motion.
+	velocity = Vector2.ZERO
 	sprite.stop()
+	sprite.flip_h = sprite_direction == "Right"
 
 
 func state_chase() -> void:
@@ -132,11 +204,12 @@ func state_chase() -> void:
 	var dt: float = get_process_delta_time()
 	_attack_cooldown = maxf(0.0, _attack_cooldown - dt)
 
-	if _attack_cooldown <= 0.0 and position.distance_to(p.position) <= ATTACK_RANGE:
-		var to_p: Vector2 = p.position - position
+	var to_p: Vector2 = p.position - position
+	if _attack_cooldown <= 0.0 and _can_attack_player(to_p):
 		if to_p.length_squared() > 0.0001:
-			_update_sprite_direction(to_p.normalized())
-			move_direction = to_p.normalized()
+			move_direction = _axis_locked_direction(to_p.normalized())
+			_play_humanoid_walk(move_direction)
+		velocity = Vector2.ZERO
 		var sw: Node = SWORD_SCENE.instantiate()
 		get_parent().add_child(sw)
 		(sw as Attack).activate(self)
@@ -145,33 +218,26 @@ func state_chase() -> void:
 	_path_timer -= dt
 
 	if _path_timer <= 0.0 or _path_idx >= _path.size():
-		_path_timer = PATH_REFRESH
-		var map: Map = _get_map()
-		if map != null:
-			_path = map.nav_find_path(position, p.position)
-			_path_idx = 0
-			if _path.size() > 0 and position.distance_to(_path[0]) < WAYPOINT_REACH:
-				_path_idx = 1
+		_refresh_path(p.position)
 
-	var dir: Vector2 = Vector2.ZERO
-	if _path_idx < _path.size():
-		var target: Vector2 = _path[_path_idx]
-		dir = (target - position).normalized()
-		if position.distance_to(target) < WAYPOINT_REACH:
-			_path_idx += 1
-	else:
-		dir = (p.position - position).normalized()
+	var dir: Vector2 = _axis_locked_direction(_get_chase_direction(p.position))
+	if _can_enter_player_space(dir, p, dt):
+		var alt_dir: Vector2 = _secondary_chase_direction(to_p, dir)
+		if alt_dir != Vector2.ZERO and not _can_enter_player_space(alt_dir, p, dt):
+			dir = alt_dir
+		else:
+			dir = Vector2.ZERO
 
 	if dir != Vector2.ZERO:
 		velocity = dir * speed
 		move_and_slide()
 		_check_collisions()
-		_update_sprite_direction(dir)
-		_play_animation("Walk")
+		_play_humanoid_walk(dir)
 		move_direction = dir
+	else:
+		velocity = Vector2.ZERO
 
 	if position.distance_to(p.position) > aggro_range * 1.6:
 		_path = PackedVector2Array()
 		_path_idx = 0
 		_change_state(state_default)
-

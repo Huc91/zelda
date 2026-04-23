@@ -77,6 +77,8 @@ signal dialogue_event(event_name: String, npc_id: String)
 
 ## Legacy: kept as empty dict so any code still referencing player_items doesn't crash.
 var player_items: Dictionary = {}
+## Number of unopened base set packs owned by the player.
+var base_set_packs: int = 0
 
 # ── Economy constants ────────────────────────────────────────────────
 const PACK_COST: int        = 10
@@ -153,6 +155,7 @@ func reset_new_game() -> void:
 	lit_bonfires.clear()
 	collected_pickups.clear()
 	player_items.clear()
+	base_set_packs = 0
 	card_collection.clear()
 	foil_collection.clear()
 	player_decks.clear()
@@ -548,6 +551,7 @@ func save_game() -> void:
 		"battle_deck_index": battle_deck_index,
 		"collected_pickups": pickups_serial,
 		"lit_bonfires": _serialize_vec2_dict(lit_bonfires),
+		"base_set_packs": base_set_packs,
 	}
 	data["dev_mode"] = dev_mode
 	var f: FileAccess = FileAccess.open(_active_save_path(), FileAccess.WRITE)
@@ -597,6 +601,8 @@ func load_game() -> bool:
 			if typeof(entry) == TYPE_DICTIONARY:
 				player_decks.append(entry as Dictionary)
 	battle_deck_index = int(data.get("battle_deck_index", 0))
+	base_set_packs = int(data.get("base_set_packs", int(player_items.get("base_set_pack", 0))))
+	player_items["base_set_pack"] = base_set_packs
 	var ps: Variant = data.get("collected_pickups", {})
 	if typeof(ps) == TYPE_DICTIONARY:
 		collected_pickups = _deserialize_vec2_dict(ps as Dictionary)
@@ -659,6 +665,21 @@ func spend_money(amount: int) -> bool:
 		return false
 	money -= amount
 	money_changed.emit(money)
+	return true
+
+
+func add_base_set_pack(amount: int = 1) -> void:
+	if amount <= 0:
+		return
+	base_set_packs += amount
+	player_items["base_set_pack"] = base_set_packs
+
+
+func consume_base_set_pack() -> bool:
+	if base_set_packs <= 0:
+		return false
+	base_set_packs -= 1
+	player_items["base_set_pack"] = base_set_packs
 	return true
 
 

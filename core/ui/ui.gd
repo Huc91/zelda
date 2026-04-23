@@ -181,7 +181,7 @@ func _ensure_binder() -> void:
 
 func _on_open_pack_requested() -> void:
 	_ensure_pack_opening()
-	if Global.money < Global.PACK_COST:
+	if Global.base_set_packs <= 0:
 		return
 	deck_inventory.hide()
 	_pack_opening.open_pack()

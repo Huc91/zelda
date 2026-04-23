@@ -63,6 +63,8 @@ func _build_visuals() -> void:
 
 
 func _apply_sprite_frame() -> void:
+	if _sprite != null:
+		_sprite.flip_h = false
 	_set_sprite_region_column(sprite_frame)
 
 
@@ -99,10 +101,16 @@ func _calc_player_dir(player: Node) -> int:
 	if dx > 0 and dx < 16 and dy > -8 and dy < 8:
 		return 2
 	elif dx < 0 and dx > -16 and dy > -8 and dy < 8:
-		return 0
+		return 2
 	elif dy > 0 and dx > -8 and dx < 8:
 		return 1
 	return 0
+
+
+func _should_flip_talk_sprite(player: Node) -> bool:
+	var dx: float = position.x - player.position.x
+	var dy: float = position.y - player.position.y
+	return dx < 0 and dx > -16 and dy > -8 and dy < 8
 
 
 func _talk() -> void:
@@ -117,6 +125,7 @@ func _talk() -> void:
 		_flag_label.visible = false
 		Global.npc_flags_dismissed[dialogue_id] = true
 
+	_sprite.flip_h = _should_flip_talk_sprite(player)
 	_set_sprite_region_column(_calc_player_dir(player))
 
 	var seq_idx: int = Global.npc_progress.get(dialogue_id, 0)

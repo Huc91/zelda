@@ -80,9 +80,9 @@ func _ready() -> void:
 	hide()
 
 
-## Call this to start a pack opening. Deducts cost from money.
+## Call this to start a pack opening. Requires one owned Base Set pack.
 func open_pack() -> void:
-	if not Global.spend_money(Global.PACK_COST):
+	if not Global.consume_base_set_pack():
 		return
 	_pack_cards = CardDB.roll_pack()
 	_revealed_count = 0

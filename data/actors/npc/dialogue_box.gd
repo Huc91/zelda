@@ -37,6 +37,7 @@ var _displayed: String = ""
 var _char_timer: float = 0.0
 var _phase: _Phase = _Phase.TYPING
 var _hovered_choice: int = -1
+var _selected_choice: int = -1
 
 var _view: Control
 var _font: Font
@@ -92,7 +93,18 @@ func _on_input(event: InputEvent) -> void:
 		if not ek.pressed:
 			return
 		if _phase == _Phase.CHOICES:
-			if ek.keycode == KEY_1 and _choices.size() >= 1:
+			if ek.keycode == KEY_UP and not _choices.is_empty():
+				_selected_choice = maxi(0, _selected_choice - 1)
+				_hovered_choice = _selected_choice
+				_view.queue_redraw()
+			elif ek.keycode == KEY_DOWN and not _choices.is_empty():
+				_selected_choice = mini(_choices.size() - 1, _selected_choice + 1)
+				_hovered_choice = _selected_choice
+				_view.queue_redraw()
+			elif ek.keycode in [KEY_Z, KEY_SPACE, KEY_ENTER]:
+				if _selected_choice >= 0:
+					_pick_choice(_selected_choice)
+			elif ek.keycode == KEY_1 and _choices.size() >= 1:
 				_pick_choice(0)
 			elif ek.keycode == KEY_2 and _choices.size() >= 2:
 				_pick_choice(1)
@@ -115,6 +127,8 @@ func _on_input(event: InputEvent) -> void:
 			var mm: InputEventMouseMotion = event as InputEventMouseMotion
 			var prev: int = _hovered_choice
 			_hovered_choice = _choice_at(mm.position)
+			if _hovered_choice >= 0:
+				_selected_choice = _hovered_choice
 			if _hovered_choice != prev:
 				_view.queue_redraw()
 
@@ -134,7 +148,8 @@ func _advance() -> void:
 	# All lines done
 	if not _choices.is_empty():
 		_phase = _Phase.CHOICES
-		_hovered_choice = -1
+		_hovered_choice = 0
+		_selected_choice = 0
 		_view.queue_redraw()
 	else:
 		_close(_sequence_event)
@@ -155,13 +170,12 @@ func _close(event: String) -> void:
 # ── Drawing ──────────────────────────────────────────────────────
 
 func _choice_rect(idx: int) -> Rect2:
-	const CHOICE_H: int = 20
-	const CHOICE_GAP: int = 4
-	var total: int = _choices.size()
-	var block_h: int = total * CHOICE_H + (total - 1) * CHOICE_GAP
-	var start_y: float = float(BOX_Y) - float(block_h) - 10.0
-	var cy: float = start_y + float(idx) * float(CHOICE_H + CHOICE_GAP)
-	return Rect2(float(BOX_X), cy, float(BOX_W), float(CHOICE_H))
+	const CHOICE_H: int = 14
+	const CHOICE_GAP: int = 2
+	const CHOICE_TOP: int = 34
+	const CHOICE_INSET_X: int = 8
+	var cy: int = BOX_Y + CHOICE_TOP + idx * (CHOICE_H + CHOICE_GAP)
+	return Rect2(BOX_X + CHOICE_INSET_X, cy, BOX_W - CHOICE_INSET_X * 2, CHOICE_H)
 
 
 func _choice_at(pos: Vector2) -> int:
@@ -174,17 +188,6 @@ func _choice_at(pos: Vector2) -> int:
 func _on_draw() -> void:
 	if _font == null:
 		return
-
-	# Choices drawn below the main box
-	if _phase == _Phase.CHOICES:
-		for i in _choices.size():
-			var r: Rect2 = _choice_rect(i)
-			var bg: Color = C_CHOICE_HOV if i == _hovered_choice else C_CHOICE_BG
-			_view.draw_rect(r, bg)
-			_view.draw_rect(r, C_BORDER, false, 1.0)
-			var label: String = "%d. %s" % [i + 1, _choices[i].get("text", "")]
-			_view.draw_string(_font, Vector2(r.position.x + 8.0, r.position.y + 14.0),
-				label, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, C_CHOICE_TXT)
 
 	# Speaker name tab
 	if _speaker != "":
@@ -205,6 +208,18 @@ func _on_draw() -> void:
 	if not _displayed.is_empty():
 		_view.draw_string(_font, Vector2(float(BOX_X) + 12.0, float(BOX_Y) + 18.0),
 			_displayed, HORIZONTAL_ALIGNMENT_LEFT, BOX_W - 24, 10, C_TEXT)
+
+	# Choices rendered inside the main dialogue box (classic RPG layout)
+	if _phase == _Phase.CHOICES:
+		for i in _choices.size():
+			var r: Rect2 = _choice_rect(i)
+			var is_focused: bool = i == _selected_choice or i == _hovered_choice
+			var bg: Color = C_CHOICE_HOV if is_focused else C_CHOICE_BG
+			_view.draw_rect(r, bg)
+			_view.draw_rect(r, C_BORDER, false, 1.0)
+			var label: String = "%d. %s" % [i + 1, _choices[i].get("text", "")]
+			_view.draw_string(_font, Vector2(r.position.x + 6.0, r.position.y + 11.0),
+				label, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, C_CHOICE_TXT)
 
 	# Line counter if multiple lines
 	if _lines.size() > 1:

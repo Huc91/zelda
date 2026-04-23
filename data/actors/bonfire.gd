@@ -42,12 +42,12 @@ func _light() -> void:
 	lit = true
 	_refresh_sprite()
 	_do_rest()
-	_info_box.show_flash("Bonfire lit! Game saved.", 2.5)
+	_info_box.show_flash("Game saved.", 2.5)
 
 
 func _rest() -> void:
 	_do_rest()
-	_info_box.show_flash("Rested. Game saved.", 2.5)
+	_info_box.show_flash("Game saved.", 2.5)
 
 
 func _do_rest() -> void:
@@ -68,7 +68,7 @@ func _on_body_entered(body: Node) -> void:
 	if body is Actor and (body as Actor).actor_type == 1:
 		_player_nearby = true
 		if not _info_box.is_queued_for_deletion():
-			var hint: String = "Press Z to rest" if lit else "Press Z to light bonfire"
+			var hint: String = "Press Z to rest" if lit else "Press Z to light"
 			_info_box.show_hint(hint)
 
 

@@ -1,32 +1,26 @@
 [gd_scene load_steps=7 format=3 uid="uid://bonfire000001"]
 
 [ext_resource type="Script" uid="uid://b02113seoh1df" path="res://data/actors/bonfire.gd" id="1_bf01"]
-[ext_resource type="Texture2D" uid="uid://kcymq52pe8o1" path="res://data/actors/bonfire.png" id="2_bf01"]
-
-[sub_resource type="AtlasTexture" id="AtlasTexture_bf_lit"]
-atlas = ExtResource("2_bf01")
-region = Rect2(16, 0, 16, 16)
-
-[sub_resource type="AtlasTexture" id="AtlasTexture_bf_unlit"]
-atlas = ExtResource("2_bf01")
-region = Rect2(0, 0, 16, 16)
+[ext_resource type="Texture2D" uid="uid://1o0l2a53nkoh" path="res://data/actors/bonfire-off.png" id="2_bf01"]
+[ext_resource type="Texture2D" uid="uid://bm7xicdfhlkvf" path="res://data/actors/bonfire-lit-a.png" id="3_bf01"]
+[ext_resource type="Texture2D" uid="uid://d28pqvsb6ruqy" path="res://data/actors/bonfire-lit-b.png" id="4_bf01"]
 
 [sub_resource type="SpriteFrames" id="SpriteFrames_bf"]
 animations = [{
 "frames": [{
 "duration": 1.0,
-"texture": SubResource("AtlasTexture_bf_lit")
+"texture": ExtResource("3_bf01")
 }, {
-"duration": 0.8,
-"texture": SubResource("AtlasTexture_bf_unlit")
+"duration": 1.0,
+"texture": ExtResource("4_bf01")
 }],
 "loop": true,
 "name": &"Lit",
-"speed": 4.0
+"speed": 1.0
 }, {
 "frames": [{
 "duration": 1.0,
-"texture": SubResource("AtlasTexture_bf_unlit")
+"texture": ExtResource("2_bf01")
 }],
 "loop": true,
 "name": &"Unlit",

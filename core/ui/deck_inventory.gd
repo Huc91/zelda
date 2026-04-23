@@ -61,6 +61,7 @@ var _hint_lbl: Label
 var _header_action_btn: Button
 var _hub_buttons: Array[Button] = []
 var _hub_cursor: int = 0
+var _packs_count_lbl: Label
 
 
 func _ready() -> void:
@@ -215,6 +216,18 @@ func _make_card(def: Dictionary, cx: int, cy: int, idx: int) -> Button:
 	desc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	btn.add_child(desc)
 
+	if idx == 0:
+		var packs_lbl := Label.new()
+		packs_lbl.position = Vector2i(0, 132)
+		packs_lbl.size = Vector2i(CARD_W, 18)
+		packs_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		packs_lbl.add_theme_font_override("font", FONT)
+		packs_lbl.add_theme_font_size_override("font_size", 10)
+		packs_lbl.add_theme_color_override("font_color", Color(0.95, 0.9, 0.35))
+		packs_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(packs_lbl)
+		_packs_count_lbl = packs_lbl
+
 	return btn
 
 
@@ -261,7 +274,14 @@ func _show_hub() -> void:
 	_title_lbl.text = "INVENTORY"
 	_header_action_btn.text = "CLOSE"
 	_hint_lbl.text = "ARROWS: move    X/Z: select    ESC/I: close"
+	_refresh_pack_count_label()
 	_focus_hub_button(_hub_cursor)
+
+
+func _refresh_pack_count_label() -> void:
+	if _packs_count_lbl == null:
+		return
+	_packs_count_lbl.text = "%d Packs" % Global.base_set_packs
 
 
 func _show_deck_list() -> void:

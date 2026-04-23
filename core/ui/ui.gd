@@ -52,7 +52,7 @@ func _process(_delta: float) -> void:
 		return
 	# Game — open inventory on "I".
 	if Input.is_action_just_pressed("inventory"):
-		if Global.in_battle:
+		if not _can_open_inventory_from_game():
 			return
 		_open_deck_inventory()
 
@@ -60,6 +60,8 @@ func _process(_delta: float) -> void:
 # ── Deck Inventory ──────────────────────────────────────────────────
 
 func _open_deck_inventory() -> void:
+	if not _can_open_inventory_from_game():
+		return
 	get_tree().paused = true
 	Sound.play(preload("res://data/sfx/Menu_In.wav"))
 	await ScreenFX.fade_white_in()
@@ -233,3 +235,11 @@ func _return_to_inventory_root() -> void:
 	deck_inventory.refresh_decks()
 	deck_inventory.reset_to_root()
 	deck_inventory.show()
+
+
+func _can_open_inventory_from_game() -> bool:
+	if Global.in_battle:
+		return false
+	if get_tree().paused:
+		return false
+	return true

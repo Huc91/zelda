@@ -56,7 +56,6 @@ var _hub: Control
 var _deck_list: Control
 var _slots_row: HBoxContainer
 var _new_deck_btn: Button
-var _money_lbl_dl: Label
 var _title_lbl: Label
 var _hint_lbl: Label
 var _header_action_btn: Button
@@ -237,30 +236,9 @@ func _build_deck_list() -> void:
 	add_child(_deck_list)
 
 	# "Your Decks" title
-	var sub_title := Label.new()
-	sub_title.text = "DECKBUILDER"
-	sub_title.position = Vector2i(0, 64)
-	sub_title.size = Vector2i(640, 28)
-	sub_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub_title.add_theme_font_override("font", FONT)
-	sub_title.add_theme_font_size_override("font_size", 16)
-	sub_title.add_theme_color_override("font_color", Color(1, 1, 1))
-	_deck_list.add_child(sub_title)
-
-	# Money label
-	_money_lbl_dl = Label.new()
-	_money_lbl_dl.position = Vector2i(0, 100)
-	_money_lbl_dl.size = Vector2i(640, 20)
-	_money_lbl_dl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_money_lbl_dl.add_theme_font_override("font", FONT)
-	_money_lbl_dl.add_theme_font_size_override("font_size", 11)
-	_money_lbl_dl.add_theme_color_override("font_color", Color(0.80, 0.65, 0.10))
-	_deck_list.add_child(_money_lbl_dl)
-	Global.money_changed.connect(func(_r: int) -> void: _refresh_money())
-
 	# Deck slots row
 	_slots_row = HBoxContainer.new()
-	_slots_row.position = Vector2i(0, 130)
+	_slots_row.position = Vector2i(0, 110)
 	_slots_row.size = Vector2i(640, 300)
 	_slots_row.add_theme_constant_override("separation", 16)
 	_slots_row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -295,16 +273,10 @@ func _show_deck_list() -> void:
 	refresh_decks()
 
 
-func _refresh_money() -> void:
-	if _money_lbl_dl != null:
-		_money_lbl_dl.text = "Money: %d" % Global.money
-
-
 func refresh_decks() -> void:
 	for c: Node in _slots_row.get_children():
 		c.queue_free()
 	_new_deck_btn.disabled = Global.player_decks.size() >= Global.MAX_DECKS
-	_refresh_money()
 	for i: int in Global.player_decks.size():
 		_slots_row.add_child(_make_deck_slot(i, Global.player_decks[i]))
 

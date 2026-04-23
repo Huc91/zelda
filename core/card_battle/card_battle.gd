@@ -977,6 +977,18 @@ func _find_hand_idx_by_id(id: String) -> int:
 	return -1
 
 
+func _current_pay_hand_idx() -> int:
+	if _mode != Mode.CHOOSE_PAY_MANA or _pay_from_arsenal:
+		return -1
+	if _pay_hand_idx >= 0 and _pay_hand_idx < player_hand.size():
+		if str(player_hand[_pay_hand_idx].get("id", "")) == _pay_card_id:
+			return _pay_hand_idx
+	var resolved_idx: int = _find_hand_idx_by_id(_pay_card_id)
+	if resolved_idx >= 0:
+		_pay_hand_idx = resolved_idx
+	return resolved_idx
+
+
 func _cancel_pay_mana() -> void:
 	if _mode != Mode.CHOOSE_PAY_MANA:
 		return
@@ -2040,7 +2052,7 @@ func _on_right_click(pos: Vector2) -> void:
 	if _mode != Mode.CHOOSE_PAY_MANA: return
 	for i in player_hand.size():
 		if CardBattleLayout.hand_rect(i, player_hand.size()).has_point(pos):
-			if i == _pay_hand_idx:
+			if i == _current_pay_hand_idx():
 				_log("Pitch a different card — not the one you are casting.")
 				_view.queue_redraw()
 				return
@@ -2064,6 +2076,8 @@ func _on_left_press(pos: Vector2) -> void:
 		_mode = Mode.IDLE; _sel_idx = -1; _ctx_idx = -1; _ctx_is_front = true; _atk_drag_idx = -1; _rear_pick_idx = -1
 		_open_modal(player_gy, "Your Graveyard"); return
 	if _mode != Mode.CHOOSE_PAY_MANA and CardBattleLayout.side_deck_rect(true).has_point(pos):
+		if not Global.dev_mode:
+			return
 		_mode = Mode.IDLE; _sel_idx = -1; _ctx_idx = -1; _ctx_is_front = true; _atk_drag_idx = -1; _rear_pick_idx = -1
 		var s := enemy_deck.duplicate(); s.shuffle(); _open_modal(s, "Enemy Deck (random)"); return
 	if _mode != Mode.CHOOSE_PAY_MANA and CardBattleLayout.side_deck_rect(false).has_point(pos):
@@ -2215,9 +2229,10 @@ func _on_drag_drop(pos: Vector2) -> void:
 		return
 
 	if _mode == Mode.CHOOSE_PAY_MANA:
+		var pay_hand_idx: int = _current_pay_hand_idx()
 		if CardBattleLayout.pinfo_rect().has_point(pos):
 			if hand_idx >= 0 and hand_idx < player_hand.size():
-				if hand_idx == _pay_hand_idx:
+				if hand_idx == pay_hand_idx:
 					_log("Pitch a different card to add mana.")
 				else:
 					_pitch_card(hand_idx)
@@ -2227,7 +2242,7 @@ func _on_drag_drop(pos: Vector2) -> void:
 		var pfront: bool = CardBattleLayout.row_drop_rect(true).has_point(pos)
 		var prear: bool = CardBattleLayout.row_drop_rect(false).has_point(pos)
 		if pfront or prear:
-			if hand_idx >= 0 and str(card.get("id", "")) == _pay_card_id and player_mana >= _pay_cost:
+			if hand_idx >= 0 and hand_idx == pay_hand_idx and player_mana >= _pay_cost:
 				_pay_to_front = pfront
 				var rr_pf: Rect2 = CardBattleLayout.row_drop_rect(pfront)
 				if rr_pf.has_point(pos):
@@ -2439,6 +2454,8 @@ func _pitch_card(i: int) -> void:
 	var mv: int = card.get("mana_value", 1)
 	player_mana = mini(player_mana + mv, 10)
 	_pitched_this_turn.append(card); player_hand.remove_at(i)
+	if _mode == Mode.CHOOSE_PAY_MANA and not _pay_from_arsenal and i < _pay_hand_idx:
+		_pay_hand_idx -= 1
 	if _mode != Mode.CHOOSE_PAY_MANA:
 		_mode = Mode.IDLE
 	_sel_idx = -1
@@ -2979,8 +2996,6 @@ func _draw_left_panel() -> void:
 		_view.draw_rect(Rect2(CardBattleConstants.LOG_SCROLL_X, thumb_y, CardBattleConstants.LOG_SCROLL_W, thumb_h), CardBattleConstants.C_SCROLL_THUMB)
 
 	# Zoomed card
-	_view.draw_rect(Rect2(0, CardBattleConstants.ZOOM_Y, CardBattleConstants.LEFT_W, CardBattleConstants.ZOOM_H), CardBattleConstants.C_ZOOM_BG)
-	_view.draw_rect(Rect2(0, CardBattleConstants.ZOOM_Y, CardBattleConstants.LEFT_W, CardBattleConstants.ZOOM_H), CardBattleConstants.C_BLACK, false, 1.0)
 	if not _hover_card.is_empty():
 		_draw_zoomed_card(_hover_card, _hover_state)
 
@@ -3098,14 +3113,10 @@ func _draw_right_sidebar() -> void:
 
 
 func _side_label_top_y(r: Rect2) -> float:
-	if r.size.y <= 54.0:
-		return r.position.y + 4.0
 	return r.position.y + 5.0
 
 
 func _side_count_baseline(r: Rect2) -> float:
-	if r.size.y <= 54.0:
-		return r.position.y + 22.0
 	return r.position.y + 28.0
 
 
@@ -3174,7 +3185,7 @@ func _draw_hand() -> void:
 		return
 	var drew_any: bool = false
 	for i in player_hand.size():
-		if _mode == Mode.CHOOSE_PAY_MANA and i == _pay_hand_idx:
+		if _mode == Mode.CHOOSE_PAY_MANA and i == _current_pay_hand_idx():
 			continue
 		if _drag_active and _drag_hand_idx == i: continue
 		drew_any = true

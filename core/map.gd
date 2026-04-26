@@ -198,9 +198,11 @@ func _try_grass_drop(world_pos: Vector2) -> void:
 		var ids: Array[String] = CardDB.all_collectible_ids()
 		if not ids.is_empty():
 			var dropped: String = ids[randi() % ids.size()]
-			Global.collect_card(dropped, false)
-			var card: Dictionary = CardDB.get_card(dropped)
-			_spawn_drop_label(world_pos, card.get("name", "Card") + "!", Color(0.4, 0.8, 1.0))
+			var pickup: CardPickup = CardPickup.new()
+			pickup.card_id = dropped
+			pickup.is_placed = false
+			pickup.position = world_pos
+			add_child(pickup)
 
 
 ## Returns the soul type of the tile at cell, or "" if not soulable.

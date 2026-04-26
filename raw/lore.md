@@ -57,4 +57,12 @@ He reach a level of knoledge uninthinkable. He becomes God himself.
 2684
 After 300 years, Roger has grown tired of being God, could be fun to find a substitute.
 A new game begins.
-The selections open.
+The selections open. The player the protagonist will compete in the new game. He need to defeat the 5 bosses. And the last boss. The last boss is Minuro Mage King (again? weird right he was dead that's an hint that the world is fake.) After he finds the Zeno card he can choose to become a God and govern over Earth or destroy the world.
+The end.
+
+About the lore
+I want the lore to be cryptic like dark soul but sometime we need to give some hint. NPC are machines or humans so unaware of most things but you can slip something here and there maybe they read somewhere, maybe the heard stories. The player to undestand the
+lore need to finish the game and read all cards lore. Give each card some
+lore for Demon Summoner, but Demon Summoner lore is a metaphor to the lore
+of the game. Demons are humans entrapped by a powerful entity and forced to
+fight and play. Like Humans in the game world.

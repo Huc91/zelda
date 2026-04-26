@@ -216,11 +216,25 @@ static func resolve(b: CardBattle, card: Dictionary, is_player: bool) -> void:
 				if dd["atk"] > hi["atk"]: hi = dd
 			b._apply_freeze(hi)
 		"destroy_low_atk":
-			for row in [of_, or_]:
-				for dd in row.duplicate():
-					if dd["atk"] <= val: dd["hp"] = 0
-				var is_f: bool = (row == of_)
-				b._process_deaths(row, not is_player, is_f)
+			var dl_ti: int = -1
+			var dl_best: int = -1
+			for i in of_.size():
+				if of_[i]["atk"] <= val and of_[i]["atk"] > dl_best:
+					dl_best = of_[i]["atk"]
+					dl_ti = i
+			if dl_ti >= 0:
+				of_[dl_ti]["hp"] = 0
+				b._process_deaths(of_, not is_player, true)
+			else:
+				var dl_ri: int = -1
+				var dl_rbest: int = -1
+				for i in or_.size():
+					if or_[i]["atk"] <= val and or_[i]["atk"] > dl_rbest:
+						dl_rbest = or_[i]["atk"]
+						dl_ri = i
+				if dl_ri >= 0:
+					or_[dl_ri]["hp"] = 0
+					b._process_deaths(or_, not is_player, false)
 		"destroy_damaged":
 			for row in [of_, or_]:
 				var is_f2: bool = (row == of_)

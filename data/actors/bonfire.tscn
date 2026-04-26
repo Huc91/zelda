@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3 uid="uid://bonfire000001"]
+[gd_scene load_steps=8 format=3 uid="uid://bonfire000001"]
 
 [ext_resource type="Script" uid="uid://b02113seoh1df" path="res://data/actors/bonfire.gd" id="1_bf01"]
 [ext_resource type="Texture2D" uid="uid://1o0l2a53nkoh" path="res://data/actors/bonfire-off.png" id="2_bf01"]
@@ -27,12 +27,14 @@ animations = [{
 "speed": 1.0
 }]
 
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_485kk"]
+size = Vector2(12, 13)
+
 [sub_resource type="CircleShape2D" id="CircleShape2D_bf"]
 radius = 14.0
 
-[node name="Bonfire" type="Area2D"]
-collision_layer = 0
-collision_mask = 2
+[node name="Bonfire" type="StaticBody2D"]
+collision_layer = 1
 script = ExtResource("1_bf01")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
@@ -41,4 +43,12 @@ animation = &"Unlit"
 autoplay = "Unlit"
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, 0.5)
+shape = SubResource("RectangleShape2D_485kk")
+
+[node name="TriggerArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="TriggerArea"]
 shape = SubResource("CircleShape2D_bf")

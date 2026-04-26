@@ -98,6 +98,8 @@ var _sel_idx          := -1
 var _freeze_target_source_name: String = ""
 var _ally_target_pending_card: Dictionary = {}
 var _ally_target_source_name: String = ""
+## Pending card for player-targeted enemy spells (Terror, etc.).
+var _enemy_target_pending_card: Dictionary = {}
 
 var _battle_log:  Array = []
 var _log_scroll:  int   = 0
@@ -222,6 +224,7 @@ func _start_battle() -> void:
 			prebuilt_enemy_deck = enemy_actor.call("get_battle_deck")
 	enemy_deck  = prebuilt_enemy_deck if not prebuilt_enemy_deck.is_empty() else CardDB.enemy_deck_for_difficulty(diff)
 	_ai_type    = _ai_runner.detect_ai_type_from_deck(enemy_deck)
+	enemy_hp = _enemy_hp_for_difficulty(diff)
 	player_hp = Global.player_hp
 	if not _draw_mandatory_refresh(player_hand, player_deck, CardBattleConstants.STARTING_HAND, true): return
 	if not _draw_mandatory_refresh(enemy_hand, enemy_deck, CardBattleConstants.STARTING_HAND, false): return
@@ -232,6 +235,15 @@ func _start_battle() -> void:
 	if _ended: return
 	if player_first: _start_player_turn()
 	else:            _start_enemy_turn()
+
+
+func _enemy_hp_for_difficulty(diff: String) -> int:
+	match diff:
+		"easy":   return 10
+		"normal": return randi_range(12, 14)
+		"hard":   return randi_range(15, 20)
+		"boss":   return randi_range(22, 30)
+		_:        return 10
 
 
 ## Mandatory draws (opening + end-of-turn refresh). Draw up to n; stop if deck runs dry (no cards forced from empty deck).
@@ -438,8 +450,10 @@ func _start_enemy_turn() -> void:
 	_enemy_stashed_this_turn = false
 	_enemy_soul_collector_drew_this_turn = false
 	## Previous turn’s unplayed hand — graveyard (pitched cards already left hand earlier).
-	for c in enemy_hand: enemy_gy.append(c)
-	enemy_hand.clear()
+	## Skip on turn 1: hand was just drawn in _start_battle and hasn’t been played yet.
+	if enemy_turn_num > 1:
+		for c in enemy_hand: enemy_gy.append(c)
+		enemy_hand.clear()
 	if not _draw_mandatory_refresh(enemy_hand, enemy_deck, CardBattleConstants.STARTING_HAND, false):
 		_animating = false
 		return
@@ -539,6 +553,44 @@ func _begin_choose_enemy_to_freeze(source_name: String) -> void:
 func _finish_choose_enemy_target_idle() -> void:
 	_mode = Mode.IDLE
 	_freeze_target_source_name = ""
+	_enemy_target_pending_card = {}
+
+
+func _begin_choose_enemy_target_for_spell(card: Dictionary) -> void:
+	_enemy_target_pending_card = card
+	_mode = Mode.CHOOSE_ENEMY_TARGET
+	_ctx_idx = -1
+	_ctx_is_front = true
+	_atk_drag_idx = -1
+	_rear_pick_idx = -1
+	_sel_idx = -1
+	_show_toast("Choose target")
+	_log("%s — click an enemy demon." % str(card.get("name", "Spell")))
+	_view.queue_redraw()
+
+
+func _complete_choose_enemy_target_spell(target: Dictionary, is_front: bool) -> void:
+	var card: Dictionary = _enemy_target_pending_card
+	var effect: String = str(card.get("effect", ""))
+	var val: int = int(card.get("value", 0))
+	_enemy_target_pending_card = {}
+	_mode = Mode.IDLE
+	match effect:
+		"destroy_low_atk":
+			if target.get("atk", 0) > val:
+				_log("Invalid target — ATK must be ≤ %d. Pick again." % val)
+				_begin_choose_enemy_target_for_spell(card)
+				return
+			target["hp"] = 0
+			if is_front:
+				_process_deaths(enemy_front, false, true)
+			else:
+				_process_deaths(enemy_rear, false, false)
+			_log("%s destroys %s!" % [str(card.get("name", "Spell")), str(target["data"].get("name", "?"))])
+	_apply_after_spell_cast(true)
+	_refresh_mimic_minions_and_front_atk_auras()
+	_check_game_over()
+	_view.queue_redraw()
 
 
 func _complete_choose_enemy_freeze(target: Dictionary) -> void:
@@ -1112,19 +1164,23 @@ func _try_finish_pay_mana() -> void:
 	_check_game_over()
 
 
+func _effective_card_cost(card: Dictionary) -> int:
+	var base_cost: int = int(card.get("cost", 0))
+	if "spell_cost_reduce_per_spell_gy" in str(card.get("ability", "")):
+		var spell_count: int = 0
+		for c_gy in player_gy:
+			if str(c_gy.get("type", "")) == "spell":
+				spell_count += 1
+		base_cost = maxi(0, base_cost - spell_count)
+	return base_cost
+
+
 func _begin_pay_mana(card: Dictionary, _hand_idx: int, to_front: bool, drop_pos: Vector2 = Vector2(-1.0e9, -1.0e9)) -> void:
 	_mode = Mode.CHOOSE_PAY_MANA
 	_pay_from_arsenal = false
 	_pay_card_id = str(card.get("id", ""))
 	_pay_hand_idx = _hand_idx
-	var base_cost: int = int(card.get("cost", 0))
-	if "spell_cost_reduce_per_spell_gy" in str(card.get("ability", "")):
-		var spell_count_gy: int = 0
-		for c_gy in player_gy:
-			if str(c_gy.get("type", "")) == "spell":
-				spell_count_gy += 1
-		base_cost = maxi(0, base_cost - spell_count_gy)
-	_pay_cost = base_cost + (_spell_tax_against_caster(true) if str(card.get("type", "")) == "spell" else 0)
+	_pay_cost = _effective_card_cost(card) + (_spell_tax_against_caster(true) if str(card.get("type", "")) == "spell" else 0)
 	_pay_to_front = to_front
 	_pay_stack_t = 0.0
 	_pay_arsenal_pitch_start = _pitched_this_turn.size()
@@ -1591,6 +1647,7 @@ func _face_attack_followup(att: Dictionary, attacker_is_player: bool) -> void:
 
 
 const ALLY_TARGET_EFFECTS: Array[String] = ["buff_hp", "give_divine_shield", "buff_target_stats"]
+const ENEMY_TARGET_EFFECTS: Array[String] = ["destroy_low_atk"]
 
 const _EXPLOSION_EFFECTS: Array = ["destroy_all_both", "aoe_all_2", "aoe_all_hp"]
 const _THUNDER_EFFECTS: Array = ["damage", "deal_face", "deal_and_gain_mana", "deal_face_drain",
@@ -1603,6 +1660,10 @@ func _resolve_spell(card: Dictionary, is_player: bool) -> void:
 		var pr: Array = player_rear
 		if not pf.is_empty() or not pr.is_empty():
 			_begin_choose_ally_target(str(card.get("name", "Spell")), card)
+			return
+	if is_player and str(card.get("effect", "")) in ENEMY_TARGET_EFFECTS:
+		if not enemy_front.is_empty() or not enemy_rear.is_empty():
+			_begin_choose_enemy_target_for_spell(card)
 			return
 	var eff: String = str(card.get("effect", ""))
 	if eff in _EXPLOSION_EFFECTS:
@@ -2033,8 +2094,7 @@ func _update_hover() -> void:
 			_hover_card = enemy_rear[i]["data"]; _hover_state = enemy_rear[i]; return
 	if not player_arsenal.is_empty() and CardBattleLayout.player_arsenal_rect().has_point(_mouse_pos):
 		_hover_card = player_arsenal
-	if not enemy_arsenal.is_empty() and CardBattleLayout.side_arsenal_rect(true).has_point(_mouse_pos):
-		_hover_card = enemy_arsenal
+	## Enemy arsenal is intentionally hidden — never reveal on hover.
 
 
 func _on_right_click(pos: Vector2) -> void:
@@ -2101,17 +2161,26 @@ func _on_left_press(pos: Vector2) -> void:
 		_view.queue_redraw()
 		return
 
-	# Targeting: Frost Mage / Frost Bolt — click enemy minion (elsewhere cancels)
+	# Targeting: enemy demon click — freeze, Terror, or other targeted spells
 	if _mode == Mode.CHOOSE_ENEMY_TARGET:
 		for i in enemy_front.size():
 			if CardBattleLayout.mini_rect(enemy_front, CardBattleConstants.EFFRONT_Y, i).has_point(pos):
-				_complete_choose_enemy_freeze(enemy_front[i])
+				if not _enemy_target_pending_card.is_empty():
+					_complete_choose_enemy_target_spell(enemy_front[i], true)
+				else:
+					_complete_choose_enemy_freeze(enemy_front[i])
 				return
 		for i in enemy_rear.size():
 			if CardBattleLayout.mini_rect(enemy_rear, CardBattleConstants.EFREAR_Y, i).has_point(pos):
-				_complete_choose_enemy_freeze(enemy_rear[i])
+				if not _enemy_target_pending_card.is_empty():
+					_complete_choose_enemy_target_spell(enemy_rear[i], false)
+				else:
+					_complete_choose_enemy_freeze(enemy_rear[i])
 				return
-		_log("Freeze cancelled.")
+		if not _enemy_target_pending_card.is_empty():
+			_log("Cancelled.")
+		else:
+			_log("Freeze cancelled.")
 		_finish_choose_enemy_target_idle()
 		_view.queue_redraw()
 		return
@@ -2276,11 +2345,11 @@ func _on_drag_drop(pos: Vector2) -> void:
 		if is_click and hand_idx >= 0 and hand_idx < player_hand.size() \
 				and _mode != Mode.CHOOSE_PAY_MANA:
 			var cc: Dictionary = card
-			var cst_c: int = int(cc.get("cost", 0))
+			var cst_c: int = _effective_card_cost(cc)
 			var tax_c: int = _spell_tax_against_caster(true) if str(cc.get("type", "")) == "spell" else 0
 			var total_c: int = cst_c + tax_c
 			if total_c > player_mana:
-				if cst_c <= 10:
+				if int(cc.get("cost", 0)) <= 10:
 					_begin_pay_mana(cc, hand_idx, true)
 			elif str(cc.get("type", "")) == "demon":
 				var ab_c: String = str(cc.get("ability", ""))
@@ -2321,11 +2390,11 @@ func _on_drag_drop(pos: Vector2) -> void:
 		_begin_chaos_summon_hand(hand_idx, to_front)
 		_view.queue_redraw(); return
 
-	var cost: int = int(card.get("cost", 0))
+	var cost: int = _effective_card_cost(card)
 	var spell_tax: int = _spell_tax_against_caster(true) if str(card.get("type", "")) == "spell" else 0
 	var total_cost: int = cost + spell_tax
 	if total_cost > player_mana:
-		if cost > 10:
+		if int(card.get("cost", 0)) > 10:
 			_log("Cost exceeds max mana (10).")
 			_view.queue_redraw(); return
 		if str(card.get("type", "")) == "demon":
@@ -2536,11 +2605,11 @@ func _on_arsenal_play() -> void:
 		_begin_chaos_summon_arsenal()
 		_view.queue_redraw()
 		return
-	var cst: int = int(card.get("cost", 0))
+	var cst: int = _effective_card_cost(card)
 	var taxa: int = _spell_tax_against_caster(true) if str(card.get("type", "")) == "spell" else 0
 	var total_cst: int = cst + taxa
 	if total_cst > player_mana:
-		if cst > 10:
+		if int(card.get("cost", 0)) > 10:
 			_log("Cost exceeds max mana (10).")
 			_view.queue_redraw(); return
 		_mode = Mode.CHOOSE_PAY_MANA
@@ -3105,7 +3174,7 @@ func _draw_right_sidebar() -> void:
 	if _mode == Mode.CHOOSE_PAY_MANA and _pay_from_arsenal and not player_arsenal.is_empty():
 		ars_vis = {}
 	_draw_side_sec(0, "GRAVE",   enemy_gy.size(),    {})
-	_draw_side_sec(1, "ARSENAL", -1,                 enemy_arsenal)
+	_draw_side_sec(1, "ARSENAL", -1,                 enemy_arsenal, true)
 	_draw_side_sec(2, "DECK",    enemy_deck.size(),  {})
 	_draw_side_sec(3, "DECK",    player_deck.size(), {})
 	_draw_side_sec(4, "ARSENAL", -1,                 ars_vis)
@@ -3150,7 +3219,7 @@ func _draw_side_arsenal_vertical_label(inner: Rect2) -> void:
 			HORIZONTAL_ALIGNMENT_LEFT, -1, fs, CardBattleConstants.C_TEXT)
 
 
-func _draw_side_sec(sec: int, label: String, count: int, card: Dictionary) -> void:
+func _draw_side_sec(sec: int, label: String, count: int, card: Dictionary, face_down: bool = false) -> void:
 	var r := Rect2(float(CardBattleConstants.SIDE_ZONE_X), CardBattleConstants.SIDE_BAND_Y[sec], float(CardBattleConstants.SIDE_ZONE_RW), CardBattleConstants.SIDE_BAND_H[sec])
 	var tx: float = r.position.x + 4.0
 	var inner_h: float = minf(r.size.y, 110.0)
@@ -3170,7 +3239,12 @@ func _draw_side_sec(sec: int, label: String, count: int, card: Dictionary) -> vo
 			var cx: float = inner.position.x + (inner.size.x - float(CardBattleConstants.MINI_W)) * 0.5
 			var cy: float = inner.position.y + (inner.size.y - float(CardBattleConstants.MINI_H)) * 0.5
 			var full := Rect2(cx, cy, float(CardBattleConstants.MINI_W), float(CardBattleConstants.MINI_H))
-			_draw_hand_card(full, card, false, false)
+			if face_down:
+				_view.draw_rect(full, CardBattleConstants.C_DECK_BG)
+				_view.draw_rect(full, CardBattleConstants.C_SIDE_ARSENAL_BORDER, false, 2.0)
+				_str("?", full.get_center().x - 3.0, full.get_center().y + 4.0, 8, CardBattleConstants.C_TEXT_LT)
+			else:
+				_draw_hand_card(full, card, false, false)
 		else:
 			_draw_side_arsenal_vertical_label(inner)
 

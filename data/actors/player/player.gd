@@ -31,9 +31,9 @@ func state_default() -> void:
 	# Handle animations
 	if velocity:
 		if is_on_wall() and ((test_move(transform, Vector2.DOWN) and sprite_direction == "Down")
-				|| (test_move(transform, Vector2.UP) and sprite_direction == "Up")
-				|| (test_move(transform, Vector2.RIGHT) and sprite_direction == "Right")
-				|| (test_move(transform, Vector2.LEFT) and sprite_direction == "Left")):
+				or (test_move(transform, Vector2.UP) and sprite_direction == "Up")
+				or (test_move(transform, Vector2.RIGHT) and sprite_direction == "Right")
+				or (test_move(transform, Vector2.LEFT) and sprite_direction == "Left")):
 			_play_animation("Push")
 		else:
 			_play_animation("Walk")

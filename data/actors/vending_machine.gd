@@ -1,5 +1,5 @@
 class_name VendingMachine
-extends Area2D
+extends StaticBody2D
 
 const INTERACT_ACTION: String = "interact"
 const PACK_COST: int = 10
@@ -11,11 +11,13 @@ var _ui_open: bool = false
 var _cooldown_frames: int = 0
 var _info_box: InfoBox
 
+@onready var trigger: Area2D = $TriggerArea
+
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	body_entered.connect(_on_body_entered)
-	body_exited.connect(_on_body_exited)
+	trigger.body_entered.connect(_on_body_entered)
+	trigger.body_exited.connect(_on_body_exited)
 	_info_box = InfoBox.new()
 	call_deferred("_add_info_box")
 

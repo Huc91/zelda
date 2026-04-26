@@ -1,8 +1,9 @@
-class_name Bonfire extends Area2D
+class_name Bonfire extends StaticBody2D
 
 const INTERACT_ACTION: String = "interact"
 
 @onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
+@onready var trigger: Area2D = $TriggerArea
 
 var lit: bool = false
 var _player_nearby: bool = false
@@ -10,8 +11,8 @@ var _info_box: InfoBox
 
 
 func _ready() -> void:
-	body_entered.connect(_on_body_entered)
-	body_exited.connect(_on_body_exited)
+	trigger.body_entered.connect(_on_body_entered)
+	trigger.body_exited.connect(_on_body_exited)
 	lit = Global.is_bonfire_lit(position, Global.current_map_path)
 	_refresh_sprite()
 	_info_box = InfoBox.new()

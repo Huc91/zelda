@@ -2,7 +2,7 @@
 
 **Summary**: Table of contents for source summaries and concept pages in the Zelda project wiki.  
 **Sources**: `raw/card-game.md`, `raw/card-game-ai.md`, `raw/implementig-ui.md`, `raw/game-mechanics.md`, `raw/on-the-art.md`, `raw/lore.md`, `core/card_battle/card_db.gd`  
-**Last updated**: 2026-04-22
+**Last updated**: 2026-04-26
 
 ---
 
@@ -14,6 +14,10 @@
 - [[game-mechanics-source]] - Overworld progression and soul-system migration directives.
 - [[on-the-art-source]] - Pixel-art sizing constraints.
 - [[lore-source]] - Full narrative timeline and major world entities.
+
+## Card Design
+
+- [[meta-decks]] - Three curated boss/hard AI archetypes with deck lists and AI strategy notes.
 
 ## Gameplay Concepts
 

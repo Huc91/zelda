@@ -25,6 +25,8 @@ var last_bonfire_position = null
 var last_bonfire_map: String = ""
 ## All lit bonfire positions keyed by map path — persists across map transitions.
 var lit_bonfires: Dictionary = {}  ## { map_path: Array[Vector2] }
+## All opened chest positions keyed by map path — persists across map transitions.
+var opened_chests: Dictionary = {}  ## { map_path: Array[Vector2] }
 
 ## Backward-compat: emitted alongside hp_changed.
 signal lives_changed(new_lives: int)
@@ -153,6 +155,7 @@ func reset_new_game() -> void:
 	last_bonfire_position = null
 	last_bonfire_map = ""
 	lit_bonfires.clear()
+	opened_chests.clear()
 	collected_pickups.clear()
 	player_items.clear()
 	base_set_packs = 0
@@ -515,6 +518,18 @@ func is_bonfire_lit(world_pos: Vector2, map_path: String) -> bool:
 	return list.has(world_pos)
 
 
+func open_chest(world_pos: Vector2, map_path: String) -> void:
+	if not opened_chests.has(map_path):
+		opened_chests[map_path] = []
+	var list: Array = opened_chests[map_path]
+	if not list.has(world_pos):
+		list.append(world_pos)
+
+
+func is_chest_opened(world_pos: Vector2, map_path: String) -> bool:
+	return (opened_chests.get(map_path, []) as Array).has(world_pos)
+
+
 const SAVE_PATH: String = "user://save.json"
 const SAVE_PATH_DEV: String = "user://save_dev.json"
 
@@ -551,6 +566,7 @@ func save_game() -> void:
 		"battle_deck_index": battle_deck_index,
 		"collected_pickups": pickups_serial,
 		"lit_bonfires": _serialize_vec2_dict(lit_bonfires),
+		"opened_chests": _serialize_vec2_dict(opened_chests),
 		"base_set_packs": base_set_packs,
 	}
 	data["dev_mode"] = dev_mode
@@ -609,6 +625,9 @@ func load_game() -> bool:
 	var lb: Variant = data.get("lit_bonfires", {})
 	if typeof(lb) == TYPE_DICTIONARY:
 		lit_bonfires = _deserialize_vec2_dict(lb as Dictionary)
+	var oc: Variant = data.get("opened_chests", {})
+	if typeof(oc) == TYPE_DICTIONARY:
+		opened_chests = _deserialize_vec2_dict(oc as Dictionary)
 	money_changed.emit(money)
 	hp_changed.emit(player_hp, get_effective_max_hp())
 	lives_changed.emit(_hp_to_lives())

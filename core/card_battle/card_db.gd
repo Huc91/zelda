@@ -414,6 +414,41 @@ const HARD_12 = [
 ]
 const HARD_DECKS: Array = [HARD_01, HARD_02, HARD_03, HARD_04, HARD_05, HARD_06, HARD_07, HARD_08, HARD_09, HARD_10, HARD_11, HARD_12]
 
+# ── meta decks (boss / hard AI archetypes) ─────────────────
+## Death Ping: Death Knell rear anchor + cheap deathrattle bodies + drain-on-death engine.
+const META_DEATH_PING: Array = [
+	"demon_023", "demon_022", "demon_047", "demon_030", "demon_030",
+	"spell_017", "demon_046", "demon_046", "demon_077", "demon_077",
+	"demon_040", "demon_040", "demon_021", "demon_051", "demon_051",
+	"demon_003", "demon_003", "spell_008", "spell_016", "spell_016",
+]
+
+## Tidal Terror: spam cheap spells to fill GY → play Tidal Terror for free; Pyromancer AoE engine.
+const META_TIDAL_TERROR: Array = [
+	"spell_013", "spell_026", "spell_026", "spell_048", "spell_048",
+	"spell_019", "spell_039", "demon_048", "spell_036", "spell_036",
+	"demon_007", "demon_075", "demon_075", "spell_027", "spell_027",
+	"spell_016", "spell_016", "spell_046", "demon_083", "demon_083",
+]
+
+## Reanimator: discard fat demons to GY → Resurrection / Final Hour; Chaos King Dragon finisher.
+const META_REANIMATOR: Array = [
+	"demon_024", "demon_024", "demon_023", "demon_044", "demon_043", "demon_043",
+	"spell_019", "demon_042", "demon_007", "spell_017",
+	"demon_019", "demon_019", "demon_021", "spell_008",
+	"demon_006", "demon_006", "demon_026", "demon_026", "demon_059", "demon_059",
+]
+
+## Return a built meta deck by archetype name. Falls back to a random hard deck if unknown.
+static func meta_deck(archetype: String) -> Array:
+	_ensure_init()
+	match archetype:
+		"death_ping":    return _build_enemy(META_DEATH_PING.duplicate())
+		"tidal_terror":  return _build_enemy(META_TIDAL_TERROR.duplicate())
+		"reanimator":    return _build_enemy(META_REANIMATOR.duplicate())
+	push_warning("CardDB.meta_deck: unknown archetype '%s'" % archetype)
+	return enemy_deck_for_difficulty("hard")
+
 # ── test decks ─────────────────
 const TEST_1 = [
 	"demon_080", "demon_081",

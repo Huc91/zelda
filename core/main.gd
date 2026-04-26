@@ -279,7 +279,19 @@ func _give_battle_reward(enemy: Node) -> void:
 		var ids: Array[String] = CardDB.all_collectible_ids()
 		if not ids.is_empty():
 			var dropped_id: String = ids[randi() % ids.size()]
-			Global.collect_card(dropped_id, false)
+			_spawn_card_pickup(enemy.position, dropped_id)
+
+
+func _spawn_card_pickup(world_pos: Vector2, dropped_id: String) -> void:
+	if current_scene == null or current_scene.map == null:
+		Global.collect_card(dropped_id, false)
+		return
+	var tile: Vector2i = _find_walkable(current_scene.map.local_to_map(world_pos), 0, 3, [])
+	var pickup: CardPickup = CardPickup.new()
+	pickup.card_id = dropped_id
+	pickup.is_placed = false
+	pickup.position = current_scene.map.map_to_local(tile)
+	current_scene.map.add_child(pickup)
 
 
 func _decompose_to_coins(amount: int) -> Array[int]:

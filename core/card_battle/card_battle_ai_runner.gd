@@ -116,7 +116,8 @@ func stash_arsenal_at_turn_end() -> void:
 	b.enemy_hand.remove_at(best_i)
 	b.enemy_arsenal = card
 	b.ai_set_enemy_stashed(true)
-	b.ai_log_line("Enemy stashes %s (Arsenal)" % card["name"])
+	if Global.dev_mode:
+		b.ai_log_line("Enemy stashes %s (Arsenal)" % card["name"])
 
 
 func try_play_from_arsenal() -> bool:

@@ -141,6 +141,9 @@ func _on_card_battle_requested(p_first: bool, enemy: Node) -> void:
 	Global.card_battle_requested.disconnect(_on_card_battle_requested)
 	for actor in get_tree().get_nodes_in_group("actor"):
 		actor.set_physics_process(false)
+	for child in get_tree().root.get_children():
+		if child is DialogueBox or child is MerchantUI:
+			child.queue_free()
 	await ScreenFX.fade_white_in()
 	# Initiative screen
 	var init_screen: InitiativeScreen = InitiativeScreen.new()

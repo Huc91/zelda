@@ -9,6 +9,8 @@ var playing:
 
 
 func _ready() -> void:
+	if not OS.has_feature("dedicated_server"):
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	# Layer 5 sits above UI (layer 0). A full-screen ColorRect with default mouse_filter STOP
 	# steals every click even at alpha 0 — deck inventory EDIT/DELETE never receive input.
 	_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE

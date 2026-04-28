@@ -154,11 +154,9 @@ var _battle_font: Font
 var _ai_runner: CardBattleAIRunner
 signal battle_ended(player_won: bool)
 
-const _DUEL_GLOVE_ITEM_PATH: String = "res://data/items/duel-glove-item.png"
 const _DUEL_GLOVE_ATTACK_PATH: String = "res://data/items/duel-glove-attack.png"
 const _DUEL_GLOVE_SWING_DUR: float = 0.24
 var _duel_glove_swing_t: float = 0.0
-var _duel_glove_item_tex: Texture2D
 var _duel_glove_attack_tex: Texture2D
 
 
@@ -170,7 +168,6 @@ func setup(p_first: bool, p_enemy: Node) -> void:
 	enemy_actor  = p_enemy
 	layer        = 10
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_duel_glove_item_tex = load(_DUEL_GLOVE_ITEM_PATH) as Texture2D
 	_duel_glove_attack_tex = load(_DUEL_GLOVE_ATTACK_PATH) as Texture2D
 	_ensure_battle_font()
 	_view        = _View.new()
@@ -890,19 +887,15 @@ func _resolve_battlecry(d: Dictionary, is_player: bool) -> void:
 			_log("%s gives +1 ATK to %s." % [d["data"].get("name", "?"), tgt["data"].get("name", "?")])
 	elif "wormoyf_power" in ab:
 		var subtypes_seen: Dictionary = {}
-		for row_w: Array in [pf, pr, of_, or_]:
-			for dm: Dictionary in row_w:
-				if dm == d: continue
-				var st: String = str(dm["data"].get("subtype", ""))
-				if st != "": subtypes_seen[st] = true
-		var spell_count: int = 0
 		var pg_w: Array = player_gy if is_player else enemy_gy
 		var og_w: Array = enemy_gy if is_player else player_gy
 		for c in pg_w:
-			if str(c.get("type", "")) == "spell": spell_count += 1
+			var st: String = str(c.get("data", {}).get("subtype", c.get("subtype", "")))
+			if st != "": subtypes_seen[st] = true
 		for c in og_w:
-			if str(c.get("type", "")) == "spell": spell_count += 1
-		var bonus: int = subtypes_seen.size() + spell_count
+			var st: String = str(c.get("data", {}).get("subtype", c.get("subtype", "")))
+			if st != "": subtypes_seen[st] = true
+		var bonus: int = subtypes_seen.size()
 		if bonus > 0:
 			d["atk_intrinsic"] = d.get("atk_intrinsic", int(d["data"].get("atk", 0))) + bonus
 			d["hp"] = d.get("hp", 1) + bonus
@@ -3106,9 +3099,6 @@ func _start_duel_glove_swing() -> void:
 
 
 func _draw_duel_glove_fx() -> void:
-	if _duel_glove_item_tex != null:
-		var item_pos: Vector2 = Vector2(142.0, 436.0)
-		_view.draw_texture(_duel_glove_item_tex, Vector2(float(_tx(item_pos.x)), float(_tx(item_pos.y))))
 	if _duel_glove_swing_t <= 0.0 or _duel_glove_attack_tex == null:
 		return
 	var progress: float = 1.0 - (_duel_glove_swing_t / _DUEL_GLOVE_SWING_DUR)

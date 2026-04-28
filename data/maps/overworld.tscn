@@ -138,7 +138,7 @@ Vector2i(243, 67): {
 }
 
 [node name="Lizalfos" parent="." instance=ExtResource("3_03ws5")]
-position = Vector2(2175, 1302)
+position = Vector2(2141, 1141)
 
 [node name="Bonfire" parent="." instance=ExtResource("6_bf01")]
 position = Vector2(1904, 1283)
@@ -165,13 +165,13 @@ position = Vector2(3352, 965)
 position = Vector2(2698, 978)
 
 [node name="EnemyEasy3" parent="." instance=ExtResource("9_5q7rf")]
-position = Vector2(2694, 1123)
+position = Vector2(2736, 1141)
 
 [node name="EnemyEasy4" parent="." instance=ExtResource("9_5q7rf")]
-position = Vector2(2610, 1143)
+position = Vector2(2534, 1094)
 
 [node name="IronKnuckle" parent="." instance=ExtResource("10_vtmkg")]
-position = Vector2(2176, 1079)
+position = Vector2(2306, 969)
 
 [node name="Octorok" parent="." instance=ExtResource("11_6d03a")]
 position = Vector2(2887, 951)
@@ -218,3 +218,6 @@ card_id = "demon_035"
 position = Vector2(3127, 1125)
 content_type = 2
 quantity = 15
+
+[node name="IronKnuckle2" parent="." instance=ExtResource("10_vtmkg")]
+position = Vector2(2326, 1292)

@@ -15,6 +15,9 @@ var _soul_hold_timer: float = 0.0
 var _soul_hold_active: bool = false
 var _soul_hold_cell: Vector2i = Vector2i.ZERO
 
+@onready var _soul_particles: CPUParticles2D = $SoulParticles
+@onready var _soul_particles_center: CPUParticles2D = $SoulParticlesCenter
+
 
 func _physics_process(delta: float) -> void:
 	super._physics_process(delta)
@@ -89,7 +92,6 @@ func _pickup(other: Pickup) -> void:
 	Global.record_pickup(Global.current_map_path, other.position)
 	var soul_id: String = other.soul_id
 	Global.add_soul_to_collection(soul_id)
-	# Auto-equip if the soul's slot is still empty
 	var si: SoulItem = Global.SOULS.get(soul_id, null) as SoulItem
 	if si != null:
 		var slot_empty: bool = false
@@ -103,7 +105,7 @@ func _pickup(other: Pickup) -> void:
 
 
 func restore_state_from_global() -> void:
-	pass  # Soul state lives in Global; nothing to restore here.
+	pass
 
 
 func _get_facing_cell(map: Map) -> Vector2i:
@@ -116,23 +118,29 @@ func _get_facing_cell(map: Map) -> Vector2i:
 	return map.local_to_map(position + face_offset)
 
 
+func _facing_world_pos(map: Map) -> Vector2:
+	return map.map_to_local(_get_facing_cell(map))
+
+
 func _update_soul_catch(dt: float) -> void:
 	var map: Map = _get_map()
 	if map == null:
+		_stop_absorb_vfx()
 		return
 
 	var holding: bool = Input.is_action_pressed("interact")
 
 	if not holding:
+		_stop_absorb_vfx()
 		_soul_hold_timer = 0.0
 		_soul_hold_active = false
 		return
 
 	var cell: Vector2i = _get_facing_cell(map)
-	var soul_type: String = map.get_soulable_type(cell)
+	var soul_data: Dictionary = map.get_soul_data(cell)
 
-	# Only valid soulable tiles trigger the hold.
-	if soul_type == "":
+	if soul_data.is_empty():
+		_stop_absorb_vfx()
 		_soul_hold_timer = 0.0
 		_soul_hold_active = false
 		return
@@ -147,30 +155,82 @@ func _update_soul_catch(dt: float) -> void:
 		return
 
 	_soul_hold_timer += dt
+	var progress: float = clampf(_soul_hold_timer / SOUL_HOLD_TIME, 0.0, 1.0)
+	_update_absorb_vfx(progress, map)
+
 	if _soul_hold_timer < SOUL_HOLD_TIME:
 		return
 
-	# 2 seconds held — absorb.
+	# 2 seconds held — attempt absorption.
 	_soul_hold_active = true
-	_absorb_soul(soul_type, map, cell)
+	_stop_absorb_vfx()
+	_absorb_soul(soul_data, map.scene_file_path, cell)
 
 
-func _absorb_soul(soul_type: String, map: Map, cell: Vector2i) -> void:
-	if Global.caught_souls.get(soul_type, false):
-		_show_soul_dialog("You already carry the " + soul_type.capitalize() + " Soul.")
+func _absorb_soul(soul_data: Dictionary, map_path: String, cell: Vector2i) -> void:
+	var reward_id: String = soul_data.get("soul_item_id", "")
+	var absorb_chance: float = float(soul_data.get("absorb_chance", 1.0))
+
+	if reward_id == "":
+		_show_soul_dialog("Nothing to absorb here.")
 		return
-	Global.caught_souls[soul_type] = true
-	Global.add_soul_to_collection(soul_type)
-	var soul: SoulItem = Global.SOULS.get(soul_type, null) as SoulItem
+
+	# Lock this cell for the rest of the session — any attempt (success or fail) counts.
+	Global.record_soul_absorb(map_path, cell)
+
+	if randf() > absorb_chance:
+		_show_soul_dialog("The soul slipped away...")
+		return
+
+	# Soul item from SoulItemDB takes priority; fall back to CardDB.
+	var soul: SoulItem = Global.SOULS.get(reward_id, null) as SoulItem
 	if soul != null:
+		Global.add_soul_to_collection(reward_id)
 		var slot_empty: bool = false
 		match soul.slot:
 			"red":   slot_empty = Global.equipped_soul_red == ""
 			"blue":  slot_empty = Global.equipped_soul_blue == ""
 			"green": slot_empty = Global.equipped_soul_green == ""
 		if slot_empty:
-			Global.equip_soul(soul_type)
-	_show_soul_dialog(soul_type.capitalize() + " Soul absorbed!")
+			Global.equip_soul(reward_id)
+		var count: int = int(Global.soul_collection.get(reward_id, 1))
+		var suffix: String = " (x%d)" % count if count > 1 else ""
+		_show_soul_dialog(soul.name + " absorbed!" + suffix)
+	else:
+		var card: Dictionary = CardDB.get_card(reward_id)
+		if card.is_empty():
+			_show_soul_dialog("Nothing to absorb here.")
+			return
+		Global.collect_card(reward_id, false)
+		var card_name: String = str(card.get("name", reward_id))
+		var count: int = int(Global.card_collection.get(reward_id, 1))
+		var suffix: String = " (x%d)" % count if count > 1 else ""
+		_show_soul_dialog(card_name + " absorbed!" + suffix)
+
+
+func _update_absorb_vfx(progress: float, map: Map) -> void:
+	_play_animation("Absorb")
+	var tile_pos: Vector2 = _facing_world_pos(map)
+	_soul_particles.global_position = tile_pos
+	_soul_particles.emitting = true
+	_soul_particles.amount = int(lerp(14.0, 32.0, progress))
+	_soul_particles.speed_scale = lerp(0.8, 1.6, progress)
+	_soul_particles.color = Color(
+		lerp(0.2, 0.7, progress),
+		lerp(0.85, 1.0, progress),
+		1.0, 1.0)
+	_soul_particles_center.global_position = tile_pos
+	_soul_particles_center.emitting = true
+	_soul_particles_center.amount = int(lerp(4.0, 12.0, progress))
+	_soul_particles_center.color = Color(
+		lerp(0.7, 1.0, progress),
+		lerp(0.97, 1.0, progress),
+		1.0, 1.0)
+
+
+func _stop_absorb_vfx() -> void:
+	_soul_particles.emitting = false
+	_soul_particles_center.emitting = false
 
 
 func _show_soul_dialog(msg: String) -> void:

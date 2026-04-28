@@ -205,21 +205,30 @@ func _try_grass_drop(world_pos: Vector2) -> void:
 			add_child(pickup)
 
 
-## Returns the soul type of the tile at cell, or "" if not soulable.
-## Checks STATIC layer for custom data "soulable" (String: "stone"/"tree"/"flower").
-## Checks DYNAMIC layer for is_cuttable (flower).
-func get_soulable_type(cell: Vector2i) -> String:
-	# Dynamic layer: grass/flower
+## Returns {soul_item_id, absorb_chance} for the cell if is_soulable is set on either layer.
+## Checks DYNAMIC layer first (flowers, grass), then STATIC (rocks, trees).
+func get_soul_data(cell: Vector2i) -> Dictionary:
+	if Global.has_absorbed_soul(scene_file_path, cell):
+		return {}
 	var dyn: TileData = get_cell_tile_data(Layer.DYNAMIC, cell)
-	if dyn != null and dyn.get_custom_data("is_cuttable"):
-		return "flower"
-	# Static layer: custom soulable data
+	if dyn != null and dyn.get_custom_data("is_soulable"):
+		var item_id: String = str(dyn.get_custom_data("soul_item_id"))
+		var chance: float = _read_chance(dyn)
+		return {"soul_item_id": item_id, "absorb_chance": chance}
 	var st: TileData = get_cell_tile_data(Layer.STATIC, cell)
-	if st != null:
-		var stype: String = str(st.get_custom_data("soulable"))
-		if stype != "" and stype != "null":
-			return stype
-	return ""
+	if st != null and st.get_custom_data("is_soulable"):
+		var item_id: String = str(st.get_custom_data("soul_item_id"))
+		var chance: float = _read_chance(st)
+		return {"soul_item_id": item_id, "absorb_chance": chance}
+	return {}
+
+
+func _read_chance(td: TileData) -> float:
+	var layer_idx: int = tile_set.get_custom_data_layer_by_name("soul_absorb_chance")
+	if layer_idx < 0:
+		push_warning("Map: 'soul_absorb_chance' custom data layer missing from TileSet — defaulting to 1.0")
+		return 1.0
+	return float(td.get_custom_data_by_layer_id(layer_idx))
 
 
 func show_label(world_pos: Vector2, text: String, col: Color) -> void:

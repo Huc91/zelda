@@ -90,7 +90,7 @@ func _process(delta: float) -> void:
 func _on_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var ek: InputEventKey = event as InputEventKey
-		if not ek.pressed:
+		if not ek.pressed or ek.echo:
 			return
 		if _phase == _Phase.CHOICES:
 			if ek.keycode == KEY_UP and not _choices.is_empty():

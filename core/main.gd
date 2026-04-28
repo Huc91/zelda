@@ -133,7 +133,7 @@ func _find_walkable(center: Vector2i, min_r: int, max_r: int, used: Array) -> Ve
 func _on_bonfire_rested() -> void:
 	# Enemies respawn naturally when the player leaves and re-enters the map,
 	# since initialize_scene always creates fresh instances.
-	pass
+	Global.reset_tried_souls()
 
 
 func _on_card_battle_requested(p_first: bool, enemy: Node) -> void:

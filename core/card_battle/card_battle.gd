@@ -154,6 +154,13 @@ var _battle_font: Font
 var _ai_runner: CardBattleAIRunner
 signal battle_ended(player_won: bool)
 
+const _DUEL_GLOVE_ITEM_PATH: String = "res://data/items/duel-glove-item.png"
+const _DUEL_GLOVE_ATTACK_PATH: String = "res://data/items/duel-glove-attack.png"
+const _DUEL_GLOVE_SWING_DUR: float = 0.24
+var _duel_glove_swing_t: float = 0.0
+var _duel_glove_item_tex: Texture2D
+var _duel_glove_attack_tex: Texture2D
+
 
 # ══════════════════════════════════════════════════════════════════
 # SETUP
@@ -163,6 +170,8 @@ func setup(p_first: bool, p_enemy: Node) -> void:
 	enemy_actor  = p_enemy
 	layer        = 10
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_duel_glove_item_tex = load(_DUEL_GLOVE_ITEM_PATH) as Texture2D
+	_duel_glove_attack_tex = load(_DUEL_GLOVE_ATTACK_PATH) as Texture2D
 	_ensure_battle_font()
 	_view        = _View.new()
 	_view.b      = self
@@ -2564,6 +2573,7 @@ func _on_attack_face() -> void:
 		if _has_taunt(enemy_front):    _log("Attack the taunt!");       _view.queue_redraw(); return
 	att["attacked"] += 1
 	att["exhausted"] = att["attacked"] >= (2 if att.get("double_attack", false) else 1)
+	_start_duel_glove_swing()
 	_deal_damage_to_enemy(att["atk"])
 	if att.get("lifesteal", false): _heal_player(att["atk"])
 	_face_attack_followup(att, true)
@@ -2588,6 +2598,7 @@ func _on_attack_demon(d_idx: int, d_is_front: bool) -> void:
 			_log("Attack the taunt!"); _view.queue_redraw(); return
 	att["attacked"] += 1
 	att["exhausted"] = att["attacked"] >= (2 if att.get("double_attack", false) else 1)
+	_start_duel_glove_swing()
 	_log("%s → %s!" % [att["data"]["name"], d_board[d_idx]["data"]["name"]])
 	_do_combat(player_front, _sel_idx, true, true, d_board, d_idx, d_is_front)
 	_mode = Mode.IDLE
@@ -2876,6 +2887,9 @@ func _tick(delta: float) -> void:
 		if _enemy_spell_preview_t <= 0.0:
 			_enemy_spell_preview = {}
 		changed = true
+	if _duel_glove_swing_t > 0.0:
+		_duel_glove_swing_t = maxf(0.0, _duel_glove_swing_t - delta)
+		changed = true
 	if changed: _view.queue_redraw()
 	# Drag past threshold on a front minion → attack aim (arrow); exhausted minions skip
 	if _atk_drag_idx >= 0 and not _drag_active and is_player_turn and not _animating and not _ended \
@@ -2910,6 +2924,7 @@ func _on_draw() -> void:
 	_view.draw_rect(Rect2(CardBattleConstants.RAIL_LINE_X, CardBattleConstants.HAND_Y, CardBattleConstants.RIGHT_W, CardBattleConstants.HAND_H), CardBattleConstants.C_BG)
 
 	_draw_left_panel()
+	_draw_duel_glove_fx()
 	_draw_board()
 	if _mode == Mode.CHOOSE_PAY_MANA:
 		_draw_pay_stack_pending()
@@ -3084,6 +3099,26 @@ func _draw_left_panel() -> void:
 	_view.draw_rect(eb, CardBattleConstants.C_END_TURN if ea else CardBattleConstants.C_END_TURN_DIM)
 	_view.draw_rect(eb, CardBattleConstants.C_BLACK, false, 1.0)
 	_str_in_rect_center("END TURN", eb, 9, CardBattleConstants.C_TEXT_LT if ea else CardBattleConstants.C_TEXT_ON_DARK_DIM)
+
+
+func _start_duel_glove_swing() -> void:
+	_duel_glove_swing_t = _DUEL_GLOVE_SWING_DUR
+
+
+func _draw_duel_glove_fx() -> void:
+	if _duel_glove_item_tex != null:
+		var item_pos: Vector2 = Vector2(142.0, 436.0)
+		_view.draw_texture(_duel_glove_item_tex, Vector2(float(_tx(item_pos.x)), float(_tx(item_pos.y))))
+	if _duel_glove_swing_t <= 0.0 or _duel_glove_attack_tex == null:
+		return
+	var progress: float = 1.0 - (_duel_glove_swing_t / _DUEL_GLOVE_SWING_DUR)
+	var rot_angle: float = -1.2 + progress * 2.4
+	var center: Vector2 = Vector2(206.0, 347.0)
+	var tex_w: float = float(_duel_glove_attack_tex.get_width())
+	var tex_h: float = float(_duel_glove_attack_tex.get_height())
+	_view.draw_set_transform(Vector2(float(_tx(center.x)), float(_tx(center.y))), rot_angle, Vector2.ONE)
+	_view.draw_texture(_duel_glove_attack_tex, Vector2(-tex_w * 0.5, -tex_h * 0.5))
+	_view.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 # ══════════════════════════════════════════════════════════════════

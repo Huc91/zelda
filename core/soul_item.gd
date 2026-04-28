@@ -11,3 +11,4 @@ var initiative_bonus: int = 0
 var is_weapon: bool = false
 var weapon_scene: PackedScene = null
 var icon: Texture2D = null
+var sell_price: int = 1

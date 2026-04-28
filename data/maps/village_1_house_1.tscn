@@ -19,6 +19,7 @@ tile_set = ExtResource("2_jwv3u")
 
 [node name="NPC" parent="." index="4" instance=ExtResource("3_6g44q")]
 position = Vector2(61, 75)
+dialogue_id = "coolio"
 sprite_name = "coolio"
 
 [node name="Chest" parent="." index="5" instance=ExtResource("4_l7jhm")]

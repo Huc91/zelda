@@ -1,4 +1,4 @@
-[gd_scene load_steps=26 format=3 uid="uid://dtrlj82v8h6ru"]
+[gd_scene load_steps=33 format=3 uid="uid://dtrlj82v8h6ru"]
 
 [ext_resource type="Script" uid="uid://brmq38cncrsoy" path="res://data/actors/player/player.gd" id="1_4v2fk"]
 [ext_resource type="Texture2D" uid="uid://bw2oehx1j7o4i" path="res://data/actors/player/link.png" id="1_w4kfg"]
@@ -84,8 +84,65 @@ region = Rect2(64, 0, 16, 16)
 atlas = ExtResource("1_w4kfg")
 region = Rect2(80, 0, 16, 16)
 
+[sub_resource type="AtlasTexture" id="AtlasTexture_absdn0"]
+atlas = ExtResource("1_w4kfg")
+region = Rect2(0, 48, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_absdn1"]
+atlas = ExtResource("1_w4kfg")
+region = Rect2(16, 48, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_abssd0"]
+atlas = ExtResource("1_w4kfg")
+region = Rect2(32, 48, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_abssd1"]
+atlas = ExtResource("1_w4kfg")
+region = Rect2(48, 48, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_absup0"]
+atlas = ExtResource("1_w4kfg")
+region = Rect2(64, 48, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_absup1"]
+atlas = ExtResource("1_w4kfg")
+region = Rect2(80, 48, 16, 16)
+
 [sub_resource type="SpriteFrames" id="SpriteFrames_ties8"]
 animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_absdn0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_absdn1")
+}],
+"loop": true,
+"name": &"AbsorbDown",
+"speed": 4.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_abssd0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_abssd1")
+}],
+"loop": true,
+"name": &"AbsorbSide",
+"speed": 4.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_absup0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_absup1")
+}],
+"loop": true,
+"name": &"AbsorbUp",
+"speed": 4.0
+}, {
 "frames": [{
 "duration": 1.0,
 "texture": SubResource("AtlasTexture_haewf")
@@ -228,3 +285,38 @@ frame_progress = 0.420857
 visible = false
 rotation = 0.785398
 shape = SubResource("RectangleShape2D_h3sv4")
+
+[node name="SoulParticles" type="CPUParticles2D" parent="."]
+emitting = false
+amount = 28
+lifetime = 0.55
+explosiveness = 0.0
+randomness = 0.35
+visibility_rect = Rect2(-8, -8, 16, 16)
+emission_shape = 3
+emission_rect_extents = Vector2(7.0, 7.0)
+direction = Vector2(0, -1)
+spread = 50.0
+gravity = Vector2(0, -15.0)
+initial_velocity_min = 5.0
+initial_velocity_max = 22.0
+scale_amount_min = 1.0
+scale_amount_max = 1.8
+color = Color(0.3, 0.88, 1, 1)
+
+[node name="SoulParticlesCenter" type="CPUParticles2D" parent="."]
+emitting = false
+amount = 8
+lifetime = 0.45
+explosiveness = 0.0
+randomness = 1.0
+visibility_rect = Rect2(-8, -8, 16, 16)
+emission_shape = 0
+direction = Vector2(0, -1)
+spread = 90.0
+gravity = Vector2(0, -5.0)
+initial_velocity_min = 2.0
+initial_velocity_max = 10.0
+scale_amount_min = 1.5
+scale_amount_max = 2.5
+color = Color(0.85, 0.99, 1, 1)

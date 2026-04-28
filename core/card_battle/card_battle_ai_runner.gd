@@ -72,8 +72,7 @@ func play_phase() -> void:
 		# Try pitching a pitcher demon for 2 mana if it enables a better play
 		var pitcher_i: int = pick_pitcher_to_pitch_index()
 		if pitcher_i >= 0:
-			b.ai_enemy_pitch_idx(pitcher_i)
-			b.ai_log_line("Enemy pitches %s for 2!" % b.enemy_hand[pitcher_i]["name"] if pitcher_i < b.enemy_hand.size() else "")
+			b.ai_enemy_pitch_idx(pitcher_i)   # already logs the pitch internally
 			b.ai_queue_redraw()
 			await b.get_tree().create_timer(0.28, true).timeout
 			continue
@@ -619,7 +618,7 @@ func attack_phase() -> void:
 				advance_i = i
 				break
 		if advance_i < 0:
-			advance_i = 0
+			return  # no viable frontliner — protect support demons, skip attack
 		var mover: Dictionary = b.enemy_rear[advance_i]
 		b.enemy_rear.remove_at(advance_i)
 		mover["exhausted"] = mover.get("frozen", false)

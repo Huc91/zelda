@@ -28,6 +28,9 @@ var lit_bonfires: Dictionary = {}  ## { map_path: Array[Vector2] }
 ## All opened chest positions keyed by map path — persists across map transitions.
 var opened_chests: Dictionary = {}  ## { map_path: Array[Vector2] }
 
+## Cells where the player has already attempted soul absorption (map_path → Array[Vector2i]).
+var absorbed_soul_cells: Dictionary = {}
+
 ## Backward-compat: emitted alongside hp_changed.
 signal lives_changed(new_lives: int)
 signal hp_changed(new_hp: int, max_hp: int)
@@ -42,7 +45,7 @@ var equipped_soul_green: String = ""
 
 ## soul_id -> count owned.
 var soul_collection: Dictionary = {}
-## soul_id -> true; can only catch one of each type.
+## soul_id -> true; kept for save-file backward-compat but no longer enforced.
 var caught_souls: Dictionary = {}
 
 signal soul_changed
@@ -157,6 +160,7 @@ func reset_new_game() -> void:
 	lit_bonfires.clear()
 	opened_chests.clear()
 	collected_pickups.clear()
+	absorbed_soul_cells.clear()
 	player_items.clear()
 	base_set_packs = 0
 	card_collection.clear()
@@ -191,43 +195,41 @@ func _init_card_collection() -> void:
 
 
 func _init_souls() -> void:
-	var sword: SoulItem = SoulItem.new()
-	sword.soul_id = "sword"
-	sword.slot = "red"
-	sword.name = "Soul Sword"
-	sword.description = "A blade imbued with a hero's spirit."
-	sword.is_weapon = true
-	var sword_scene: Variant = load("res://data/actors/attacks/sword.tscn")
-	if sword_scene != null:
-		sword.weapon_scene = sword_scene as PackedScene
-	var sword_icon: Variant = load("res://data/items/sword-icon.png")
-	if sword_icon != null:
-		sword.icon = sword_icon as Texture2D
-	SOULS["sword"] = sword
-
-	var stone: SoulItem = SoulItem.new()
-	stone.soul_id = "stone"
-	stone.slot = "blue"
-	stone.name = "Stone Soul"
-	stone.description = "+1 max HP."
-	stone.max_hp_bonus = 1
-	SOULS["stone"] = stone
-
-	var tree: SoulItem = SoulItem.new()
-	tree.soul_id = "tree"
-	tree.slot = "green"
-	tree.name = "Tree Soul"
-	tree.description = "+4 HP healed at end of battle."
-	tree.heal_after_battle = 4
-	SOULS["tree"] = tree
-
-	var flower: SoulItem = SoulItem.new()
-	flower.soul_id = "flower"
-	flower.slot = "green"
-	flower.name = "Flower Soul"
-	flower.description = "+1 Luck."
-	flower.luck_bonus = 1
-	SOULS["flower"] = flower
+	for id: String in SoulItemDB.all_ids():
+		var data: Dictionary = SoulItemDB.get_item(id)
+		var soul: SoulItem = SoulItem.new()
+		soul.soul_id = id
+		soul.name = str(data.get("name", id))
+		soul.slot = str(data.get("slot", "green"))
+		soul.description = str(data.get("description", ""))
+		soul.luck_bonus = int(data.get("luck_bonus", 0))
+		soul.max_hp_bonus = int(data.get("max_hp_bonus", 0))
+		soul.heal_after_battle = int(data.get("heal_after_battle", 0))
+		soul.initiative_bonus = int(data.get("initiative_bonus", 0))
+		soul.is_weapon = bool(data.get("is_weapon", false))
+		soul.sell_price = int(data.get("sell_price", 1))
+		var ws: String = str(data.get("weapon_scene", ""))
+		if ws != "" and ResourceLoader.exists(ws):
+			var loaded: Variant = load(ws)
+			if loaded != null:
+				soul.weapon_scene = loaded as PackedScene
+		var icon_path: String = str(data.get("icon", ""))
+		if icon_path != "" and ResourceLoader.exists(icon_path):
+			var loaded: Variant = load(icon_path)
+			if loaded != null:
+				soul.icon = loaded as Texture2D
+		if soul.icon == null:
+			var sheet_path: String = str(data.get("icon_sheet", ""))
+			if sheet_path != "" and ResourceLoader.exists(sheet_path):
+				var sheet: Variant = load(sheet_path)
+				if sheet != null:
+					var region: Rect2 = data.get("icon_region", Rect2())
+					if region.size != Vector2.ZERO:
+						var atlas: AtlasTexture = AtlasTexture.new()
+						atlas.atlas = sheet as Texture2D
+						atlas.region = region
+						soul.icon = atlas
+		SOULS[id] = soul
 
 
 ## Returns the sum of luck_bonus from all equipped souls plus foil card count, clamped 0–42.
@@ -363,8 +365,23 @@ func unequip_soul(slot: String) -> void:
 
 
 func add_soul_to_collection(soul_id: String) -> void:
-	soul_collection[soul_id] = int(soul_collection.get(soul_id, 0)) + 1
+	soul_collection[soul_id] = mini(int(soul_collection.get(soul_id, 0)) + 1, 99)
 	soul_changed.emit()
+
+
+## Sell one copy of a soul item. Returns money gained (0 if none owned).
+func sell_soul_item(soul_id: String) -> int:
+	var count: int = int(soul_collection.get(soul_id, 0))
+	if count <= 0:
+		return 0
+	var soul: Variant = SOULS.get(soul_id, null)
+	var price: int = 1
+	if soul != null:
+		price = (soul as SoulItem).sell_price
+	soul_collection[soul_id] = count - 1
+	add_money(price)
+	soul_changed.emit()
+	return price
 
 
 ## Returns total heal_after_battle HP from all equipped souls.
@@ -657,6 +674,25 @@ func _deserialize_vec2_dict(src: Dictionary) -> Dictionary:
 
 func request_card_battle(player_first: bool, enemy: Node) -> void:
 	card_battle_requested.emit(player_first, enemy)
+
+
+## Mark a tile cell as soul-absorbed so it can't be attempted again this session.
+func record_soul_absorb(map_path: String, cell: Vector2i) -> void:
+	if not absorbed_soul_cells.has(map_path):
+		absorbed_soul_cells[map_path] = []
+	var arr: Array = absorbed_soul_cells[map_path]
+	if not arr.has(cell):
+		arr.append(cell)
+
+
+## Returns true if this cell has already been soul-absorbed this session.
+func has_absorbed_soul(map_path: String, cell: Vector2i) -> bool:
+	return (absorbed_soul_cells.get(map_path, []) as Array).has(cell)
+
+
+## Clear all tried soul cells on rest so each cell can be attempted once per rest cycle.
+func reset_tried_souls() -> void:
+	absorbed_soul_cells.clear()
 
 
 ## Record that a pickup at `pos` in `map_path` has been collected.

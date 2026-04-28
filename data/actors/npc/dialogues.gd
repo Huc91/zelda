@@ -103,10 +103,19 @@ const DB: Dictionary = {
 	},
 
 	"fire_guide": {
-		"name": "Flame Keeper",
-		"lines": [
-			"You can always rest here.",
-			"Come by the unswept fire.",
+		"name": "Elda",
+		"sequences": [
+			{
+				"lines": [
+					"This village has no history older than three generations.",
+					"No founding stone. No old graves.",
+					"We just... arrived here one day.",
+					"Funny. Nobody seems to ask why.",
+				],
+			},
+			{
+				"lines": ["Come back if you need a word."],
+			},
 		],
 	},
 
@@ -116,11 +125,11 @@ const DB: Dictionary = {
 			{
 				"lines": [
 					"Was evoked from the graveyard?",
-					"...",
-					"Ah hello there!",
-					"Inside this cave there is a shiny little thing.",
-					"I think you need it.",
-					"Me? No thanks, I'm afraid.",
+					"...Ah. Hello there.",
+					"Inside the cave — something waits.",
+					"Not hidden. Placed.",
+					"I think you're meant to find it.",
+					"Me? Something in there already knows my name.",
 				],
 				"choices": [
 					{"text": "I'll go find it.",     "event": "bonzo_spawn_accepted"},
@@ -128,7 +137,11 @@ const DB: Dictionary = {
 				],
 			},
 			{
-				"lines": ["Still haven't found it? It's just inside."],
+				"lines": [
+					"Still haven't found it?",
+					"It's placed just inside.",
+					"Things made to be found tend to wait.",
+				],
 			},
 		],
 	},
@@ -212,10 +225,12 @@ const DB: Dictionary = {
 	},
 
 	"coolio": {
-		"name": "Coolio",
+		"name": "Sable",
 		"lines": [
-			"Stay cool. Play Aerial demons.",
-			"Nothing says cool like flying past the front row.",
+			"I only play Aerial demons.",
+			"They bypass the front row — nothing touches them.",
+			"But sometimes, looking at the card too long...",
+			"I get this feeling. Like it's looking back.",
 		],
 	},
 

@@ -33,6 +33,7 @@ var _max_scroll: float = 0.0
 var _cards: Array = []
 var _grid_x0: float = 0.0
 var _back_rect: Rect2 = Rect2(16, 8, 92, 28)
+var _detail_card: Dictionary = {}
 
 
 func _ready() -> void:
@@ -96,6 +97,16 @@ func _scroll(amount: float) -> void:
 func _input(event: InputEvent) -> void:
 	if not visible:
 		return
+	if not _detail_card.is_empty():
+		var dismiss: bool = false
+		if event is InputEventKey and (event as InputEventKey).pressed:
+			dismiss = true
+		elif event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
+			dismiss = true
+		if dismiss:
+			_detail_card = {}
+			get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey:
 		var ek: InputEventKey = event as InputEventKey
 		if ek.pressed:
@@ -126,12 +137,22 @@ func _on_input(event: InputEvent) -> void:
 	# MOUSE_FILTER_STOP on _view captures the event before _input() sees it.
 	if not visible:
 		return
+	if not _detail_card.is_empty():
+		if event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
+			_detail_card = {}
+			_view.accept_event()
+		return
 	if event is InputEventMouseButton:
 		var mb: InputEventMouseButton = event as InputEventMouseButton
 		if mb.pressed:
 			if mb.button_index == MOUSE_BUTTON_LEFT and _back_rect.has_point(mb.position):
 				request_back()
 				_view.accept_event()
+			elif mb.button_index == MOUSE_BUTTON_LEFT:
+				var hit: Dictionary = _card_at_point(mb.position)
+				if not hit.is_empty():
+					_detail_card = hit
+					_view.accept_event()
 			elif mb.button_index == MOUSE_BUTTON_WHEEL_UP:
 				_scroll(-32.0)
 				_view.accept_event()
@@ -182,6 +203,9 @@ func _on_draw() -> void:
 		var thumb_y: float = float(HEADER_H) + 2.0 + (_scroll_y / _max_scroll) * (track_h - thumb_h)
 		_view.draw_rect(Rect2(W - 5.0, float(HEADER_H) + 2.0, 3.0, track_h), Color(0.7, 0.7, 0.7))
 		_view.draw_rect(Rect2(W - 5.0, thumb_y, 3.0, thumb_h), Color(0.3, 0.3, 0.4))
+
+	if not _detail_card.is_empty():
+		_draw_detail_overlay()
 
 
 func _draw_cell(r: Rect2, card: Dictionary, owned_normal: int, owned_foil: int) -> void:
@@ -235,3 +259,66 @@ func _draw_back_button() -> void:
 	_view.draw_rect(_back_rect, Color(0.24, 0.20, 0.34))
 	_view.draw_rect(_back_rect, Color.WHITE, false, 2.0)
 	_draw_str("< BACK", _back_rect.position.x + 12.0, _back_rect.position.y + 7.0, 10, Color.WHITE)
+
+
+func _card_at_point(pt: Vector2) -> Dictionary:
+	if pt.y <= float(HEADER_H):
+		return {}
+	var ry: float = pt.y + _scroll_y - float(START_Y)
+	if ry < 0.0:
+		return {}
+	var row: int = int(ry / _cell_stride_y())
+	if fmod(ry, _cell_stride_y()) >= float(CARD_H):
+		return {}
+	var col_f: float = pt.x - _grid_x0
+	if col_f < 0.0:
+		return {}
+	var col: int = int(col_f / float(CARD_W + GAP_X))
+	if col >= GRID_COLS or fmod(col_f, float(CARD_W + GAP_X)) >= float(CARD_W):
+		return {}
+	var idx: int = row * GRID_COLS + col
+	if idx >= _cards.size():
+		return {}
+	var card: Dictionary = _cards[idx]
+	var id: String = str(card.get("id", ""))
+	if Global.card_collection.get(id, 0) <= 0 and Global.foil_collection.get(id, 0) <= 0:
+		return {}
+	return card
+
+
+func _draw_detail_overlay() -> void:
+	var id: String = str(_detail_card.get("id", ""))
+	_view.draw_rect(Rect2(0, 0, float(W), float(H)), Color(0.08, 0.05, 0.14))
+	var cx: float = (float(W) - float(CARD_W)) * 0.5
+	var cy: float = 24.0
+	var cr := Rect2(cx, cy, float(CARD_W), float(CARD_H))
+	var draw_card: Dictionary = _detail_card.duplicate()
+	draw_card["foil"] = Global.foil_collection.get(id, 0) > 0
+	CardZoomDraw.draw(_view, _font, cr, draw_card, {})
+	var ny: float = cy + float(CARD_H) + 10.0
+	_draw_str_c(str(_detail_card.get("name", "")), float(W) * 0.5, ny, 10, Color.WHITE)
+	var flavor: String = CardDB.get_flavor(id)
+	if not flavor.is_empty():
+		var lines: Array[String] = _wrap_text(flavor, 380.0, 8)
+		for li: int in lines.size():
+			_draw_str_c(lines[li], float(W) * 0.5, ny + 22.0 + float(li) * 13.0, 8, Color(0.78, 0.74, 0.66))
+	_draw_str_c("press any key to close", float(W) * 0.5, float(H) - 16.0, 7, Color(0.45, 0.45, 0.45))
+
+
+func _wrap_text(text: String, max_w: float, size: int) -> Array[String]:
+	var lines: Array[String] = []
+	if _font == null:
+		lines.append(text)
+		return lines
+	var words: PackedStringArray = text.split(" ")
+	var current: String = ""
+	for word: String in words:
+		var candidate: String = word if current.is_empty() else current + " " + word
+		if _font.get_string_size(candidate, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > max_w and not current.is_empty():
+			lines.append(current)
+			current = word
+		else:
+			current = candidate
+	if not current.is_empty():
+		lines.append(current)
+	return lines

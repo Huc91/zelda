@@ -1,7 +1,9 @@
 ## Small non-blocking info box. No screen overlay. No pause. No input required.
 class_name InfoBox
 extends CanvasLayer
+const PixelFont = preload("res://core/ui/pixel_font.gd")
 
+const PixelChamferStyleBox = preload("res://core/ui/pixel_chamfer_stylebox.gd")
 const FONT_PATH: String = "res://assets/fonts/Nudge Orb.ttf"
 const C_BG: Color     = Color(0.08, 0.05, 0.16, 1.0)
 const C_BORDER: Color = Color(0.6, 0.5, 0.9, 1.0)
@@ -16,7 +18,7 @@ var _font: Font
 func _ready() -> void:
 	layer = 29
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_font = load(FONT_PATH) as Font
+	_font = PixelFont.nudge_orb()
 	_ensure_view()
 
 
@@ -79,7 +81,6 @@ func _on_draw() -> void:
 	var bx: float = (640.0 - bw) * 0.5
 	var by: float = 576.0 - bh - 16.0
 	var box: Rect2 = Rect2(bx, by, bw, bh)
-	_view.draw_rect(box, C_BG)
-	_view.draw_rect(box, C_BORDER, false, 1.0)
+	PixelChamferStyleBox.draw_chamfer_control(_view, box, C_BG, C_BORDER, 1, 2)
 	_view.draw_string(_font, Vector2(bx + pad_x, by + pad_y + float(fs)),
 		_text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, C_TEXT)

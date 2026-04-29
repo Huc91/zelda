@@ -229,6 +229,11 @@ func _init_souls() -> void:
 						atlas.atlas = sheet as Texture2D
 						atlas.region = region
 						soul.icon = atlas
+		var hud_icon_path: String = str(data.get("hud_icon", ""))
+		if hud_icon_path != "" and ResourceLoader.exists(hud_icon_path):
+			var loaded_hi: Variant = load(hud_icon_path)
+			if loaded_hi != null:
+				soul.hud_icon = loaded_hi as Texture2D
 		SOULS[id] = soul
 
 

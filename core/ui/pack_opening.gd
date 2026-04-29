@@ -2,6 +2,7 @@
 ## Triggered by UI. Emits `finished` when player collects the cards.
 class_name PackOpening
 extends CanvasLayer
+const PixelFont = preload("res://core/ui/pixel_font.gd")
 
 signal finished
 
@@ -69,7 +70,7 @@ var _foil_time: float = 0.0
 func _ready() -> void:
 	layer = 20
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_font = load(FONT_PATH) as Font
+	_font = PixelFont.nudge_orb()
 	_view = Control.new()
 	_view.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_view.mouse_filter = Control.MOUSE_FILTER_STOP

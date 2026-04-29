@@ -1,11 +1,12 @@
 class_name TitleScreen extends Control
+const PixelFont = preload("res://core/ui/pixel_font.gd")
 
 enum Choice { CONTINUE, NEW_GAME, DEV_MODE }
 
 signal chosen(choice: Choice)
 
 const _LOGO: Texture2D = preload("res://assets/logo.png")
-const _FONT: Font = preload("res://assets/fonts/Nudge Orb.ttf")
+var _font: Font
 
 const _W: int = 640
 const _H: int = 576
@@ -21,6 +22,7 @@ var _ctrl: Control
 
 
 func _ready() -> void:
+	_font = PixelFont.nudge_orb()
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
@@ -75,14 +77,14 @@ func _draw_screen() -> void:
 			color = _SELECTED_COLOR
 		else:
 			color = _NORMAL_COLOR
-		var tw: float = _FONT.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, _FONT_SIZE).x
+		var tw: float = _font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, _FONT_SIZE).x
 		var tx: float = (_W - tw) * 0.5
 		var ty: float = start_y + i * item_h
 		# Cursor arrow
 		if i == _cursor and enabled:
-			_ctrl.draw_string(_FONT, Vector2(tx - 16.0, ty), ">",
+			_ctrl.draw_string(_font, Vector2(tx - 16.0, ty), ">",
 					HORIZONTAL_ALIGNMENT_LEFT, -1, _FONT_SIZE, _SELECTED_COLOR)
-		_ctrl.draw_string(_FONT, Vector2(tx, ty), label,
+		_ctrl.draw_string(_font, Vector2(tx, ty), label,
 				HORIZONTAL_ALIGNMENT_LEFT, -1, _FONT_SIZE, color)
 
 

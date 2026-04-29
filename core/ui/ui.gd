@@ -44,8 +44,9 @@ func _process(_delta: float) -> void:
 		return
 	if _is_any_inventory_menu_open():
 		if Input.is_action_just_pressed("inventory"):
-			_close_all_menus()
-			return
+			if not (_is_deck_editor_open() and _deck_editor.is_deck_name_field_focused()):
+				_close_all_menus()
+				return
 		if Input.is_action_just_pressed("pause"):
 			_handle_menu_back()
 			return

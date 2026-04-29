@@ -1,4 +1,5 @@
 extends Control
+const PixelFont = preload("res://core/ui/pixel_font.gd")
 
 const STARTING_MAP: String = "res://data/maps/overworld.tscn"
 const STARTING_ENTRANCE := Vector2i(116, 80)
@@ -221,7 +222,7 @@ func _show_game_over() -> void:
 	go.layer = 50
 	go.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(go)
-	var font: Font = load("res://assets/fonts/Nudge Orb.ttf") as Font
+	var font: Font = PixelFont.nudge_orb()
 	var ctrl: Control = Control.new()
 	ctrl.set_anchors_preset(Control.PRESET_FULL_RECT)
 	ctrl.focus_mode = Control.FOCUS_CLICK

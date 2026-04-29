@@ -2,11 +2,11 @@
 ## Place on the map via SpawnLayer. Set `merchant_type` to control stock.
 class_name Merchant
 extends StaticBody2D
+const PixelFont = preload("res://core/ui/pixel_font.gd")
 
 @export_enum("general", "rare_hunter", "spell_dealer") var merchant_type: String = "general"
 
 const INTERACT_RADIUS: float = 24.0
-const FONT_PATH: String = "res://assets/fonts/Nudge Orb.ttf"
 
 var _player: Node = null
 var _ui_open: bool = false
@@ -41,6 +41,7 @@ func _build_sprite() -> void:
 	var lbl: Label = Label.new()
 	lbl.position = Vector2(-20, -28)
 	lbl.text = _display_name()
+	lbl.add_theme_font_override("font", PixelFont.nudge_orb())
 	lbl.add_theme_font_size_override("font_size", 6)
 	add_child(lbl)
 

@@ -1,6 +1,7 @@
 extends Control
 
-const FONT: FontFile = preload("res://assets/fonts/Nudge Orb.ttf")
+const PixelChamferStyleBox = preload("res://core/ui/pixel_chamfer_stylebox.gd")
+const PixelFont = preload("res://core/ui/pixel_font.gd")
 
 const DECKBOX: Dictionary = {
 	"black":  preload("res://core/ui/deckbox_black.png"),
@@ -62,9 +63,11 @@ var _header_action_btn: Button
 var _hub_buttons: Array[Button] = []
 var _hub_cursor: int = 0
 var _packs_count_lbl: Label
+var _font: Font
 
 
 func _ready() -> void:
+	_font = PixelFont.nudge_orb()
 	visible = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -106,7 +109,7 @@ func _build_bg() -> void:
 	title.position = Vector2i(0, 24)
 	title.size = Vector2i(640, 40)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_override("font", FONT)
+	title.add_theme_font_override("font", _font)
 	title.add_theme_font_size_override("font_size", 22)
 	title.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
 	add_child(title)
@@ -124,7 +127,7 @@ func _build_bg() -> void:
 	hint.position = Vector2i(0, 544)
 	hint.size = Vector2i(640, 20)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.add_theme_font_override("font", FONT)
+	hint.add_theme_font_override("font", _font)
 	hint.add_theme_font_size_override("font_size", 10)
 	hint.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
 	add_child(hint)
@@ -162,33 +165,31 @@ func _make_card(def: Dictionary, cx: int, cy: int, idx: int) -> Button:
 	btn.focus_entered.connect(_on_hub_button_focus_entered.bind(idx))
 
 	# Normal
-	var sb_n := StyleBoxFlat.new()
+	var sb_n := PixelChamferStyleBox.new()
 	sb_n.bg_color = HUB_CARD_BG
-	sb_n.set_corner_radius_all(6)
-	sb_n.border_width_left   = 2
-	sb_n.border_width_right  = 2
-	sb_n.border_width_top    = 2
-	sb_n.border_width_bottom = 2
+	sb_n.border_width = 2
 	sb_n.border_color = HUB_CARD_BORDER
+	sb_n.chamfer_pixels = 2
+	sb_n.set_content_margin_all(8)
 	btn.add_theme_stylebox_override("normal", sb_n)
 
 	# Hover
-	var sb_h := sb_n.duplicate() as StyleBoxFlat
+	var sb_h = sb_n.duplicate()
 	sb_h.bg_color = HUB_CARD_BG.lightened(0.10)
 	sb_h.border_color = HUB_CARD_FOCUS
 	btn.add_theme_stylebox_override("hover", sb_h)
 
 	# Pressed
-	var sb_p := sb_n.duplicate() as StyleBoxFlat
+	var sb_p = sb_n.duplicate()
 	sb_p.bg_color = HUB_CARD_BG.darkened(0.16)
 	sb_p.border_color = HUB_CARD_FOCUS
 	btn.add_theme_stylebox_override("pressed", sb_p)
 
-	var sb_f := sb_h.duplicate() as StyleBoxFlat
+	var sb_f = sb_h.duplicate()
 	btn.add_theme_stylebox_override("focus", sb_f)
 
 	btn.add_theme_color_override("font_color", Color(1, 1, 1))
-	btn.add_theme_font_override("font", FONT)
+	btn.add_theme_font_override("font", _font)
 
 	btn.pressed.connect(_on_card_pressed.bind(idx))
 
@@ -198,7 +199,7 @@ func _make_card(def: Dictionary, cx: int, cy: int, idx: int) -> Button:
 	lbl.position = Vector2i(0, 52)
 	lbl.size = Vector2i(CARD_W, 28)
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl.add_theme_font_override("font", FONT)
+	lbl.add_theme_font_override("font", _font)
 	lbl.add_theme_font_size_override("font_size", 13)
 	lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -210,7 +211,7 @@ func _make_card(def: Dictionary, cx: int, cy: int, idx: int) -> Button:
 	desc.position = Vector2i(8, 86)
 	desc.size = Vector2i(CARD_W - 16, 34)
 	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	desc.add_theme_font_override("font", FONT)
+	desc.add_theme_font_override("font", _font)
 	desc.add_theme_font_size_override("font_size", 10)
 	desc.add_theme_color_override("font_color", Color(1, 1, 1, 1).darkened(0.1))
 	desc.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -221,7 +222,7 @@ func _make_card(def: Dictionary, cx: int, cy: int, idx: int) -> Button:
 		packs_lbl.position = Vector2i(0, 132)
 		packs_lbl.size = Vector2i(CARD_W, 18)
 		packs_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		packs_lbl.add_theme_font_override("font", FONT)
+		packs_lbl.add_theme_font_override("font", _font)
 		packs_lbl.add_theme_font_size_override("font_size", 10)
 		packs_lbl.add_theme_color_override("font_color", Color(0.95, 0.9, 0.35))
 		packs_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -289,7 +290,7 @@ func _show_deck_list() -> void:
 	_deck_list.visible = true
 	_title_lbl.text = "DECKBUILDER"
 	_header_action_btn.text = "< BACK"
-	_hint_lbl.text = "ESC: back    I: close to game"
+	_hint_lbl.text = "ESC: back to hub"
 	refresh_decks()
 
 
@@ -326,7 +327,7 @@ func _make_deck_slot(index: int, deck: Dictionary) -> Control:
 	name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	name_lbl.custom_minimum_size = Vector2(120, 36)
 	name_lbl.clip_text = true
-	name_lbl.add_theme_font_override("font", FONT)
+	name_lbl.add_theme_font_override("font", _font)
 	name_lbl.add_theme_font_size_override("font_size", 11)
 	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_child(name_lbl)
@@ -341,7 +342,7 @@ func _make_deck_slot(index: int, deck: Dictionary) -> Control:
 		]
 		power_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		power_lbl.custom_minimum_size = Vector2(120, 20)
-		power_lbl.add_theme_font_override("font", FONT)
+		power_lbl.add_theme_font_override("font", _font)
 		power_lbl.add_theme_font_size_override("font_size", 8)
 		power_lbl.add_theme_color_override("font_color", Color(0.75, 0.95, 0.75))
 		power_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -378,24 +379,28 @@ func _make_deck_slot(index: int, deck: Dictionary) -> Control:
 
 
 func _style_flat(btn: Button, bg: Color) -> void:
-	var sb := StyleBoxFlat.new()
+	var sb := PixelChamferStyleBox.new()
 	sb.bg_color = bg
-	sb.set_corner_radius_all(3)
+	sb.border_color = Color(0.88, 0.90, 0.96)
+	sb.border_width = 2
+	sb.chamfer_pixels = 2
+	sb.set_content_margin_all(6)
 	btn.add_theme_stylebox_override("normal", sb)
-	var sb_h := sb.duplicate() as StyleBoxFlat
+	var sb_h = sb.duplicate()
 	sb_h.bg_color = bg.lightened(0.15)
 	btn.add_theme_stylebox_override("hover", sb_h)
-	var sb_p := sb.duplicate() as StyleBoxFlat
+	var sb_p = sb.duplicate()
 	sb_p.bg_color = bg.darkened(0.15)
 	btn.add_theme_stylebox_override("pressed", sb_p)
-	var sb_f := sb_h.duplicate() as StyleBoxFlat
+	var sb_f = sb_h.duplicate()
 	btn.add_theme_stylebox_override("focus", sb_f)
-	var sb_d := sb.duplicate() as StyleBoxFlat
+	var sb_d = sb.duplicate()
 	sb_d.bg_color = bg.darkened(0.30)
+	sb_d.border_color = Color(0.55, 0.56, 0.62)
 	btn.add_theme_stylebox_override("disabled", sb_d)
 	btn.add_theme_color_override("font_color", Color(1, 1, 1))
 	btn.add_theme_color_override("font_disabled_color", Color(0.6, 0.6, 0.6))
-	btn.add_theme_font_override("font", FONT)
+	btn.add_theme_font_override("font", _font)
 	btn.add_theme_font_size_override("font_size", 11)
 
 

@@ -2,6 +2,7 @@
 ## Ownership line below each card (normal / foil counts).
 class_name CollectionBinder
 extends CanvasLayer
+const PixelFont = preload("res://core/ui/pixel_font.gd")
 
 signal closed
 
@@ -39,7 +40,7 @@ var _detail_card: Dictionary = {}
 func _ready() -> void:
 	layer = 18
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_font = load(FONT_PATH) as Font
+	_font = PixelFont.nudge_orb()
 	_view = Control.new()
 	_view.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_view.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -211,7 +212,7 @@ func _on_draw() -> void:
 func _draw_cell(r: Rect2, card: Dictionary, owned_normal: int, owned_foil: int) -> void:
 	if owned_normal <= 0 and owned_foil <= 0:
 		_view.draw_rect(r, C_EMPTY)
-		_view.draw_rect(r, C_EMPTY_BOR, false, 1.0)
+		_border(r, C_EMPTY_BOR, 1)
 		_draw_str_c("?", r.position.x + r.size.x * 0.5, r.position.y + r.size.y * 0.5 - 6.0, 10, Color(0.65, 0.65, 0.65))
 		return
 
@@ -228,6 +229,15 @@ func _draw_cell(r: Rect2, card: Dictionary, owned_normal: int, owned_foil: int) 
 	if count_str != "":
 		var ly: float = r.position.y + r.size.y + 2.0
 		_draw_str_c(count_str, r.get_center().x, ly, 7, C_TEXT)
+
+
+func _border(r: Rect2, col: Color, w: int) -> void:
+	var x: int = int(r.position.x); var y: int = int(r.position.y)
+	var rw: int = int(r.size.x);    var rh: int = int(r.size.y)
+	_view.draw_rect(Rect2(x,          y,          rw, w),          col)
+	_view.draw_rect(Rect2(x,          y + rh - w, rw, w),          col)
+	_view.draw_rect(Rect2(x,          y + w,      w,  rh - w * 2), col)
+	_view.draw_rect(Rect2(x + rw - w, y + w,      w,  rh - w * 2), col)
 
 
 func _draw_str(text: String, x: float, y: float, size: int, col: Color) -> void:
@@ -257,7 +267,7 @@ func request_back() -> void:
 
 func _draw_back_button() -> void:
 	_view.draw_rect(_back_rect, Color(0.24, 0.20, 0.34))
-	_view.draw_rect(_back_rect, Color.WHITE, false, 2.0)
+	_border(_back_rect, Color.WHITE, 2)
 	_draw_str("< BACK", _back_rect.position.x + 12.0, _back_rect.position.y + 7.0, 10, Color.WHITE)
 
 

@@ -1,18 +1,19 @@
 extends Control
-## BUILD DECK — left: zoom + deck list; right: collection grid (20/page). Pixel coords; Nudge Orb.
+const PixelChamferStyleBox = preload("res://core/ui/pixel_chamfer_stylebox.gd")
+## BUILD DECK — left: zoom + deck list; right: collection grid (15/page, 3 rows). Pixel coords; Nudge Orb.
 
 signal closed
 
-const PAGE_SIZE: int = 20
 const GRID_COLS: int = 5
-const GRID_ROWS: int = 4
+const GRID_ROWS: int = 3
+const PAGE_SIZE: int = GRID_COLS * GRID_ROWS
 const LEFT_W: int = 176
 ## Tight list rows; compact +/- under full-size zoom.
 const ROW_H: int = 14
 const DECK_LIST_Y0: int = 268
 const DECK_LIST_H: int = 250
 const LIST_BTN_W: int = 14
-const LIST_BTN_H: int = 12
+const LIST_BTN_H: int = 14
 const LIST_BTN_GAP: int = 3
 const LIST_BTN_RIGHT_PAD: int = 4
 ## Full zoom (original layout).
@@ -45,7 +46,6 @@ var _rect_next: Rect2 = Rect2()
 var _rect_cancel: Rect2 = Rect2()
 var _rect_save: Rect2 = Rect2()
 var _rect_deck_list_area: Rect2 = Rect2()
-var _rect_back: Rect2 = Rect2()
 
 var _save_err_msg: String = ""
 var _save_err_t: float = 0.0
@@ -85,19 +85,30 @@ func _ready() -> void:
 	_ensure_font()
 
 	_name_edit = LineEdit.new()
-	_name_edit.position = Vector2i(8, 2)
-	_name_edit.size = Vector2i(112, 15)
+	_name_edit.position = Vector2i(8, 4)
+	_name_edit.size = Vector2i(78, 13)
 	_name_edit.max_length = 12
-	_name_edit.placeholder_text = "Deck name"
+	_name_edit.placeholder_text = "Name"
 	_name_edit.focus_mode = Control.FOCUS_ALL
 	_name_edit.mouse_filter = Control.MOUSE_FILTER_STOP
 	_name_edit.process_mode = Node.PROCESS_MODE_ALWAYS
 	_name_edit.add_theme_font_size_override("font_size", 8)
 	_name_edit.add_theme_constant_override("caret_width", 1)
 	_name_edit.add_theme_constant_override("minimum_character_width", 0)
+	# LineEdit draws theme styleboxes in a way that clips / mismatches custom chamfer; frame is drawn in _draw().
+	for st: String in ["normal", "focus", "read_only"]:
+		var em := StyleBoxEmpty.new()
+		em.set_content_margin_all(3)
+		_name_edit.add_theme_stylebox_override(st, em)
 	add_child(_name_edit)
+	_name_edit.focus_entered.connect(_on_name_edit_focus_ui)
+	_name_edit.focus_exited.connect(_on_name_edit_focus_ui)
 	if _font != null:
 		_name_edit.add_theme_font_override("font", _font)
+
+
+func _on_name_edit_focus_ui() -> void:
+	queue_redraw()
 
 
 func _ensure_font() -> void:
@@ -180,6 +191,10 @@ func close_save() -> void:
 	visible = false
 	_name_edit.visible = false
 	emit_signal("closed")
+
+
+func is_deck_name_field_focused() -> bool:
+	return visible and is_instance_valid(_name_edit) and _name_edit.has_focus()
 
 
 func _count_id(card_id: String) -> int:
@@ -299,8 +314,7 @@ func _str_r_atk_hp(atk_v: int, hp_v: int, max_hp: int, rx: float, y: float, sz: 
 
 
 func _draw_cost_badge_rect(r: Rect2, cost: int) -> void:
-	draw_rect(r, CardBattleConstants.C_COST_BADGE)
-	draw_rect(r, CardBattleConstants.C_BLACK, false, 1.0)
+	PixelChamferStyleBox.draw_chamfer_control(self, r, CardBattleConstants.C_COST_BADGE, CardBattleConstants.C_BLACK, 1, 1)
 	var fs: int = clampi(mini(int(r.size.x), int(r.size.y)) - 4, CardBattleConstants.FONT_MIN, 12)
 	var s: String = str(cost)
 	var f: Font = _fnt()
@@ -312,9 +326,9 @@ func _draw_cost_badge_rect(r: Rect2, cost: int) -> void:
 
 func _draw_hand_card(r: Rect2, card: Dictionary, selected: bool, grayed: bool) -> void:
 	var is_dem: bool = card.get("type", "demon") == "demon"
-	draw_rect(r, CardBattleConstants.C_DEMON_BG if is_dem else CardBattleConstants.C_SPELL_BG)
+	var fill: Color = CardBattleConstants.C_DEMON_BG if is_dem else CardBattleConstants.C_SPELL_BG
 	var border_col: Color = Color(0.0, 0.4, 1.0) if selected else CardBattleConstants.C_MINI_BORDER
-	draw_rect(r, border_col, false, 2.0)
+	PixelChamferStyleBox.draw_chamfer_control(self, r, fill, border_col, 2, 2)
 	if grayed:
 		draw_rect(r, CardBattleConstants.C_GRAYED_CARD_OVERLAY)
 
@@ -347,17 +361,18 @@ func _draw_hand_card(r: Rect2, card: Dictionary, selected: bool, grayed: bool) -
 		float(CardBattleConstants.HAND_COST_W), float(CardBattleConstants.HAND_COST_H)), card.get("cost", 0))
 
 
-func _list_row_btn_y(row_y: float) -> float:
-	return row_y + (float(ROW_H) - float(LIST_BTN_H)) * 0.5
+func _list_row_btn_y_i(row_y: float) -> int:
+	var y: float = row_y + (float(ROW_H) - float(LIST_BTN_H)) * 0.5
+	return int(floor(y))
 
 
 func _list_plus_minus_rects(row_y: float) -> Array[Rect2]:
-	var by: float = _list_row_btn_y(row_y)
-	var mx: float = float(LEFT_W - LIST_BTN_RIGHT_PAD - LIST_BTN_W)
-	var px: float = mx - float(LIST_BTN_GAP) - float(LIST_BTN_W)
+	var by: int = _list_row_btn_y_i(row_y)
+	var mx: int = LEFT_W - LIST_BTN_RIGHT_PAD - LIST_BTN_W
+	var px: int = mx - LIST_BTN_GAP - LIST_BTN_W
 	return [
-		Rect2(px, by, float(LIST_BTN_W), float(LIST_BTN_H)),
-		Rect2(mx, by, float(LIST_BTN_W), float(LIST_BTN_H)),
+		Rect2(float(px), float(by), float(LIST_BTN_W), float(LIST_BTN_H)),
+		Rect2(float(mx), float(by), float(LIST_BTN_W), float(LIST_BTN_H)),
 	]
 
 
@@ -381,11 +396,17 @@ func _cell_stride_y() -> float:
 func _draw() -> void:
 	_rects_collection.clear()
 	draw_rect(Rect2(0, 0, float(CardBattleConstants.W), float(CardBattleConstants.H)), CardBattleConstants.C_BG)
-	draw_rect(Rect2(0, 0, float(LEFT_W), float(CardBattleConstants.H)), CardBattleConstants.C_LEFT_BG)
-	_rect_back = Rect2(8.0, 6.0, 90.0, 24.0)
-	draw_rect(_rect_back, Color(0.24, 0.20, 0.34))
-	draw_rect(_rect_back, CardBattleConstants.C_TEXT, false, 2.0)
-	_str_in_rect_center("< BACK", _rect_back, 9, CardBattleConstants.C_TEXT)
+	# Same chamfered silhouette as cards/buttons; plain draw_rect made only the collection column look “cut corner”.
+	PixelChamferStyleBox.draw_chamfer_control(self,
+		Rect2(0, 0, float(LEFT_W), float(CardBattleConstants.H)),
+		CardBattleConstants.C_LEFT_BG, CardBattleConstants.C_LEFT_BG, 0, 2)
+
+	if _name_edit != null and _name_edit.visible:
+		var nr := Rect2(_name_edit.position, _name_edit.size)
+		var n_focus: bool = _name_edit.has_focus()
+		var n_fill := Color(0.26, 0.24, 0.32)
+		var n_br := Color(0.72, 0.68, 0.88) if n_focus else Color(0.48, 0.45, 0.58)
+		PixelChamferStyleBox.draw_chamfer_control(self, nr, n_fill, n_br, 1, 2)
 
 	var deck_sz: int = _edit_ids.size()
 	_str_r("%d/20" % deck_sz, 168.0, 6.0, 9, CardBattleConstants.C_HP_RED)
@@ -407,8 +428,7 @@ func _draw() -> void:
 		var cr := Rect2(cx, cy, float(CardBattleConstants.HAND_CW), float(CardBattleConstants.HAND_CH))
 		_rects_collection.append(cr)
 		if idx >= _all_ids.size():
-			draw_rect(cr, Color(0.75, 0.75, 0.75))
-			draw_rect(cr, CardBattleConstants.C_MINI_BORDER, false, 1.0)
+			PixelChamferStyleBox.draw_chamfer_control(self, cr, Color(0.75, 0.75, 0.75), CardBattleConstants.C_MINI_BORDER, 1, 2)
 			continue
 		var cid: String = _all_ids[idx]
 		var card: Dictionary = CardDB.get_card(cid)
@@ -426,11 +446,8 @@ func _draw() -> void:
 			_draw_zoom(zc)
 	else:
 		var ez := Rect2(ZOOM_X, ZOOM_Y, ZOOM_W, ZOOM_H)
-		draw_rect(ez, Color(0.82, 0.82, 0.82))
-		draw_rect(ez, CardBattleConstants.C_MINI_BORDER, false, 1.0)
+		PixelChamferStyleBox.draw_chamfer_control(self, ez, Color(0.82, 0.82, 0.82), CardBattleConstants.C_MINI_BORDER, 1, 2)
 		_str_c("Hover a card", ez.get_center().x, ez.get_center().y, 8, CardBattleConstants.C_MUTED)
-
-	_str("Deck name", 8.0, 20.0, 7, CardBattleConstants.C_MUTED)
 
 	var rows: Array[Dictionary] = _deck_rows()
 	var max_scroll: int = maxi(0, rows.size() * ROW_H - DECK_LIST_H)
@@ -458,22 +475,18 @@ func _draw() -> void:
 		var minus_rect: Rect2 = pm[1]
 		var can_p: bool = _can_add(rid)
 		var can_m: bool = cnt > 0
-		draw_rect(plus_rect, Color(0.55, 0.55, 0.55) if not can_p else Color(0.35, 0.45, 0.85))
-		draw_rect(minus_rect, Color(0.55, 0.55, 0.55) if not can_m else Color(0.85, 0.45, 0.25))
-		_str_c("+", plus_rect.get_center().x, plus_rect.get_center().y - 3.0, 9, Color.WHITE if can_p else Color(0.7, 0.7, 0.7))
-		_str_c("−", minus_rect.get_center().x, minus_rect.get_center().y - 3.0, 9, Color.WHITE if can_m else Color(0.7, 0.7, 0.7))
-
-	var col_name: String = str(Global.player_decks[_deck_index].get("color", "black"))
-	_str("Deckbox: %s" % col_name.capitalize(), 8.0, 522.0, 7, CardBattleConstants.C_MUTED)
+		var p_fill: Color = Color(0.55, 0.55, 0.55) if not can_p else Color(0.35, 0.45, 0.85)
+		var m_fill: Color = Color(0.55, 0.55, 0.55) if not can_m else Color(0.85, 0.45, 0.25)
+		var pm_border: Color = Color(0.25, 0.25, 0.30)
+		_draw_pm_square_button(plus_rect, p_fill, pm_border, "+", Color.WHITE if can_p else Color(0.7, 0.7, 0.7))
+		_draw_pm_square_button(minus_rect, m_fill, pm_border, "−", Color.WHITE if can_m else Color(0.7, 0.7, 0.7))
 
 	var fy: float = float(FOOT_Y)
 	var fh: float = float(FOOT_BTN_H)
 	_rect_cancel = Rect2(8.0, fy, 90.0, fh)
 	_rect_save = Rect2(102.0, fy, 90.0, fh)
-	draw_rect(_rect_cancel, Color(0.20, 0.20, 0.20))
-	draw_rect(_rect_cancel, Color(0.95, 0.95, 0.95), false, 2.0)
-	draw_rect(_rect_save, Color(0.22, 0.44, 0.88))
-	draw_rect(_rect_save, Color(0.65, 0.78, 1.0), false, 2.0)
+	PixelChamferStyleBox.draw_chamfer_control(self, _rect_cancel, Color(0.20, 0.20, 0.20), Color(0.95, 0.95, 0.95), 2, 2)
+	PixelChamferStyleBox.draw_chamfer_control(self, _rect_save, Color(0.22, 0.44, 0.88), Color(0.65, 0.78, 1.0), 2, 2)
 	_str_in_rect_center("CANCEL", _rect_cancel, 10, Color.WHITE)
 	_str_in_rect_center("SAVE", _rect_save, 10, Color.WHITE)
 
@@ -485,13 +498,14 @@ func _draw() -> void:
 	_rect_next = Rect2(float(CardBattleConstants.W) - rm - nav_w, fy, nav_w, fh)
 	_str_c("page %d / %d" % [_page + 1, pc],
 		(float(LEFT_W) + float(CardBattleConstants.W)) * 0.5, fy + fh * 0.5 - 2.0, 8, CardBattleConstants.C_TEXT)
-	draw_rect(_rect_prev, Color(0.45, 0.45, 0.45) if _page <= 0 else Color(0.35, 0.35, 0.5))
-	draw_rect(_rect_next, Color(0.45, 0.45, 0.45) if _page >= pc - 1 else Color(0.35, 0.35, 0.5))
-	draw_rect(_rect_prev, Color(0.88, 0.88, 0.92), false, 2.0)
-	draw_rect(_rect_next, Color(0.88, 0.88, 0.92), false, 2.0)
+	var prev_fill: Color = Color(0.45, 0.45, 0.45) if _page <= 0 else Color(0.35, 0.35, 0.5)
+	var next_fill: Color = Color(0.45, 0.45, 0.45) if _page >= pc - 1 else Color(0.35, 0.35, 0.5)
+	var nav_border: Color = Color(0.88, 0.88, 0.92)
+	PixelChamferStyleBox.draw_chamfer_control(self, _rect_prev, prev_fill, nav_border, 2, 2)
+	PixelChamferStyleBox.draw_chamfer_control(self, _rect_next, next_fill, nav_border, 2, 2)
 	_str_in_rect_center("< Prev", _rect_prev, 8, Color.WHITE)
 	_str_in_rect_center("Next >", _rect_next, 8, Color.WHITE)
-	_str_c("ESC: back    I: close to game", 470.0, fy - 16.0, 7, CardBattleConstants.C_MUTED)
+	_str_c("ESC: back to deck list", 470.0, fy - 16.0, 7, CardBattleConstants.C_MUTED)
 
 	if not _save_err_msg.is_empty():
 		_str(_save_err_msg, 8.0, fy - 14.0, 7, Color(1.0, 0.35, 0.35))
@@ -504,6 +518,30 @@ func _str_in_rect_center(text: String, r: Rect2, sz: int, color: Color) -> void:
 	var cx: float = r.position.x + (r.size.x - tw) * 0.5
 	var baseline: float = r.position.y + r.size.y * 0.5 + float(fs) * 0.35
 	draw_string(f, Vector2(_tx(cx), _tx(baseline)), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, color)
+
+
+## Single glyph centered using font metrics (works for + / − in square cells).
+func _str_glyph_centered_in_rect(text: String, r: Rect2, sz: int, color: Color) -> void:
+	var f: Font = _fnt()
+	var fs: int = _fs(sz)
+	var tw: float = f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	var asc: float = f.get_ascent(fs)
+	var dsc: float = f.get_descent(fs)
+	var cx: float = r.position.x + (r.size.x - tw) * 0.5
+	var mid_y: float = r.position.y + r.size.y * 0.5
+	var baseline: float = mid_y + (asc - dsc) * 0.5
+	draw_string(f, Vector2(_tx(cx), _tx(baseline)), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, color)
+
+
+func _draw_pm_square_button(r: Rect2, fill: Color, border: Color, label: String, label_clr: Color) -> void:
+	var x: int = int(floor(r.position.x))
+	var y: int = int(floor(r.position.y))
+	var w: int = int(floor(r.size.x))
+	var h: int = int(floor(r.size.y))
+	var rr := Rect2(x, y, w, h)
+	draw_rect(rr, fill)
+	draw_rect(rr, border, false, 1.0)
+	_str_glyph_centered_in_rect(label, rr, 8, label_clr)
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -564,9 +602,6 @@ func _update_hover(p: Vector2) -> void:
 
 
 func _handle_click(pos: Vector2) -> void:
-	if _rect_back.has_point(pos):
-		close_cancel()
-		return
 	if _rect_cancel.has_point(pos):
 		close_cancel()
 		return

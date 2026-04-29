@@ -1,6 +1,7 @@
 ## Merchant shop UI overlay.
 class_name MerchantUI
 extends CanvasLayer
+const PixelFont = preload("res://core/ui/pixel_font.gd")
 
 signal closed
 
@@ -37,7 +38,7 @@ const LIST_Y: int = 90
 func _ready() -> void:
 	layer = 25
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_font = load(FONT_PATH) as Font
+	_font = PixelFont.nudge_orb()
 	_view = Control.new()
 	_view.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_view.mouse_filter = Control.MOUSE_FILTER_STOP

@@ -3115,19 +3115,6 @@ func _draw_duel_glove_fx() -> void:
 # DRAWING — board
 # ══════════════════════════════════════════════════════════════════
 func _draw_board() -> void:
-	if enemy_front.is_empty():
-		_str_c("— empty —", float(CardBattleConstants.BOARD_X) + float(CardBattleConstants.BOARD_W) * 0.5,
-			float(CardBattleConstants.EFFRONT_Y) + CardBattleConstants.ROW_H * 0.5 - 4.0, 7, CardBattleConstants.C_BOARD_EMPTY_TEXT)
-	if enemy_rear.is_empty():
-		_str_c("— empty —", float(CardBattleConstants.BOARD_X) + float(CardBattleConstants.BOARD_W) * 0.5,
-			float(CardBattleConstants.EFREAR_Y) + CardBattleConstants.ROW_H * 0.5 - 4.0,  7, CardBattleConstants.C_BOARD_EMPTY_TEXT)
-	if player_front.is_empty():
-		_str_c("— empty —", float(CardBattleConstants.BOARD_X) + float(CardBattleConstants.BOARD_W) * 0.5,
-			float(CardBattleConstants.PFFRONT_Y) + CardBattleConstants.ROW_H * 0.5 - 4.0, 7, CardBattleConstants.C_BOARD_EMPTY_TEXT)
-	if player_rear.is_empty():
-		_str_c("— empty —", float(CardBattleConstants.BOARD_X) + float(CardBattleConstants.BOARD_W) * 0.5,
-			float(CardBattleConstants.PFREAR_Y) + CardBattleConstants.ROW_H * 0.5 - 4.0,  7, CardBattleConstants.C_BOARD_EMPTY_TEXT)
-
 	var ef_tgt: bool = _mode == Mode.ATTACKING or _mode == Mode.CHOOSE_ENEMY_TARGET
 	for i in enemy_front.size():
 		_draw_mini_card(CardBattleLayout.mini_rect(enemy_front, CardBattleConstants.EFFRONT_Y, i), enemy_front[i],

@@ -1,8 +1,12 @@
 class_name SoulInventory extends CanvasLayer
+const PixelFont = preload("res://core/ui/pixel_font.gd")
 
 const SoulItem = preload("res://core/soul_item.gd")
-const ICONS_TEXTURE: Texture2D = preload("res://assets/ui parts/icons.png")
 const FONT_PATH: String = "res://assets/fonts/Nudge Orb.ttf"
+
+const ICON_RED: Texture2D = preload("res://core/ui/red_icon.png")
+const ICON_BLUE: Texture2D = preload("res://core/ui/blue_icon.png")
+const ICON_GREEN: Texture2D = preload("res://core/ui/green_icon.png")
 
 const W: int = 640
 const H: int = 576
@@ -37,7 +41,6 @@ const CARD_Y:   int = 68
 const CARD_W:   int = 165
 const CARD_H:   int = 230
 
-const SLOT_LABELS: Array = ["Red", "Blue", "Green"]
 const SLOT_KEYS:   Array = ["red", "blue", "green"]
 const SLOT_COLS:   Array = [Color(0.85, 0.15, 0.15), Color(0.15, 0.35, 0.90), Color(0.10, 0.75, 0.25)]
 
@@ -50,14 +53,12 @@ const LIST_Y0:     int = 140
 const ENTRY_H:     int = 26
 const VISIBLE_ROWS: int = 14
 
-var _list:        Array[String] = []
-var _cursor:      int = 0
-var _font:        Font
-var _back_rect:   Rect2 = Rect2(16, 8, 84, 24)
-var _slot_icons:  Array[AtlasTexture] = []
+var _list:       Array[String] = []
+var _cursor:     int = 0
+var _font:       Font
+var _back_rect:  Rect2 = Rect2(16, 8, 84, 24)
 
-# face=red(0), tao=blue(1), circle=green(2)
-const ICON_REGIONS: Array = [Rect2(0, 0, 30, 30), Rect2(31, 0, 30, 30), Rect2(62, 0, 30, 30)]
+const _SLOT_ICONS: Array[Texture2D] = [ICON_RED, ICON_BLUE, ICON_GREEN]
 
 signal back_requested
 
@@ -73,17 +74,13 @@ var _view: _View
 func _ready() -> void:
 	layer = 20
 	process_mode = Node.PROCESS_MODE_WHEN_PAUSED
-	_font = load(FONT_PATH) as Font
-	for reg: Rect2 in ICON_REGIONS:
-		var at: AtlasTexture = AtlasTexture.new()
-		at.atlas = ICONS_TEXTURE
-		at.region = reg
-		_slot_icons.append(at)
+	_font = PixelFont.nudge_orb()
 	_view = _View.new()
 	_view.b = self
 	_view.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_view.mouse_filter = Control.MOUSE_FILTER_STOP
 	_view.focus_mode = Control.FOCUS_CLICK
+	_view.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	add_child(_view)
 	Global.soul_changed.connect(func() -> void: _rebuild_list(); _view.queue_redraw())
 	_rebuild_list()
@@ -188,7 +185,7 @@ func _on_draw() -> void:
 
 func _draw_header() -> void:
 	_view.draw_rect(_back_rect, Color(0.20, 0.16, 0.32))
-	_view.draw_rect(_back_rect, C_TEXT, false, 1.0)
+	_border(_back_rect, C_TEXT, 1)
 	_str(22, 23, "< BACK", 9, C_TEXT)
 
 	var title: String = "SOUL SYSTEM"
@@ -212,33 +209,20 @@ func _draw_equipped_slots() -> void:
 		# Slot background
 		_view.draw_rect(Rect2(sx, sy, SLOT_W, SLOT_H), col.darkened(0.5) if equipped == null else col.darkened(0.2))
 
-		# Icon sub-area: 38×38 on left, padded 3px from slot edge
+		# Icon sub-area: 38x38 on left, padded 3px from slot edge.
 		var icon_rect: Rect2 = Rect2(sx + 3, sy + 3, 38, 38)
 		_view.draw_rect(icon_rect, Color(0.08, 0.08, 0.08))
+		var draw_rect: Rect2 = Rect2(sx + 6, sy + 6, 32, 32)
 
-		# Soul sprite or slot type icon
-		if equipped != null:
-			var soul_icon: Variant = equipped.get("icon")
-			if soul_icon != null and soul_icon is Texture2D:
-				_view.draw_texture_rect(soul_icon as Texture2D, icon_rect, false)
-			elif i < _slot_icons.size():
-				_view.draw_texture_rect(_slot_icons[i], icon_rect, false)
-		elif i < _slot_icons.size():
-			_view.draw_texture_rect(_slot_icons[i], icon_rect, false)
+		if equipped != null and equipped.hud_icon != null:
+			_view.draw_texture_rect(equipped.hud_icon, draw_rect, false)
+		else:
+			_view.draw_texture_rect(_SLOT_ICONS[i], draw_rect, false)
 
 		# Colored 3px strip TOP — over sprite
 		_view.draw_rect(Rect2(sx + 3, sy + 3, 38, 3), col)
 		# Colored 3px strip BOTTOM — over sprite
 		_view.draw_rect(Rect2(sx + 3, sy + 38, 38, 3), col)
-
-		# Text block to the right of icon area
-		var tx: int = sx + 47
-		var label: String = (SLOT_LABELS[i] as String).to_upper() + " SLOT"
-		_str(tx, sy + 16, label, 8, C_TEXT)
-		if equipped != null:
-			_str(tx, sy + 30, equipped.name, 9, C_TEXT)
-		else:
-			_str(tx, sy + 30, "— empty —", 9, C_MUTED)
 
 
 func _draw_divider(y: int) -> void:
@@ -325,11 +309,11 @@ func _draw_soul_card(cr: Rect2, soul: SoulItem, soul_id: String, qty: int) -> vo
 	_view.draw_rect(cr, SC_BG)
 
 	# ── Outer black border ─────────────────────────────────────────
-	_view.draw_rect(cr, SC_BORDER_O, false, 2.0)
+	_border(cr, SC_BORDER_O, 2)
 
 	# ── Inner azure frame (inset 3px) ──────────────────────────────
 	var inner: Rect2 = cr.grow(-3.0)
-	_view.draw_rect(inner, SC_BORDER_I, false, 1.0)
+	_border(inner, SC_BORDER_I, 1)
 
 	# ── Name strip ────────────────────────────────────────────────
 	var name_strip: Rect2 = Rect2(x + 4, y + 4, w - 8, 18)
@@ -344,8 +328,8 @@ func _draw_soul_card(cr: Rect2, soul: SoulItem, soul_id: String, qty: int) -> vo
 	_view.draw_rect(Rect2(sq_x, sq_y, 12, 12), SC_BORDER_O)
 	_view.draw_rect(Rect2(sq_x + 1, sq_y + 1, 10, 10), Color(0.08, 0.08, 0.08))
 	var sq_idx: int = SLOT_KEYS.find(soul.slot)
-	if sq_idx >= 0 and sq_idx < _slot_icons.size():
-		_view.draw_texture_rect(_slot_icons[sq_idx], Rect2(sq_x + 1, sq_y + 1, 10, 10), false)
+	if sq_idx >= 0 and sq_idx < _SLOT_ICONS.size():
+		_view.draw_texture_rect(_SLOT_ICONS[sq_idx], Rect2(sq_x + 1, sq_y + 1, 10, 10), false)
 	_view.draw_rect(Rect2(sq_x + 1, sq_y + 1, 10, 2), slot_col)
 	_view.draw_rect(Rect2(sq_x + 1, sq_y + 9, 10, 2), slot_col)
 
@@ -356,20 +340,19 @@ func _draw_soul_card(cr: Rect2, soul: SoulItem, soul_id: String, qty: int) -> vo
 
 	# Art BG: dark slot-tinted block
 	_view.draw_rect(art_rect, slot_col.darkened(0.78))
-	_view.draw_rect(art_rect, SC_ART_LINE, false, 1.0)
+	_border(art_rect, SC_ART_LINE, 1)
 
-	if soul.icon != null:
-		# Center the icon inside the art area
-		var tex_size: Vector2 = soul.icon.get_size()
+	var art_tex: Texture2D = soul.icon if soul.icon != null else soul.hud_icon
+	if art_tex != null:
+		var tex_size: Vector2 = art_tex.get_size()
 		var scale: float = minf(float(art_rect.size.x - 8) / tex_size.x,
 								float(art_rect.size.y - 8) / tex_size.y)
 		var draw_w: int = int(tex_size.x * scale)
 		var draw_h: int = int(tex_size.y * scale)
 		var draw_x: int = int(art_rect.position.x + (art_rect.size.x - float(draw_w)) * 0.5)
 		var draw_y: int = int(art_rect.position.y + (art_rect.size.y - float(draw_h)) * 0.5)
-		_view.draw_texture_rect(soul.icon, Rect2(draw_x, draw_y, draw_w, draw_h), false)
+		_view.draw_texture_rect(art_tex, Rect2(draw_x, draw_y, draw_w, draw_h), false)
 	else:
-		# Placeholder: big initial letter centered on the art
 		var initial: String = soul.name.left(1).to_upper()
 		var fs: int = 40
 		var iw: float = _font.get_string_size(initial, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
@@ -432,6 +415,15 @@ func _equipped_id_for(slot: String) -> String:
 		"blue":  return Global.equipped_soul_blue
 		"green": return Global.equipped_soul_green
 	return ""
+
+
+func _border(r: Rect2, col: Color, w: int) -> void:
+	var x: int = int(r.position.x); var y: int = int(r.position.y)
+	var rw: int = int(r.size.x);    var rh: int = int(r.size.y)
+	_view.draw_rect(Rect2(x,          y,          rw, w),          col)
+	_view.draw_rect(Rect2(x,          y + rh - w, rw, w),          col)
+	_view.draw_rect(Rect2(x,          y + w,      w,  rh - w * 2), col)
+	_view.draw_rect(Rect2(x + rw - w, y + w,      w,  rh - w * 2), col)
 
 
 func _str(x: int, y: int, text: String, fs: int, col: Color) -> void:

@@ -1,4 +1,5 @@
 class_name InitiativeScreen extends CanvasLayer
+const PixelFont = preload("res://core/ui/pixel_font.gd")
 
 signal result_ready(player_goes_first: bool)
 
@@ -42,7 +43,7 @@ func setup(p_first_attacker: bool, enemy: Node) -> void:
 		_enemy_difficulty = str(enemy.difficulty)
 	DICE_NORMAL = load("res://GUI_plugin/die/dice_full_normal.png") as Texture2D
 	DICE_RESULT = load("res://GUI_plugin/die/dice_full_dragging.png") as Texture2D
-	_font = load(FONT_PATH) as Font
+	_font = PixelFont.nudge_orb()
 	layer = 15
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_view = _View.new()

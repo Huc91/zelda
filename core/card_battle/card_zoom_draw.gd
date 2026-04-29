@@ -12,7 +12,7 @@ static func draw(ci: CanvasItem, font: Font, rect: Rect2, card: Dictionary, stat
 	var cr: Rect2 = rect
 	var is_dem: bool = card.get("type", "demon") == "demon"
 	ci.draw_rect(cr, CardBattleConstants.C_DEMON_BG if is_dem else CardBattleConstants.C_SPELL_BG)
-	ci.draw_rect(cr, CardBattleConstants.C_MINI_BORDER, false, 2.0)
+	_border(ci, cr, CardBattleConstants.C_MINI_BORDER, 2)
 
 	_str_wrap(ci, font, card.get("name", ""), cr.position.x + 6.0, cr.position.y + 6.0,
 		cr.size.x - 30.0, 12, CardBattleConstants.C_TEXT)
@@ -44,6 +44,15 @@ static func draw(ci: CanvasItem, font: Font, rect: Rect2, card: Dictionary, stat
 		var atk_v: int = state.get("atk", card.get("atk", 0)) if not state.is_empty() else card.get("atk", 0)
 		var exzoom: bool = state.get("exhausted", false) if not state.is_empty() else false
 		_str_r_atk_hp(ci, font, atk_v, cur_hp, max_hp, cr.position.x + cr.size.x - 6.0, cr.position.y + 203.0, 12, exzoom)
+
+
+static func _border(ci: CanvasItem, r: Rect2, col: Color, w: int) -> void:
+	var x: int = int(r.position.x); var y: int = int(r.position.y)
+	var rw: int = int(r.size.x);    var rh: int = int(r.size.y)
+	ci.draw_rect(Rect2(x,          y,          rw, w),          col)
+	ci.draw_rect(Rect2(x,          y + rh - w, rw, w),          col)
+	ci.draw_rect(Rect2(x,          y + w,      w,  rh - w * 2), col)
+	ci.draw_rect(Rect2(x + rw - w, y + w,      w,  rh - w * 2), col)
 
 
 static func _tx(x: float) -> int:
@@ -89,7 +98,7 @@ static func _draw_cost_badge_rect(ci: CanvasItem, font: Font, r: Rect2, cost: in
 	var w: int = maxi(1, int(floor(r.size.x)))
 	var h: int = maxi(1, int(floor(r.size.y)))
 	ci.draw_rect(r, CardBattleConstants.C_COST_BADGE)
-	ci.draw_rect(r, CardBattleConstants.C_BLACK, false, 1.0)
+	_border(ci, r, CardBattleConstants.C_BLACK, 1)
 	var fs: int = clampi(mini(w, h) - 4, CardBattleConstants.FONT_MIN, 12)
 	var s: String = str(cost)
 	var tw: float = font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x

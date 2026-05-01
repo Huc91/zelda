@@ -132,8 +132,8 @@ const DB: Dictionary = {
 					"Me? Something in there already knows my name.",
 				],
 				"choices": [
-					{"text": "I'll go find it.",     "event": "bonzo_spawn_accepted"},
-					{"text": "Maybe another time.",  "event": ""},
+					{"text": "I'll go find it.", "event": "bonzo_spawn_accepted"},
+					{"text": "Maybe another time.", "event": ""},
 				],
 			},
 			{
@@ -197,8 +197,8 @@ const DB: Dictionary = {
 			{
 				"lines": ["You look strong. Strong enough to duel?"],
 				"choices": [
-					{"text": "I'm ready!",        "event": "macho_challenge"},
-					{"text": "Not yet.",           "event": ""},
+					{"text": "I'm ready!", "event": "macho_challenge"},
+					{"text": "Not yet.", "event": ""},
 				],
 			},
 			{
@@ -293,7 +293,37 @@ const DB: Dictionary = {
 			"Keep opening packs. One day you'll complete the set.",
 		],
 	},
+
+	"kabba": {
+		"name": "Kabba",
+		"sequences": [
+			{
+				"lines": [
+					"I was sorting my collection waiting for you.",
+					"I'm getting hungry.",
+					"After I kill you I will go to have a good meal in your honor.",
+					"What kind of pizza do you like?",
+				],
+				"choices": [
+					{"text": "Pepperoni", "event": "kabba_fight_pepperoni"},
+					{"text": "Margherita", "event": "kabba_fight_margherita"},
+					{"text": "Capricciosa", "event": "kabba_fight_capricciosa"},
+				],
+			},
+		],
+	},
 }
+
+
+## Post–card-battle mercy (opened from code, not npc_progress index).
+static func get_kabba_post_victory_mercy() -> Dictionary:
+	return {
+		"lines": ["..."],
+		"choices": [
+			{"text": "Spare", "event": "kabba_spare"},
+			{"text": "Kill", "event": "kabba_kill"},
+		],
+	}
 
 
 ## Returns the sequence dict for `dialogue_id` at the given progress index.
@@ -311,10 +341,10 @@ static func get_sequence(dialogue_id: String, seq_idx: int) -> Dictionary:
 static func advance_sequence(dialogue_id: String, seq_idx: int) -> int:
 	var entry: Dictionary = DB.get(dialogue_id, DB.get("default", {}))
 	if not entry.has("sequences"):
-		return 0  # simple lines always restart
+		return 0 # simple lines always restart
 	var seqs: Array = entry.get("sequences", [])
 	if seq_idx >= seqs.size() - 1:
-		return seq_idx  # already on last — stay there
+		return seq_idx # already on last — stay there
 	return seq_idx + 1
 
 

@@ -51,6 +51,7 @@ func _on_camera_scroll_started() -> void:
 
 
 func _on_camera_scroll_completed() -> void:
+	Global.apply_kabba_spare_despawn_if_pending(_map_path)
 	for actor in get_tree().get_nodes_in_group("actor"):
 		if camera.world_to_grid(actor.position) == camera.grid_position:
 			actor.set_physics_process(true)

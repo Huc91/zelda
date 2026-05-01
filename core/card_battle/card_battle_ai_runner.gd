@@ -72,7 +72,7 @@ func play_phase() -> void:
 		# Try pitching a pitcher demon for 2 mana if it enables a better play
 		var pitcher_i: int = pick_pitcher_to_pitch_index()
 		if pitcher_i >= 0:
-			b.ai_enemy_pitch_idx(pitcher_i)   # already logs the pitch internally
+			b.ai_enemy_pitch_idx(pitcher_i) # already logs the pitch internally
 			b.ai_queue_redraw()
 			await b.get_tree().create_timer(0.28, true).timeout
 			continue
@@ -278,7 +278,7 @@ func _archetype_priority_bonus(card: Dictionary) -> int:
 				if effective <= 2:
 					bonus += 500
 				else:
-					bonus -= 999  # don't play until cheap
+					bonus -= 999 # don't play until cheap
 			# Pyromancer is high-value when we have spells to follow up
 			if "spell_aoe" in ab:
 				var spell_count: int = 0
@@ -303,7 +303,7 @@ func _archetype_priority_bonus(card: Dictionary) -> int:
 				if demon_gy >= 3:
 					bonus += 400 + demon_gy * 30
 				else:
-					bonus -= 500  # wait for more demons in GY
+					bonus -= 500 # wait for more demons in GY
 			# Big demons should NOT be played — let them go to GY at turn end
 			if card.get("type", "") == "demon" and card.get("cost", 0) >= 5:
 				var reanimators_in_gy: int = 0
@@ -311,7 +311,7 @@ func _archetype_priority_bonus(card: Dictionary) -> int:
 					if c.get("effect", "") in ["resurrect", "final_hour"]:
 						reanimators_in_gy += 1
 				if reanimators_in_gy == 0:
-					bonus -= 300  # hold fat demons for GY unless we have no reanimate spells left
+					bonus -= 300 # hold fat demons for GY unless we have no reanimate spells left
 	return bonus
 
 
@@ -360,6 +360,15 @@ func demon_play_value(card: Dictionary) -> int:
 
 func demon_is_support(card: Dictionary) -> bool:
 	var ab: String = card.get("ability", "")
+	## Tidal Terror (and similar): ability string contains `spell_cost_reduce` as substring of
+	## `spell_cost_reduce_per_spell_gy` — must NOT be treated as rear support (needs to attack).
+	if "spell_cost_reduce_per_spell_gy" in ab:
+		return false
+	var atk: int = int(card.get("atk", 0))
+	var hp: int = int(card.get("hp", 1))
+	## Big combat bodies belong on the front row; rear is for true support / pitchers.
+	if atk >= 3 and hp >= 4:
+		return false
 	for kw: String in ["mana_per_turn", "ally_death_mana", "ally_death_lifegain",
 			"any_death_draw", "any_death_drain", "aura_front", "spell_lifegain",
 			"spell_cost_reduce", "tax_spells", "feed_on_death", "face_damage_mana",
@@ -619,7 +628,7 @@ func attack_phase() -> void:
 				advance_i = i
 				break
 		if advance_i < 0:
-			return  # no viable frontliner — protect support demons, skip attack
+			return # no viable frontliner — protect support demons, skip attack
 		var mover: Dictionary = b.enemy_rear[advance_i]
 		b.enemy_rear.remove_at(advance_i)
 		mover["exhausted"] = mover.get("frozen", false)
@@ -670,10 +679,10 @@ func _do_attack_with_preview(a_idx: int) -> void:
 
 ## Returns { type: "face"/"front"/"rear", idx: int } for the attack at `a_idx` without resolving it.
 func pick_attack_target(a_idx: int) -> Dictionary:
-	if a_idx >= b.enemy_front.size(): return {"type": "face", "idx": -1}
+	if a_idx >= b.enemy_front.size(): return {"type": "face", "idx": - 1}
 	var att: Dictionary = b.enemy_front[a_idx]
 	if att.get("unblockable", false):
-		return {"type": "face", "idx": -1}
+		return {"type": "face", "idx": - 1}
 	var taunt_idx: int = b.ai_find_taunt(b.player_front)
 	if taunt_idx >= 0:
 		return {"type": "front", "idx": taunt_idx}
@@ -697,12 +706,12 @@ func pick_attack_target(a_idx: int) -> Dictionary:
 
 	# Front is clear — can go face or hit rear
 	if b.player_rear.is_empty() or ai_type == "aggro":
-		return {"type": "face", "idx": -1}
+		return {"type": "face", "idx": - 1}
 	# Control/midrange: eliminate high-threat rear support before hitting face
 	var rear_t: int = pick_best_target_for(att, b.player_rear)
 	if target_threat_score(b.player_rear[rear_t]) >= 10:
 		return {"type": "rear", "idx": rear_t}
-	return {"type": "face", "idx": -1}
+	return {"type": "face", "idx": - 1}
 
 
 func do_attack(a_idx: int) -> void:

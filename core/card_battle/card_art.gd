@@ -101,7 +101,7 @@ static func _ensure_table() -> void:
 		# ── Obscura expansion (044-061) ──────────────────────────────────────────────
 		"demon_044": [p2+"D_09_1_gargoyle_devil.png",            p2+"D_09_3.png",                   p1+"D_09_1.png",               p1+"D_09_3.png"],
 		"demon_045": [f2+"026_1_weak_tiger.png",                 f2+"026_3.png",                    f1+"026_1.png",                f1+"026_3.png"],
-		"demon_046": [p2+"D_18_1_slime-spawn.png",               p2+"D_18_3.png",                   p1+"D_18_1.png",               p1+"D_18_3.png"],
+		"demon_046": [p2+"N_02_1_worm.png",                      p2+"N_02_3.png",                   p1+"N_02_1.png",               p1+"N_02_3.png"],
 		"demon_047": [p2+"M_05_1_giant_mosquito.png",            p2+"M_05_3.png",                   p1+"M_05_1.png",               p1+"M_05_3.png"],
 		"demon_048": [p2+"H_10_1_dark_mage.png",                 p2+"H_10_3.png",                   p1+"H_10_1.png",               p1+"H_10_3.png"],
 		"demon_049": [p2+"H_13_1_samurai_ghost.png",             p2+"H_13_3.png",                   p1+"H_13_1.png",               p1+"H_13_3.png"],
@@ -184,6 +184,7 @@ static func _ensure_table() -> void:
 		"demon_123": [f2+"022_1_beast_king.png",                 f2+"022_3.png",                    f1+"022_1.png",                f1+"022_3.png"],
 		"demon_124": [p2+"U_03_1_weak_skeleton.png",             p2+"U_03_3.png",                   p1+"U_03_1.png",               p1+"U_03_3.png"],
 		"demon_125": [p2+"U_01_1_skeleton_scimitar.png",         p2+"U_01_3.png",                   p1+"U_01_1.png",               p1+"U_01_3.png"],
+		"demon_126": [p2+"B_12_1.werewolf-beast.png",            p2+"B_12_3.png",                   p1+"B_12_1.png",               p1+"B_12_3.png"],
 		# ── Tokens ───────────────────────────────────────────────────────────────────
 		"token_zombie":    [f2+"006_1_zombie.png",               f2+"006_3.png",                    f1+"006_1.png",                f1+"006_3.png"],
 		"token_ash_wraith":[p2+"U_15_1_specter.png",             p2+"U_15_3.png",                   p1+"U_15_1.png",               p1+"U_15_3.png"],

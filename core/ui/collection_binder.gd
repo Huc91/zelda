@@ -32,6 +32,8 @@ var _font: Font
 var _scroll_y: float = 0.0
 var _max_scroll: float = 0.0
 var _cards: Array = []
+var _sections: Array[Dictionary] = []
+var _section_idx: int = 0
 var _grid_x0: float = 0.0
 var _back_rect: Rect2 = Rect2(16, 8, 92, 28)
 var _detail_card: Dictionary = {}
@@ -53,6 +55,7 @@ func _ready() -> void:
 
 
 func open_binder() -> void:
+	_build_sections()
 	_build_layout()
 	_scroll_y = 0.0
 	show()
@@ -66,14 +69,26 @@ func _cell_stride_y() -> float:
 func _build_layout() -> void:
 	CardDB._ensure_init()
 	_cards = []
+	var section_key: String = _active_section_key()
 	for c in CardDB.ALL_CARDS:
 		var id: String = str(c.get("id", ""))
 		if id.is_empty() or id.begins_with("token_"):
 			continue
-		if c.get("no_pack", false):
+		var card_set: String = str(c.get("set", "base"))
+		if section_key == "promo":
+			if card_set != "promo":
+				continue
+		else:
+			if card_set == "promo":
+				continue
+			if c.get("no_pack", false):
+				continue
+		if section_key != "promo" and c.get("no_pack", false):
 			continue
 		_cards.append(c)
 	_cards.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if section_key == "promo":
+			return int(a.get("set_number", 9999)) < int(b.get("set_number", 9999))
 		return str(a.get("id", "")) < str(b.get("id", ""))
 	)
 
@@ -83,6 +98,38 @@ func _build_layout() -> void:
 	var total_rows: int = (_cards.size() + GRID_COLS - 1) / GRID_COLS
 	var content_h: float = float(START_Y) + float(total_rows) * _cell_stride_y() + 20.0
 	_max_scroll = maxf(0.0, content_h - float(H))
+
+
+func _build_sections() -> void:
+	_sections = [
+		{"key": "base", "label": "BASE SET COLLECTION"},
+	]
+	for c in CardDB.ALL_CARDS:
+		if str(c.get("set", "")) == "promo":
+			_sections.append({"key": "promo", "label": "PROMO COLLECTION"})
+			break
+	_section_idx = clampi(_section_idx, 0, maxi(0, _sections.size() - 1))
+
+
+func _active_section_key() -> String:
+	if _sections.is_empty():
+		return "base"
+	return str(_sections[_section_idx].get("key", "base"))
+
+
+func _active_section_label() -> String:
+	if _sections.is_empty():
+		return "BASE SET COLLECTION"
+	return str(_sections[_section_idx].get("label", "BASE SET COLLECTION"))
+
+
+func _change_section(step: int) -> void:
+	if _sections.size() <= 1:
+		return
+	_section_idx = posmod(_section_idx + step, _sections.size())
+	_detail_card = {}
+	_scroll_y = 0.0
+	_build_layout()
 
 
 func _process(_dt: float) -> void:
@@ -116,6 +163,12 @@ func _input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 			elif ek.keycode == KEY_DOWN or ek.keycode == KEY_S:
 				_scroll(40.0)
+				get_viewport().set_input_as_handled()
+			elif ek.keycode == KEY_LEFT or ek.keycode == KEY_A:
+				_change_section(-1)
+				get_viewport().set_input_as_handled()
+			elif ek.keycode == KEY_RIGHT or ek.keycode == KEY_D:
+				_change_section(1)
 				get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton:
 		var mb: InputEventMouseButton = event as InputEventMouseButton
@@ -188,7 +241,7 @@ func _on_draw() -> void:
 	# Header drawn after cards so it always covers any card overflow
 	_view.draw_rect(Rect2(0, 0, W, HEADER_H), C_HDR)
 	_draw_back_button()
-	_draw_str_c("BASE SET COLLECTION", W * 0.5, 6, 12, Color.WHITE)
+	_draw_str_c(_active_section_label(), W * 0.5, 6, 12, Color.WHITE)
 
 	var total_owned: int = 0
 	for c in _cards:
@@ -196,7 +249,7 @@ func _on_draw() -> void:
 		if Global.card_collection.get(id, 0) > 0 or Global.foil_collection.get(id, 0) > 0:
 			total_owned += 1
 	_draw_str_r("%d / %d" % [total_owned, _cards.size()], W - 12, 6, 9, Color(0.85, 0.85, 0.85))
-	_draw_str_c("UP/DOWN: scroll    ESC: back    I: close", W * 0.5, H - 20, 8, Color(0.7, 0.7, 0.7))
+	_draw_str_c("LEFT/RIGHT: set    UP/DOWN: scroll    ESC: back    I: close", W * 0.5, H - 20, 8, Color(0.7, 0.7, 0.7))
 
 	if _max_scroll > 0.0:
 		var track_h: float = float(H - HEADER_H - 4)
@@ -307,11 +360,17 @@ func _draw_detail_overlay() -> void:
 	CardZoomDraw.draw(_view, _font, cr, draw_card, {})
 	var ny: float = cy + float(CARD_H) + 10.0
 	_draw_str_c(str(_detail_card.get("name", "")), float(W) * 0.5, ny, 10, Color.WHITE)
+	var card_set: String = str(_detail_card.get("set", "")).to_upper()
+	if card_set != "":
+		var set_no: int = int(_detail_card.get("set_number", 0))
+		var set_label: String = "%s #%03d" % [card_set, set_no] if set_no > 0 else card_set
+		_draw_str_c(set_label, float(W) * 0.5, ny + 12.0, 8, Color(0.88, 0.84, 0.70))
 	var flavor: String = CardDB.get_flavor(id)
 	if not flavor.is_empty():
 		var lines: Array[String] = _wrap_text(flavor, 380.0, 8)
+		var base_y: float = ny + (34.0 if card_set != "" else 22.0)
 		for li: int in lines.size():
-			_draw_str_c(lines[li], float(W) * 0.5, ny + 22.0 + float(li) * 13.0, 8, Color(0.78, 0.74, 0.66))
+			_draw_str_c(lines[li], float(W) * 0.5, base_y + float(li) * 13.0, 8, Color(0.78, 0.74, 0.66))
 	_draw_str_c("press any key to close", float(W) * 0.5, float(H) - 16.0, 7, Color(0.45, 0.45, 0.45))
 
 

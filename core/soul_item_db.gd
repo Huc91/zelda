@@ -100,3 +100,17 @@ static func _register_all() -> void:
 		"initiative_bonus": 1,
 		"sell_price": 3,
 	})
+	_reg("power_trunks", {
+		"name": "Power Trunks",
+		"description": "Move rocks and other pushable objects while equipped. Holds a special card (TBD).",
+		"slot": "blue",
+		"is_weapon": false,
+		"weapon_scene": "",
+		"icon": "",
+		"hud_icon": "res://core/ui/trunkicon.png",
+		"luck_bonus": 0,
+		"max_hp_bonus": 0,
+		"heal_after_battle": 0,
+		"initiative_bonus": 0,
+		"sell_price": 25,
+	})

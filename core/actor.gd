@@ -39,6 +39,8 @@ var _difficulty_icon: Sprite2D
 var _last_player_deck_index: int = -1
 var _last_player_deck_power: float = -999999.0
 var _last_enemy_deck_power: float = -999999.0
+var _home_sector: Vector2 = Vector2.ZERO
+var _home_sector_set: bool = false
 
 signal on_hit
 
@@ -54,6 +56,12 @@ func _ready() -> void:
 	set_collision_layer_value(1, false)
 	set_collision_layer_value(2, true)
 	_setup_enemy_power_marker()
+	if actor_type == 0:
+		_home_sector = Vector2(
+			floor(position.x / GridCamera.CELL_SIZE.x),
+			floor(position.y / GridCamera.CELL_SIZE.y)
+		)
+		_home_sector_set = true
 
 
 func _init_shader() -> void:
@@ -98,6 +106,8 @@ func _physics_process(delta: float) -> void:
 				or absf(cur_enemy_power - _last_enemy_deck_power) > 0.001:
 			_refresh_enemy_power_marker()
 	_state_process(delta)
+	if actor_type == 0:
+		_constrain_enemy_to_home_sector()
 
 
 # -------------------
@@ -142,20 +152,36 @@ func _snap_position() -> void:
 	position = position.snapped(Vector2.ONE)
 
 
+## Single cardinal axis for movement/facing (length 1 on one axis, or ZERO).
+## Near-diagonals use a tie-break so facing always updates (avoids stale Up/Right).
+func _dominant_cardinal_vector(vector: Vector2) -> Vector2:
+	if vector == Vector2.ZERO:
+		return Vector2.ZERO
+	var abs_x: float = absf(vector.x)
+	var abs_y: float = absf(vector.y)
+	const AXIS_SWITCH_BIAS: float = 0.12
+	if abs_x > abs_y + AXIS_SWITCH_BIAS:
+		return Vector2(signf(vector.x), 0.0)
+	if abs_y > abs_x + AXIS_SWITCH_BIAS:
+		return Vector2(0.0, signf(vector.y))
+	if abs_x >= abs_y:
+		return Vector2(signf(vector.x), 0.0)
+	return Vector2(0.0, signf(vector.y))
+
+
 # Sets sprite direction to last orthogonal direction.
 func _update_sprite_direction(vector : Vector2) -> void:
 	if vector == Vector2.ZERO:
 		return
-
-	# Pathing/chase movement can be diagonal; use hysteresis so near-diagonal
-	# vectors keep the current facing instead of flickering each frame.
-	var abs_x: float = absf(vector.x)
-	var abs_y: float = absf(vector.y)
-	var axis_switch_bias: float = 0.12
-	if abs_x > abs_y + axis_switch_bias:
-		sprite_direction = "Right" if vector.x > 0.0 else "Left"
-	elif abs_y > abs_x + axis_switch_bias:
-		sprite_direction = "Down" if vector.y > 0.0 else "Up"
+	var axis: Vector2 = _dominant_cardinal_vector(vector)
+	if axis.x > 0.0:
+		sprite_direction = "Right"
+	elif axis.x < 0.0:
+		sprite_direction = "Left"
+	elif axis.y > 0.0:
+		sprite_direction = "Down"
+	elif axis.y < 0.0:
+		sprite_direction = "Up"
 
 
 # Plays an animation from a directioned set.
@@ -224,6 +250,24 @@ func _check_collisions():
 
 func _custom_collision(_other):
 	pass
+
+
+func _constrain_enemy_to_home_sector() -> void:
+	if not _home_sector_set:
+		return
+	var sector_origin: Vector2 = Vector2(
+		_home_sector.x * GridCamera.CELL_SIZE.x,
+		_home_sector.y * GridCamera.CELL_SIZE.y
+	)
+	var min_x: float = sector_origin.x + 1.0
+	var min_y: float = sector_origin.y + 1.0
+	var max_x: float = sector_origin.x + GridCamera.CELL_SIZE.x - 1.0
+	var max_y: float = sector_origin.y + GridCamera.CELL_SIZE.y - 1.0
+	var clamped: Vector2 = position
+	clamped.x = clampf(clamped.x, min_x, max_x)
+	clamped.y = clampf(clamped.y, min_y, max_y)
+	if clamped != position:
+		position = clamped
 
 
 # Override in subclasses to intercept hits (e.g. trigger card battle).

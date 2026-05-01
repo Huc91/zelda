@@ -1,0 +1,20 @@
+[gd_scene load_steps=4 format=3 uid="uid://dca2p4in5tskn"]
+
+[ext_resource type="Script" uid="uid://bx67f4gm25t2i" path="res://data/actors/skull.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://blhcorjeho7ca" path="res://data/actors/skull.png" id="2_skull_tex"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_skull"]
+size = Vector2(11, 9)
+
+[node name="Skull" type="Node2D"]
+script = ExtResource("1_script")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2_skull_tex")
+
+[node name="Body" type="StaticBody2D" parent="."]
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Body"]
+position = Vector2(-0.5, -0.5)
+shape = SubResource("RectangleShape2D_skull")

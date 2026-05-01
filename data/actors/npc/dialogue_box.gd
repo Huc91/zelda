@@ -10,11 +10,23 @@ signal finished(event: String)
 
 const W: int = 640
 const H: int = 576
-const BOX_H: int = 104
-const BOX_Y: int = H - BOX_H - 12
-const BOX_X: int = 20
-const BOX_W: int = W - 40
+## Taller panel so body + 3 choice rows fit with inner padding
+const BOX_H: int = 124
+## Space from screen edge to the dialogue panel
+const MARGIN_X: int = 28
+const MARGIN_BELOW_BOX: int = 16
+const BOX_X: int = MARGIN_X
+const BOX_W: int = W - MARGIN_X * 2
+const BOX_Y: int = H - BOX_H - MARGIN_BELOW_BOX
+## Padding inside the chamfer (content inset)
+const INNER_PAD_L: int = 16
+const INNER_PAD_R: int = 16
+const INNER_PAD_T: int = 22
+const INNER_PAD_B: int = 22
+## Y offset from BOX_Y to first choice row (room for body above when choices are shown)
+const CHOICE_TOP: int = 56
 const NAME_H: int = 22
+const NAME_GAP_ABOVE_BOX: int = 6
 const FONT_PATH: String = "res://assets/fonts/Nudge Orb.ttf"
 const FS_BODY: int = 12
 const FS_NAME: int = 10
@@ -180,11 +192,10 @@ func _close(event: String) -> void:
 
 func _choice_rect(idx: int) -> Rect2:
 	const CHOICE_H: int = 18
-	const CHOICE_GAP: int = 3
-	const CHOICE_TOP: int = 38
-	const CHOICE_INSET_X: int = 8
+	const CHOICE_GAP: int = 4
 	var cy: int = BOX_Y + CHOICE_TOP + idx * (CHOICE_H + CHOICE_GAP)
-	return Rect2(BOX_X + CHOICE_INSET_X, cy, BOX_W - CHOICE_INSET_X * 2, CHOICE_H)
+	var cw: float = float(BOX_W - INNER_PAD_L - INNER_PAD_R)
+	return Rect2(float(BOX_X + INNER_PAD_L), float(cy), cw, float(CHOICE_H))
 
 
 func _choice_at(pos: Vector2) -> int:
@@ -194,28 +205,47 @@ func _choice_at(pos: Vector2) -> int:
 	return -1
 
 
+## Keep wrapped body inside the chamfer box (above choices or above bottom hint).
+func _body_max_lines() -> int:
+	# Line height ≈ font ascent+descent; +2 matches TextServer multiline spacing
+	var line_h: int = maxi(_font.get_height(FS_BODY) + 2, 13)
+	var top_y: float = float(BOX_Y + INNER_PAD_T)
+	var bottom_y: float
+	if _phase == _Phase.CHOICES:
+		bottom_y = float(BOX_Y + CHOICE_TOP - 6)
+	else:
+		bottom_y = float(BOX_Y + BOX_H - INNER_PAD_B)
+	var avail: int = int(maxf(0.0, bottom_y - top_y))
+	return maxi(1, avail / line_h)
+
+
 func _on_draw() -> void:
 	if _font == null:
 		return
 
 	# Speaker name tab (integer rect — avoids chamfer fill only painting one side on wide strips)
 	if _speaker != "":
-		var nw: int = int(ceil(_font.get_string_size(_speaker, HORIZONTAL_ALIGNMENT_LEFT, -1, FS_NAME).x + 16.0))
+		var name_inner: int = 10
+		var nw: int = int(ceil(_font.get_string_size(_speaker, HORIZONTAL_ALIGNMENT_LEFT, -1, FS_NAME).x + float(name_inner * 2)))
 		var nx: int = BOX_X
-		var ny: int = BOX_Y - NAME_H - 2
+		var ny: int = BOX_Y - NAME_H - NAME_GAP_ABOVE_BOX
 		var name_rect := Rect2(float(nx), float(ny), float(nw), float(NAME_H))
 		PixelChamferStyleBox.draw_chamfer_control(_view, name_rect, C_NAME_BG, C_BORDER, 2, DIALOG_CHAMFER)
-		_view.draw_string(_font, Vector2(float(nx + 8), float(ny + 15)),
+		_view.draw_string(_font, Vector2(float(nx + name_inner), float(ny + 15)),
 			_speaker, HORIZONTAL_ALIGNMENT_LEFT, -1, FS_NAME, C_NAME)
 
 	# Main dialogue box
 	var box: Rect2 = Rect2(float(BOX_X), float(BOX_Y), float(BOX_W), float(BOX_H))
 	PixelChamferStyleBox.draw_chamfer_control(_view, box, C_BG, C_BORDER, 2, DIALOG_CHAMFER)
 
-	# Text
+	# Body: multiline wrap + max_lines so text stays inside the panel
 	if not _displayed.is_empty():
-		_view.draw_string(_font, Vector2(float(BOX_X) + 12.0, float(BOX_Y) + 22.0),
-			_displayed, HORIZONTAL_ALIGNMENT_LEFT, BOX_W - 24, FS_BODY, C_TEXT)
+		var body_x: float = float(BOX_X + INNER_PAD_L)
+		var body_y: float = float(BOX_Y + INNER_PAD_T)
+		var body_w: float = float(BOX_W - INNER_PAD_L - INNER_PAD_R)
+		var max_lines: int = _body_max_lines()
+		_view.draw_multiline_string(_font, Vector2(body_x, body_y), _displayed,
+			HORIZONTAL_ALIGNMENT_LEFT, body_w, FS_BODY, max_lines, C_TEXT)
 
 	# Choices rendered inside the main dialogue box (classic RPG layout)
 	if _phase == _Phase.CHOICES:
@@ -225,19 +255,12 @@ func _on_draw() -> void:
 			var bg: Color = C_CHOICE_HOV if is_focused else C_CHOICE_BG
 			PixelChamferStyleBox.draw_chamfer_control(_view, r, bg, C_BORDER, 1, DIALOG_CHAMFER)
 			var label: String = "%d. %s" % [i + 1, _choices[i].get("text", "")]
-			_view.draw_string(_font, Vector2(r.position.x + 6.0, r.position.y + 14.0),
+			_view.draw_string(_font, Vector2(r.position.x + 8.0, r.position.y + 14.0),
 				label, HORIZONTAL_ALIGNMENT_LEFT, -1, FS_CHOICE, C_CHOICE_TXT)
-
-	# Line counter if multiple lines
-	if _lines.size() > 1:
-		var counter: String = "%d/%d" % [_line_idx + 1, _lines.size()]
-		var cw: float = _font.get_string_size(counter, HORIZONTAL_ALIGNMENT_LEFT, -1, FS_META).x
-		_view.draw_string(_font, Vector2(float(BOX_X + BOX_W) - cw - 8.0, float(BOX_Y) + 12.0),
-			counter, HORIZONTAL_ALIGNMENT_LEFT, -1, FS_META, C_HINT)
 
 	# Hint
 	if _phase == _Phase.READING:
 		var hint: String = "Z / SPACE" if _choices.is_empty() or _line_idx < _lines.size() - 1 else "Z to choose"
 		var hw: float = _font.get_string_size(hint, HORIZONTAL_ALIGNMENT_LEFT, -1, FS_META).x
-		_view.draw_string(_font, Vector2(float(BOX_X + BOX_W) - hw - 8.0,
-			float(BOX_Y + BOX_H) - 6.0), hint, HORIZONTAL_ALIGNMENT_LEFT, -1, FS_META, C_HINT)
+		_view.draw_string(_font, Vector2(float(BOX_X + BOX_W) - hw - float(INNER_PAD_R),
+			float(BOX_Y + BOX_H) - 10.0), hint, HORIZONTAL_ALIGNMENT_LEFT, -1, FS_META, C_HINT)

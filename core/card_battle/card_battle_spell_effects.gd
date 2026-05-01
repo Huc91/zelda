@@ -21,7 +21,7 @@ static func resolve(b: CardBattle, card: Dictionary, is_player: bool) -> void:
 			else:         b._deal_damage_to_player(val)
 		"heal":
 			if is_player: b._heal_player(val)
-			else:         b.enemy_hp  = mini(b.enemy_hp  + val, CardBattleConstants.STARTING_HP)
+			else:         b.enemy_hp  = mini(b.enemy_hp  + val, b.enemy_hp_cap)
 		"draw":
 			for _i in val: b._draw_one(own_hand, own_deck)
 		"aoe_enemy", "aoe_demon_dmg":
@@ -62,7 +62,7 @@ static func resolve(b: CardBattle, card: Dictionary, is_player: bool) -> void:
 		"life_per_demon":
 			var gain: int = (pf.size() + pr.size()) * val
 			if is_player: b._heal_player(gain)
-			else:         b.enemy_hp  = mini(b.enemy_hp  + gain, CardBattleConstants.STARTING_HP)
+			else:         b.enemy_hp  = mini(b.enemy_hp  + gain, b.enemy_hp_cap)
 		"buff_hp":
 			var pool: Array = []
 			for dd in pf: pool.append(dd)
@@ -148,7 +148,7 @@ static func resolve(b: CardBattle, card: Dictionary, is_player: bool) -> void:
 				b._heal_player(val)
 			else:
 				b._deal_damage_to_player(val)
-				b.enemy_hp = mini(b.enemy_hp + val, CardBattleConstants.STARTING_HP)
+				b.enemy_hp = mini(b.enemy_hp + val, b.enemy_hp_cap)
 		"face_per_graveyard":
 			var amt: int = gy_local.size() * val
 			if is_player: b._deal_damage_to_enemy(amt)

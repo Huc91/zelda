@@ -45,7 +45,7 @@ func _show_title_screen() -> void:
 	await title.tree_exited
 	match choice:
 		TitleScreen.Choice.CONTINUE:
-			Global.load_game()
+			Global.reset_new_game()
 		TitleScreen.Choice.NEW_GAME:
 			Global.reset_new_game()
 		TitleScreen.Choice.DEV_MODE:
@@ -135,6 +135,8 @@ func _on_bonfire_rested() -> void:
 	# Enemies respawn naturally when the player leaves and re-enters the map,
 	# since initialize_scene always creates fresh instances.
 	Global.reset_tried_souls()
+	# Spare outcome: Kabba vanishes on rest as well as on sector change.
+	Global.apply_kabba_spare_despawn_if_pending(Global.current_map_path)
 
 
 func _on_card_battle_requested(p_first: bool, enemy: Node) -> void:
@@ -166,18 +168,34 @@ func _on_battle_ended(player_won: bool, battle: Node, enemy: Node) -> void:
 	await ScreenFX.fade_white_in()
 	battle.queue_free()
 	if player_won and is_instance_valid(enemy):
-		_give_battle_reward(enemy)
+		var defer_reward_until_mercy: bool = false
+		if enemy.has_method("defer_battle_reward_until_mercy"):
+			defer_reward_until_mercy = bool(enemy.call("defer_battle_reward_until_mercy"))
+		if not defer_reward_until_mercy:
+			_give_battle_reward(enemy)
 		# Apply post-battle heals from soul items
 		var heal: int = Global.get_heal_after_battle()
 		if heal > 0:
 			Global.add_hp(heal)
-		enemy.queue_free()
+		if enemy.has_method("on_card_battle_won"):
+			enemy.call("on_card_battle_won")
+		else:
+			enemy.queue_free()
 		# Unfreeze all living actors and reset battle flag
 		for actor in get_tree().get_nodes_in_group("actor"):
 			if is_instance_valid(actor) and actor is Actor:
 				actor.set_physics_process(true)
 				actor.in_battle = false
 		await ScreenFX.fade_white_out()
+		# Post-battle dialogue only after returning to the overworld (not on the white hold).
+		if is_instance_valid(enemy) and enemy.has_method("offer_post_victory_mercy"):
+			await enemy.offer_post_victory_mercy()
+		if defer_reward_until_mercy and is_instance_valid(enemy):
+			var skip_reward: bool = false
+			if enemy.has_method("should_skip_battle_reward"):
+				skip_reward = bool(enemy.call("should_skip_battle_reward"))
+			if not skip_reward:
+				_give_battle_reward(enemy)
 		Global.card_battle_requested.connect(_on_card_battle_requested)
 	else:
 		# Player lost
@@ -280,7 +298,11 @@ func _give_battle_reward(enemy: Node) -> void:
 	elif diff == "boss":
 		card_drop_chance = 0.50
 	if randf() < card_drop_chance:
-		var ids: Array[String] = CardDB.all_collectible_ids()
+		var ids: Array[String] = []
+		for cid: String in CardDB.all_collectible_ids():
+			var c: Dictionary = CardDB.get_card(cid)
+			if not c.get("no_pack", false):
+				ids.append(cid)
 		if not ids.is_empty():
 			var dropped_id: String = ids[randi() % ids.size()]
 			_spawn_card_pickup(enemy.position, dropped_id)

@@ -2,6 +2,9 @@ extends Actor
 
 const SoulItem = preload("res://core/soul_item.gd")
 const SOUL_HOLD_TIME: float = 2.0
+const PUSH_COOLDOWN: float = 0.35
+## Matches facing probe offset; 1px test_move misses collisions on some axes / FLOATING mode.
+const PUSH_COLLISION_TEST_PX: float = 8.0
 
 var input_direction: Vector2:
 	get: return Input.get_vector("left", "right", "up", "down")
@@ -14,6 +17,7 @@ const ENTRY_DISTANCE: int = 64
 var _soul_hold_timer: float = 0.0
 var _soul_hold_active: bool = false
 var _soul_hold_cell: Vector2i = Vector2i.ZERO
+var _push_cooldown: float = 0.0
 
 @onready var _soul_particles: CPUParticles2D = $SoulParticles
 @onready var _soul_particles_center: CPUParticles2D = $SoulParticlesCenter
@@ -25,19 +29,35 @@ func _physics_process(delta: float) -> void:
 		has_entered = position.distance_squared_to(last_safe_position) > ENTRY_DISTANCE
 
 
+func _is_blocked_into_axis(axis: Vector2) -> bool:
+	if axis == Vector2.ZERO:
+		return false
+	for i: int in get_slide_collision_count():
+		var col: KinematicCollision2D = get_slide_collision(i)
+		if col.get_normal().dot(axis) < -0.2:
+			return true
+	return false
+
+
 func state_default() -> void:
+	var block_axis: Vector2 = _dominant_cardinal_vector(input_direction)
 	velocity = input_direction * speed
 	move_and_slide()
 	_update_sprite_direction(input_direction)
 	_check_collisions()
 
-	# Handle animations
-	if velocity:
-		if is_on_wall() and ((test_move(transform, Vector2.DOWN) and sprite_direction == "Down")
-				or (test_move(transform, Vector2.UP) and sprite_direction == "Up")
-				or (test_move(transform, Vector2.RIGHT) and sprite_direction == "Right")
-				or (test_move(transform, Vector2.LEFT) and sprite_direction == "Left")):
+	if _push_cooldown > 0.0:
+		_push_cooldown -= get_physics_process_delta_time()
+
+	# Blocked / Push: prefer slide normals from move_and_slide (symmetric for all facings).
+	# Diamond collision (rotated rect) + FLOATING can make test_move(transform, …) flaky on some axes.
+	if input_direction.length_squared() > 0.0:
+		var blocked_in_facing: bool = _is_blocked_into_axis(block_axis)
+		if not blocked_in_facing and block_axis != Vector2.ZERO:
+			blocked_in_facing = test_move(global_transform, block_axis * PUSH_COLLISION_TEST_PX)
+		if blocked_in_facing:
 			_play_animation("Push")
+			_try_push()
 		else:
 			_play_animation("Walk")
 	else:
@@ -108,6 +128,25 @@ func restore_state_from_global() -> void:
 	pass
 
 
+func _try_push() -> void:
+	if _push_cooldown > 0.0:
+		return
+	if Global.equipped_soul_blue != Global.POWER_TRUNKS_SOUL_ID:
+		return
+	var map: Map = _get_map()
+	if map == null:
+		return
+	var face_cell: Vector2i = _get_facing_cell(map)
+	var dir: Vector2i = Vector2i.ZERO
+	match sprite_direction:
+		"Left":  dir = Vector2i(-1, 0)
+		"Right": dir = Vector2i(1, 0)
+		"Up":    dir = Vector2i(0, -1)
+		_:       dir = Vector2i(0, 1)
+	if map.push_tile_animated(face_cell, dir):
+		_push_cooldown = PUSH_COOLDOWN
+
+
 func _get_facing_cell(map: Map) -> Vector2i:
 	var face_offset: Vector2 = Vector2.ZERO
 	match sprite_direction:
@@ -138,12 +177,14 @@ func _update_soul_catch(dt: float) -> void:
 
 	var cell: Vector2i = _get_facing_cell(map)
 	var soul_data: Dictionary = map.get_soul_data(cell)
-
+	var world_soul: Node = null
 	if soul_data.is_empty():
-		_stop_absorb_vfx()
-		_soul_hold_timer = 0.0
-		_soul_hold_active = false
-		return
+		world_soul = _find_world_soul_at_cell(map, cell)
+		if world_soul == null:
+			_stop_absorb_vfx()
+			_soul_hold_timer = 0.0
+			_soul_hold_active = false
+			return
 
 	# New cell — reset timer.
 	if cell != _soul_hold_cell:
@@ -164,7 +205,37 @@ func _update_soul_catch(dt: float) -> void:
 	# 2 seconds held — attempt absorption.
 	_soul_hold_active = true
 	_stop_absorb_vfx()
-	_absorb_soul(soul_data, map.scene_file_path, cell)
+	if world_soul != null:
+		_absorb_world_soul(world_soul, map, cell)
+	else:
+		_absorb_soul(soul_data, map.scene_file_path, cell)
+
+
+func _find_world_soul_at_cell(p_map: Map, cell: Vector2i) -> Node:
+	var p: String = p_map.scene_file_path
+	for n: Node in get_tree().get_nodes_in_group("world_soul"):
+		if n.has_method("matches_absorb_cell") and n.matches_absorb_cell(p, cell):
+			return n
+	return null
+
+
+func _absorb_world_soul(world: Node, map: Map, cell: Vector2i) -> void:
+	var map_path: String = map.scene_file_path
+	if Global.has_absorbed_soul(map_path, cell):
+		_show_soul_dialog("Nothing to absorb here.")
+		return
+	Global.record_soul_absorb(map_path, cell)
+	var result: Dictionary = {}
+	if world.has_method("absorb_world_soul"):
+		var v: Variant = world.call("absorb_world_soul")
+		if typeof(v) == TYPE_DICTIONARY:
+			result = v as Dictionary
+	var msg: String = str(result.get("message", "Nothing to absorb here."))
+	if msg != "":
+		_show_soul_dialog(msg)
+	var consume: bool = bool(result.get("consume", true))
+	if consume and world.has_method("notify_absorbed"):
+		world.notify_absorbed()
 
 
 func _absorb_soul(soul_data: Dictionary, map_path: String, cell: Vector2i) -> void:

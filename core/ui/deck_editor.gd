@@ -235,6 +235,16 @@ func _remove_one(card_id: String) -> void:
 		_edit_ids.remove_at(i)
 
 
+func _max_deck_scroll() -> int:
+	var rows: Array[Dictionary] = _deck_rows()
+	return maxi(0, rows.size() * ROW_H - DECK_LIST_H)
+
+
+func _scroll_deck_list(delta_rows: int) -> void:
+	var max_scroll: int = _max_deck_scroll()
+	_deck_scroll = clampi(_deck_scroll + delta_rows * ROW_H, 0, max_scroll)
+
+
 func _deck_rows() -> Array[Dictionary]:
 	var counts: Dictionary = {}
 	for id in _edit_ids:
@@ -409,7 +419,7 @@ func _draw() -> void:
 		PixelChamferStyleBox.draw_chamfer_control(self, nr, n_fill, n_br, 1, 2)
 
 	var deck_sz: int = _edit_ids.size()
-	_str_r("%d/20" % deck_sz, 168.0, 6.0, 9, CardBattleConstants.C_HP_RED)
+	_str_r("%d/%d" % [deck_sz, CardDB.DECK_SIZE_MAX], 168.0, 6.0, 9, CardBattleConstants.C_HP_RED)
 
 	var start: int = _page * PAGE_SIZE
 
@@ -454,7 +464,7 @@ func _draw() -> void:
 	_deck_scroll = clampi(_deck_scroll, 0, max_scroll)
 
 	var y0: float = float(DECK_LIST_Y0)
-	_rect_deck_list_area = Rect2(4.0, y0, float(LEFT_W - 8), float(DECK_LIST_H))
+	_rect_deck_list_area = Rect2(4.0, y0, float(LEFT_W - 2), float(DECK_LIST_H))
 	for ri in rows.size():
 		var row: Dictionary = rows[ri]
 		var rid: String = str(row["id"])
@@ -468,8 +478,8 @@ func _draw() -> void:
 		if cname.length() > 16:
 			cname = cname.left(16) + "…"
 		var ty: float = y + 3.0
-		_str("%d/%d" % [cnt, CardDB.card_copy_max(rid)], 4.0, ty, 8, CardBattleConstants.C_TEXT)
-		_str(cname, 40.0, ty, 8, CardBattleConstants.C_TEXT)
+		_str("%d/%d" % [cnt, CardDB.card_copy_max(rid)], 10.0, ty, 8, CardBattleConstants.C_TEXT)
+		_str(cname, 46.0, ty, 8, CardBattleConstants.C_TEXT)
 		var pm: Array[Rect2] = _list_plus_minus_rects(y)
 		var plus_rect: Rect2 = pm[0]
 		var minus_rect: Rect2 = pm[1]
@@ -480,6 +490,20 @@ func _draw() -> void:
 		var pm_border: Color = Color(0.25, 0.25, 0.30)
 		_draw_pm_square_button(plus_rect, p_fill, pm_border, "+", Color.WHITE if can_p else Color(0.7, 0.7, 0.7))
 		_draw_pm_square_button(minus_rect, m_fill, pm_border, "−", Color.WHITE if can_m else Color(0.7, 0.7, 0.7))
+	if max_scroll > 0:
+		var track_w: float = 5.0
+		var track_h: float = _rect_deck_list_area.size.y - 2.0
+		var track_x: float = _rect_deck_list_area.position.x + _rect_deck_list_area.size.x - track_w - 1.0
+		var track_y: float = _rect_deck_list_area.position.y + 1.0
+		var track: Rect2 = Rect2(track_x, track_y, track_w, track_h)
+		draw_rect(track, Color(0.08, 0.08, 0.08))
+		var total_h: float = float(rows.size() * ROW_H)
+		var visible_h: float = float(DECK_LIST_H)
+		var thumb_h: float = maxf(12.0, (visible_h / maxf(1.0, total_h)) * track_h)
+		var travel: float = maxf(0.0, track_h - thumb_h)
+		var t: float = float(_deck_scroll) / float(maxi(1, max_scroll))
+		var thumb_y: float = track_y + floor(travel * t)
+		draw_rect(Rect2(track_x, thumb_y, track_w, thumb_h), Color(0.95, 0.95, 0.98))
 
 	var fy: float = float(FOOT_Y)
 	var fh: float = float(FOOT_BTN_H)
@@ -547,6 +571,29 @@ func _draw_pm_square_button(r: Rect2, fill: Color, border: Color, label: String,
 func _gui_input(event: InputEvent) -> void:
 	if not visible:
 		return
+
+	# Match battle log input behavior: wheel events can arrive as InputEventMouseWheel.
+	if str(event.get_class()) == "InputEventMouseWheel":
+		if _rect_deck_list_area.has_point(event.position):
+			if event.delta.y > 0.0:
+				_scroll_deck_list(-3)
+			elif event.delta.y < 0.0:
+				_scroll_deck_list(3)
+			queue_redraw()
+			accept_event()
+		return
+
+	if str(event.get_class()) == "InputEventPanGesture":
+		if _rect_deck_list_area.has_point(event.position):
+			if event.delta.y < -0.35:
+				_scroll_deck_list(-2)
+				queue_redraw()
+			elif event.delta.y > 0.35:
+				_scroll_deck_list(2)
+				queue_redraw()
+			accept_event()
+		return
+
 	if event is InputEventMouseMotion:
 		var p: Vector2 = event.position
 		_update_hover(p)
@@ -557,19 +604,18 @@ func _gui_input(event: InputEvent) -> void:
 		_handle_click(pos)
 		accept_event()
 		return
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_WHEEL_UP:
 		if _rect_deck_list_area.has_point(event.position):
-			_deck_scroll = maxi(0, _deck_scroll - ROW_H * 3)
+			_scroll_deck_list(-3)
 			queue_redraw()
 		accept_event()
 		return
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 		if _rect_deck_list_area.has_point(event.position):
-			var rows: Array[Dictionary] = _deck_rows()
-			var max_scroll: int = maxi(0, rows.size() * ROW_H - DECK_LIST_H)
-			_deck_scroll = mini(max_scroll, _deck_scroll + ROW_H * 3)
+			_scroll_deck_list(3)
 			queue_redraw()
-		accept_event()
+			accept_event()
+		return
 
 
 func _update_hover(p: Vector2) -> void:

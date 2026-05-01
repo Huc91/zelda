@@ -195,7 +195,11 @@ func _try_grass_drop(world_pos: Vector2) -> void:
 		return
 	# Card drop (base 0.5%)
 	if roll < 0.035 + luck_bonus * 0.3:
-		var ids: Array[String] = CardDB.all_collectible_ids()
+		var ids: Array[String] = []
+		for cid: String in CardDB.all_collectible_ids():
+			var c: Dictionary = CardDB.get_card(cid)
+			if not c.get("no_pack", false):
+				ids.append(cid)
 		if not ids.is_empty():
 			var dropped: String = ids[randi() % ids.size()]
 			var pickup: CardPickup = CardPickup.new()
@@ -229,6 +233,60 @@ func _read_chance(td: TileData) -> float:
 		push_warning("Map: 'soul_absorb_chance' custom data layer missing from TileSet — defaulting to 1.0")
 		return 1.0
 	return float(td.get_custom_data_by_layer_id(layer_idx))
+
+
+func _can_push_to(dest: Vector2i) -> bool:
+	var st: TileData = get_cell_tile_data(Layer.STATIC, dest)
+	if st == null or st.get_collision_polygons_count(0) > 0:
+		return false
+	if str(st.get_custom_data("on_step")) == "drown":
+		return false
+	if get_cell_source_id(Layer.DYNAMIC, dest) != -1:
+		return false
+	return true
+
+
+## Slides the pushable DYNAMIC tile at `from` one step in `dir`.
+## Returns true if the push succeeded.
+func push_tile_animated(from: Vector2i, dir: Vector2i) -> bool:
+	var data: TileData = get_cell_tile_data(Layer.DYNAMIC, from)
+	if data == null or not bool(data.get_custom_data("is_pushable")):
+		return false
+	var dest: Vector2i = from + dir
+	if not _can_push_to(dest):
+		return false
+	var source_id: int = get_cell_source_id(Layer.DYNAMIC, from)
+	var atlas_coords: Vector2i = get_cell_atlas_coords(Layer.DYNAMIC, from)
+	var alternative: int = get_cell_alternative_tile(Layer.DYNAMIC, from)
+	erase_cell(Layer.DYNAMIC, from)
+	_spawn_push_dust(map_to_local(from))
+	var tw: Tween = create_tween()
+	tw.tween_interval(0.12)
+	tw.tween_callback(func() -> void:
+		set_cell(Layer.DYNAMIC, dest, source_id, atlas_coords, alternative)
+		_spawn_push_dust(map_to_local(dest))
+	)
+	return true
+
+
+func _spawn_push_dust(world_pos: Vector2) -> void:
+	var p: CPUParticles2D = CPUParticles2D.new()
+	p.one_shot = true
+	p.explosiveness = 1.0
+	p.amount = 8
+	p.lifetime = 0.5
+	p.direction = Vector2(0, -1)
+	p.spread = 80.0
+	p.initial_velocity_min = 15.0
+	p.initial_velocity_max = 30.0
+	p.gravity = Vector2(0, 50)
+	p.color = Color(0.75, 0.6, 0.35, 1.0)
+	p.position = world_pos
+	add_child(p)
+	p.emitting = true
+	var tw: Tween = create_tween()
+	tw.tween_interval(1.0)
+	tw.tween_callback(p.queue_free)
 
 
 func show_label(world_pos: Vector2, text: String, col: Color) -> void:

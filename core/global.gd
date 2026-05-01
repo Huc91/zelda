@@ -77,6 +77,26 @@ var npc_flags_dismissed: Dictionary = {}  # { dialogue_id: true }
 ## NPC dialogue sequence progress: { dialogue_id: current_sequence_index }.
 var npc_progress: Dictionary = {}
 
+## Kabba boss post-duel state (persisted in save).
+const KABBA_NONE: int = 0
+const KABBA_MERCY_PENDING: int = 1
+const KABBA_SPARED_WAITING_SCROLL: int = 2
+const KABBA_SPARED_GONE: int = 3
+const KABBA_KILLED_SKULL: int = 4
+const KABBA_SKULL_DONE: int = 5
+const POWER_TRUNKS_SOUL_ID: String = "power_trunks"
+const KABBA_PROMO_CARD_ID: String = "demon_126"
+
+var kabba_state: int = KABBA_NONE
+## True after Power Trunks was granted (spare or skull absorb).
+var kabba_reward_claimed: bool = false
+## Map where Kabba was defeated (spare despawn + skull only apply here).
+var kabba_encounter_map_path: String = ""
+## Spare follow-up dialogue step (0..5, where 5 means "..." loop).
+var kabba_spare_dialogue_step: int = 0
+## True once Fenrir was dropped to the world by Kabba.
+var kabba_fenrir_dropped: bool = false
+
 ## Fired when a dialogue sequence ends with an event string.
 signal dialogue_event(event_name: String, npc_id: String)
 
@@ -161,6 +181,13 @@ func reset_new_game() -> void:
 	opened_chests.clear()
 	collected_pickups.clear()
 	absorbed_soul_cells.clear()
+	npc_progress.clear()
+	npc_flags_dismissed.clear()
+	kabba_state = KABBA_NONE
+	kabba_reward_claimed = false
+	kabba_encounter_map_path = ""
+	kabba_spare_dialogue_step = 0
+	kabba_fenrir_dropped = false
 	player_items.clear()
 	base_set_packs = 0
 	card_collection.clear()
@@ -179,6 +206,8 @@ func _apply_dev_mode() -> void:
 	money = 9999
 	for id in CardDB.all_collectible_ids():
 		card_collection[id] = 9999
+	for id: String in SoulItemDB.all_ids():
+		add_soul_to_collection(id)
 
 
 func _init_card_collection() -> void:
@@ -447,7 +476,7 @@ func get_battle_deck_card_ids() -> Array:
 
 
 ## Computes deck power score based on rarity and demon efficiency.
-## - rarity_power = sum(rarity points)/20
+## - rarity_power = sum(rarity points)/DECK_SIZE_MAX (baseline 1.0 for all-common legal deck)
 ## - raw_power = sum(demon power)/sum(demon mana), where demon power = atk + 1 if has ability
 ## - final_power = rarity_power * raw_power
 func get_deck_power_breakdown(deck_index: int) -> Dictionary:
@@ -477,7 +506,8 @@ func get_deck_power_breakdown_for_card_ids(card_ids: Array) -> Dictionary:
 		var mana: int = int(card.get("cost", 0))
 		demon_power_sum += atk + _deck_card_ability_power(card)
 		demon_mana_sum += mana
-	var rarity_power: float = float(rarity_sum) / 20.0
+	var rarity_den: float = float(maxi(1, CardDB.DECK_SIZE_MAX))
+	var rarity_power: float = float(rarity_sum) / rarity_den
 	var raw_power: float = 0.0
 	if demon_mana_sum > 0:
 		raw_power = float(demon_power_sum) / float(demon_mana_sum)
@@ -590,6 +620,11 @@ func save_game() -> void:
 		"lit_bonfires": _serialize_vec2_dict(lit_bonfires),
 		"opened_chests": _serialize_vec2_dict(opened_chests),
 		"base_set_packs": base_set_packs,
+		"kabba_state": kabba_state,
+		"kabba_reward_claimed": kabba_reward_claimed,
+		"kabba_encounter_map_path": kabba_encounter_map_path,
+		"kabba_spare_dialogue_step": kabba_spare_dialogue_step,
+		"kabba_fenrir_dropped": kabba_fenrir_dropped,
 	}
 	data["dev_mode"] = dev_mode
 	var f: FileAccess = FileAccess.open(_active_save_path(), FileAccess.WRITE)
@@ -650,6 +685,11 @@ func load_game() -> bool:
 	var oc: Variant = data.get("opened_chests", {})
 	if typeof(oc) == TYPE_DICTIONARY:
 		opened_chests = _deserialize_vec2_dict(oc as Dictionary)
+	kabba_state = int(data.get("kabba_state", 0))
+	kabba_reward_claimed = bool(data.get("kabba_reward_claimed", false))
+	kabba_encounter_map_path = str(data.get("kabba_encounter_map_path", ""))
+	kabba_spare_dialogue_step = int(data.get("kabba_spare_dialogue_step", 0))
+	kabba_fenrir_dropped = bool(data.get("kabba_fenrir_dropped", false))
 	money_changed.emit(money)
 	hp_changed.emit(player_hp, get_effective_max_hp())
 	lives_changed.emit(_hp_to_lives())
@@ -693,6 +733,44 @@ func record_soul_absorb(map_path: String, cell: Vector2i) -> void:
 ## Returns true if this cell has already been soul-absorbed this session.
 func has_absorbed_soul(map_path: String, cell: Vector2i) -> bool:
 	return (absorbed_soul_cells.get(map_path, []) as Array).has(cell)
+
+
+## Grants Power Trunks once (Kabba spare or skull). Returns true if newly granted.
+func try_grant_kabba_power_trunks_reward(include_promo_card: bool = true) -> bool:
+	if kabba_reward_claimed:
+		return false
+	kabba_reward_claimed = true
+	add_soul_to_collection(POWER_TRUNKS_SOUL_ID)
+	var soul: SoulItem = SOULS.get(POWER_TRUNKS_SOUL_ID, null) as SoulItem
+	if soul != null:
+		var slot_empty: bool = false
+		match soul.slot:
+			"red":
+				slot_empty = equipped_soul_red == ""
+			"blue":
+				slot_empty = equipped_soul_blue == ""
+			"green":
+				slot_empty = equipped_soul_green == ""
+		if slot_empty:
+			equip_soul(POWER_TRUNKS_SOUL_ID)
+	if include_promo_card:
+		collect_card(KABBA_PROMO_CARD_ID, false)
+	return true
+
+
+## After spare: remove Kabba on next camera room transition (same map).
+func apply_kabba_spare_despawn_if_pending(map_path: String) -> void:
+	if kabba_state != KABBA_SPARED_WAITING_SCROLL:
+		return
+	if kabba_encounter_map_path != "" and map_path != kabba_encounter_map_path:
+		return
+	kabba_state = KABBA_SPARED_GONE
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return
+	for n: Node in tree.get_nodes_in_group("kabba_boss"):
+		if is_instance_valid(n):
+			n.queue_free()
 
 
 ## Clear all tried soul cells on rest so each cell can be attempted once per rest cycle.

@@ -29,7 +29,7 @@ static func enemy_deck() -> Array:
 ## the deck every time you end your turn (after pitching back). With no pitch and no permanents removing cards
 ## from the deck loop, a ~20-card deck empties in ~3–4 of your own end-steps after the opening hand; 30 adds ~2.
 ## Pitching slows that clock; playing cards to the board/GY removes them from the deck until recursion effects.
-const DECK_SIZE_MAX := 20
+const DECK_SIZE_MAX := 30
 const DECK_COPY_MAX := 2
 
 
@@ -95,8 +95,21 @@ static func _ensure_init() -> void:
 		_map[c["id"]] = c
 
 
-## Sorted card ids usable in collection / deck builder (excludes tokens).
+## Sorted card ids usable in collection / deck builder (excludes tokens, includes promo/no_pack).
 static func all_collectible_ids() -> Array[String]:
+	_ensure_init()
+	var out: Array[String] = []
+	for c in ALL_CARDS:
+		var id: String = str(c.get("id", ""))
+		if id.is_empty() or id.begins_with("token_"):
+			continue
+		out.append(id)
+	out.sort()
+	return out
+
+
+## Sorted ids that can appear from random drops / packs (excludes no_pack and tokens).
+static func pack_collectible_ids() -> Array[String]:
 	_ensure_init()
 	var out: Array[String] = []
 	for c in ALL_CARDS:
@@ -190,227 +203,196 @@ static func enemy_deck_for_difficulty(difficulty: String) -> Array:
 
 # EASY decks (10) — low cost, few spells
 const EASY_01 = [
-	"demon_001", "demon_001", "demon_002", "demon_002", "demon_003", "demon_003",
-	"demon_004", "demon_004", "demon_014", "demon_014", "demon_005", "demon_005",
-	"demon_008", "demon_008", "spell_002", "spell_002", "spell_001", "spell_001",
-	"spell_013", "spell_026",
+	"demon_001", "demon_001", "demon_002", "demon_002", "demon_003", "demon_003", "demon_004", "demon_004", "demon_014", "demon_014", 
+	"demon_005", "demon_005", "demon_008", "demon_008", "spell_002", "spell_002", "spell_001", "spell_001", "spell_013", "spell_026", 
+	"demon_006", "demon_006", "demon_009", "demon_009", "demon_024", "demon_024", "demon_018", "demon_018", "demon_013", "demon_013"
 ]
 const EASY_02 = [
-	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004",
-	"demon_018", "demon_018", "demon_006", "demon_006", "demon_008", "demon_008",
-	"demon_014", "demon_014", "spell_016", "spell_016", "spell_006", "spell_006",
-	"spell_013", "spell_004",
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_018", "demon_018", "demon_006", "demon_006", 
+	"demon_008", "demon_008", "demon_014", "demon_014", "spell_016", "spell_016", "spell_006", "spell_006", "spell_013", "spell_004", 
+	"demon_009", "demon_009", "demon_024", "demon_024", "demon_013", "demon_013", "demon_015", "demon_015", "demon_012", "demon_012"
 ]
 const EASY_03 = [
-	"demon_002", "demon_002", "demon_003", "demon_003", "demon_005", "demon_005",
-	"demon_008", "demon_008", "demon_011", "demon_011", "demon_009", "demon_009",
-	"demon_014", "demon_014", "spell_001", "spell_001", "spell_002", "spell_002",
-	"spell_026", "spell_026",
+	"demon_002", "demon_002", "demon_003", "demon_003", "demon_005", "demon_005", "demon_008", "demon_008", "demon_011", "demon_011", 
+	"demon_009", "demon_009", "demon_014", "demon_014", "spell_001", "spell_001", "spell_002", "spell_002", "spell_026", "spell_026", 
+	"demon_001", "demon_001", "demon_004", "demon_004", "demon_006", "demon_006", "demon_024", "demon_024", "demon_018", "demon_018"
 ]
 const EASY_04 = [
-	"demon_001", "demon_001", "demon_004", "demon_004", "demon_018", "demon_018",
-	"demon_003", "demon_003", "demon_006", "spell_001", "spell_001", "spell_002",
-	"spell_002", "spell_013", "spell_026", "demon_008", "demon_008", "demon_005",
-	"demon_014", "demon_014",
+	"demon_001", "demon_001", "demon_004", "demon_004", "demon_018", "demon_018", "demon_003", "demon_003", "demon_006", "spell_001", 
+	"spell_001", "spell_002", "spell_002", "spell_013", "spell_026", "demon_008", "demon_008", "demon_005", "demon_014", "demon_014", 
+	"demon_006", "demon_009", "demon_009", "demon_024", "demon_024", "demon_013", "demon_013", "demon_015", "demon_015", "demon_012"
 ]
 const EASY_05 = [
-	"demon_003", "demon_003", "demon_001", "demon_001", "demon_002", "demon_002",
-	"demon_004", "demon_004", "demon_009", "demon_014", "demon_014", "demon_018",
-	"spell_006", "spell_006", "spell_026", "spell_026", "spell_016", "spell_016",
-	"demon_008", "demon_008",
+	"demon_003", "demon_003", "demon_001", "demon_001", "demon_002", "demon_002", "demon_004", "demon_004", "demon_009", "demon_014", 
+	"demon_014", "demon_018", "spell_006", "spell_006", "spell_026", "spell_026", "spell_016", "spell_016", "demon_008", "demon_008", 
+	"demon_006", "demon_006", "demon_009", "demon_024", "demon_024", "demon_018", "demon_013", "demon_013", "demon_015", "demon_015"
 ]
 const EASY_06 = [
-	"demon_001", "demon_001", "demon_006", "demon_002", "demon_002", "demon_003",
-	"demon_003", "demon_004", "demon_004", "demon_018", "demon_018", "demon_005",
-	"demon_014", "spell_013", "spell_006", "spell_002", "spell_002", "spell_016",
-	"spell_001", "demon_008",
+	"demon_001", "demon_001", "demon_006", "demon_002", "demon_002", "demon_003", "demon_003", "demon_004", "demon_004", "demon_018", 
+	"demon_018", "demon_005", "demon_014", "spell_013", "spell_006", "spell_002", "spell_002", "spell_016", "spell_001", "demon_008", 
+	"demon_006", "demon_009", "demon_009", "demon_014", "demon_024", "demon_024", "demon_013", "demon_013", "demon_015", "demon_015"
 ]
 const EASY_07 = [
-	"demon_024", "demon_024", "demon_001", "demon_001", "demon_003", "demon_003",
-	"demon_002", "demon_002", "demon_018", "demon_018", "demon_008", "demon_008",
-	"demon_014", "demon_014", "spell_004", "spell_026", "spell_026", "spell_013",
-	"spell_016", "demon_006",
+	"demon_024", "demon_024", "demon_001", "demon_001", "demon_003", "demon_003", "demon_002", "demon_002", "demon_018", "demon_018", 
+	"demon_008", "demon_008", "demon_014", "demon_014", "spell_004", "spell_026", "spell_026", "spell_013", "spell_016", "demon_006", 
+	"demon_004", "demon_004", "demon_006", "demon_009", "demon_009", "demon_013", "demon_013", "demon_015", "demon_015", "demon_012"
 ]
 ## Nest / swarm: cheap bodies, Imp Matron, Nest Warden, mana + free Imps.
 const EASY_08 = [
-	"demon_001", "demon_001", "demon_040", "demon_040", "demon_105", "demon_105",
-	"demon_003", "demon_003", "demon_077", "demon_077", "demon_018", "demon_018",
-	"demon_024", "demon_024",
-	"spell_016", "spell_016", "spell_026", "spell_026", "spell_048", "spell_048",
+	"demon_001", "demon_001", "demon_040", "demon_040", "demon_105", "demon_105", "demon_003", "demon_003", "demon_077", "demon_077", 
+	"demon_018", "demon_018", "demon_024", "demon_024", "spell_016", "spell_016", "spell_026", "spell_026", "spell_048", "spell_048", 
+	"demon_004", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009", "demon_014", "demon_014", "demon_013", "demon_013"
 ]
 ## Great Wall: taunt stack + heals and Hex to stall while chipping.
 const EASY_09 = [
-	"demon_011", "demon_011", "demon_009", "demon_009", "demon_091", "demon_091",
-	"demon_108", "demon_108", "demon_014", "demon_014", "demon_004", "demon_004",
-	"spell_002", "spell_002", "spell_006", "spell_006", "spell_001", "spell_001",
-	"spell_007", "spell_007",
+	"demon_011", "demon_011", "demon_009", "demon_009", "demon_091", "demon_091", "demon_108", "demon_108", "demon_014", "demon_014", 
+	"demon_004", "demon_004", "spell_002", "spell_002", "spell_006", "spell_006", "spell_001", "spell_001", "spell_007", "spell_007", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_006", "demon_006", "demon_024", "demon_024", "demon_018", "demon_018"
 ]
 ## Through the line: Specters + chip damage + Tomes and mana to keep pressure.
 const EASY_10 = [
-	"demon_006", "demon_006", "demon_001", "demon_001", "demon_002", "demon_002",
-	"demon_003", "demon_003", "demon_018", "demon_018", "demon_024", "demon_024",
-	"spell_001", "spell_001", "spell_026", "spell_026", "spell_048", "spell_048",
-	"spell_016", "spell_016",
+	"demon_006", "demon_006", "demon_001", "demon_001", "demon_002", "demon_002", "demon_003", "demon_003", "demon_018", "demon_018", 
+	"demon_024", "demon_024", "spell_001", "spell_001", "spell_026", "spell_026", "spell_048", "spell_048", "spell_016", "spell_016", 
+	"demon_004", "demon_004", "demon_009", "demon_009", "demon_014", "demon_014", "demon_013", "demon_013", "demon_015", "demon_015"
 ]
 const EASY_DECKS: Array = [EASY_01, EASY_02, EASY_03, EASY_04, EASY_05, EASY_06, EASY_07, EASY_08, EASY_09, EASY_10]
 
 # NORMAL decks (12) — mid-range, more powerful demons, some synergies
 const NORMAL_01 = [
-	"demon_007", "demon_010", "demon_011", "demon_011", "demon_013", "demon_013",
-	"demon_015", "demon_015", "demon_016", "demon_012", "demon_012", "demon_017",
-	"spell_004", "spell_004", "spell_007", "spell_007", "spell_005", "spell_005",
-	"demon_027", "demon_027",
+	"demon_007", "demon_010", "demon_011", "demon_011", "demon_013", "demon_013", "demon_015", "demon_015", "demon_016", "demon_012", 
+	"demon_012", "demon_017", "spell_004", "spell_004", "spell_007", "spell_007", "spell_005", "spell_005", "demon_027", "demon_027", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009"
 ]
 const NORMAL_02 = [
-	"demon_011", "demon_011", "demon_009", "demon_009", "demon_012", "demon_012",
-	"demon_010", "demon_016", "demon_016", "demon_017", "demon_019", "demon_019",
-	"spell_003", "spell_003", "spell_005", "spell_005", "spell_014", "spell_014",
-	"demon_030", "demon_030",
+	"demon_011", "demon_011", "demon_009", "demon_009", "demon_012", "demon_012", "demon_010", "demon_016", "demon_016", "demon_017", 
+	"demon_019", "demon_019", "spell_003", "spell_003", "spell_005", "spell_005", "spell_014", "spell_014", "demon_030", "demon_030", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_006", "demon_006", "demon_014", "demon_014"
 ]
 const NORMAL_03 = [
-	"demon_036", "demon_036", "demon_037", "demon_037", "demon_038", "demon_038",
-	"demon_039", "demon_015", "demon_015", "demon_016", "demon_013", "demon_013",
-	"spell_011", "spell_011", "spell_007", "spell_007", "spell_004", "spell_004",
-	"demon_040", "demon_040",
+	"demon_036", "demon_036", "demon_037", "demon_037", "demon_038", "demon_038", "demon_039", "demon_015", "demon_015", "demon_016", 
+	"demon_013", "demon_013", "spell_011", "spell_011", "spell_007", "spell_007", "spell_004", "spell_004", "demon_040", "demon_040", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009"
 ]
 const NORMAL_04 = [
-	"demon_019", "demon_019", "demon_010", "demon_016", "demon_016", "demon_020",
-	"demon_012", "demon_012", "demon_013", "demon_013", "spell_010", "spell_010",
-	"spell_003", "spell_003", "spell_014", "spell_014", "demon_030", "demon_030",
-	"demon_015", "demon_015",
+	"demon_019", "demon_019", "demon_010", "demon_016", "demon_016", "demon_020", "demon_012", "demon_012", "demon_013", "demon_013", 
+	"spell_010", "spell_010", "spell_003", "spell_003", "spell_014", "spell_014", "demon_030", "demon_030", "demon_015", "demon_015", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009"
 ]
 const NORMAL_05 = [
-	"demon_027", "demon_027", "demon_028", "demon_028", "demon_011", "demon_011",
-	"demon_009", "demon_009", "demon_012", "demon_013", "demon_013", "demon_017",
-	"spell_012", "spell_012", "spell_008", "spell_003", "spell_014", "spell_014",
-	"demon_016", "demon_030",
+	"demon_027", "demon_027", "demon_028", "demon_028", "demon_011", "demon_011", "demon_009", "demon_009", "demon_012", "demon_013", 
+	"demon_013", "demon_017", "spell_012", "spell_012", "spell_008", "spell_003", "spell_014", "spell_014", "demon_016", "demon_030", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_006", "demon_006", "demon_014", "demon_014"
 ]
 const NORMAL_06 = [
-	"demon_024", "demon_024", "demon_025", "demon_025", "demon_007", "demon_019",
-	"demon_018", "demon_018", "demon_013", "demon_013", "demon_015", "demon_015",
-	"spell_004", "spell_004", "spell_026", "spell_026", "spell_011", "spell_011",
-	"demon_017", "demon_016",
+	"demon_024", "demon_024", "demon_025", "demon_025", "demon_007", "demon_019", "demon_018", "demon_018", "demon_013", "demon_013", 
+	"demon_015", "demon_015", "spell_004", "spell_004", "spell_026", "spell_026", "spell_011", "spell_011", "demon_017", "demon_016", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009"
 ]
 const NORMAL_07 = [
-	"demon_037", "demon_037", "demon_036", "demon_036", "demon_016", "demon_016",
-	"demon_019", "demon_019", "demon_020", "demon_010", "demon_012", "demon_012",
-	"spell_010", "spell_010", "spell_007", "spell_007", "spell_015", "spell_011",
-	"demon_039", "demon_040",
+	"demon_037", "demon_037", "demon_036", "demon_036", "demon_016", "demon_016", "demon_019", "demon_019", "demon_020", "demon_010", 
+	"demon_012", "demon_012", "spell_010", "spell_010", "spell_007", "spell_007", "spell_015", "spell_011", "demon_039", "demon_040", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009"
 ]
 ## Hive: rats, wasps, beetles, Nest Warden, Beelzebub + Carrion Beetle + Wormoyf; mana / draw / bodies to cast them.
 const NORMAL_08 = [
-	"demon_003", "demon_003", "demon_047", "demon_022", "demon_081", "demon_096", "demon_096",
-	"demon_104", "demon_104", "demon_105", "demon_105",
-	"spell_026", "spell_026", "spell_016", "spell_016", "spell_048", "spell_048",
-	"spell_011", "spell_011", "spell_004",
+	"demon_003", "demon_003", "demon_047", "demon_022", "demon_081", "demon_096", "demon_096", "demon_104", "demon_104", "demon_105", 
+	"demon_105", "spell_026", "spell_026", "spell_016", "spell_016", "spell_048", "spell_048", "spell_011", "spell_011", "spell_004", 
+	"demon_001", "demon_001", "demon_004", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009", "demon_014", "demon_014"
 ]
 ## Leyline ramp: Channeling Plant, Elder Treant, taunts, Fallen Goddess draw, Cultist aura, mana rituals.
 const NORMAL_09 = [
-	"demon_089", "demon_089", "demon_094", "demon_094", "demon_009", "demon_009",
-	"demon_091", "demon_091", "demon_007", "demon_013", "demon_013", "demon_027", "demon_027",
-	"spell_026", "spell_026", "spell_004", "spell_004", "spell_012", "spell_012", "spell_048",
+	"demon_089", "demon_089", "demon_094", "demon_094", "demon_009", "demon_009", "demon_091", "demon_091", "demon_007", "demon_013", 
+	"demon_013", "demon_027", "demon_027", "spell_026", "spell_026", "spell_004", "spell_004", "spell_012", "spell_012", "spell_048", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_006", "demon_006", "demon_014", "demon_014"
 ]
 ## Death by a thousand cuts: Death Knell + deathrattle bodies + burn to face.
 const NORMAL_10 = [
-	"demon_030", "demon_030", "demon_005", "demon_005", "demon_077", "demon_077",
-	"demon_014", "demon_014", "demon_016", "demon_016", "demon_017", "demon_017",
-	"spell_003", "spell_003", "spell_010", "spell_010", "spell_001", "spell_001",
-	"spell_005", "spell_005",
+	"demon_030", "demon_030", "demon_005", "demon_005", "demon_077", "demon_077", "demon_014", "demon_014", "demon_016", "demon_016", 
+	"demon_017", "demon_017", "spell_003", "spell_003", "spell_010", "spell_010", "spell_001", "spell_001", "spell_005", "spell_005", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009"
 ]
 ## Skies and tricks: Wasps, Goblin Assassins, Medusa, reach spells.
 const NORMAL_11 = [
-	"demon_096", "demon_096", "demon_036", "demon_036", "demon_019", "demon_019",
-	"demon_020", "demon_020", "demon_010", "demon_010", "demon_013", "demon_013",
-	"spell_007", "spell_007", "spell_001", "spell_001", "spell_026", "spell_026",
-	"spell_033", "spell_033",
+	"demon_096", "demon_096", "demon_036", "demon_036", "demon_019", "demon_019", "demon_020", "demon_020", "demon_010", "demon_010", 
+	"demon_013", "demon_013", "spell_007", "spell_007", "spell_001", "spell_001", "spell_026", "spell_026", "spell_033", "spell_033", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009"
 ]
 ## Front-line buff: Cultist + Komainu auras, bruisers, cheap combat tricks.
 const NORMAL_12 = [
-	"demon_027", "demon_027", "demon_028", "demon_028", "demon_013", "demon_013",
-	"demon_015", "demon_015", "demon_012", "demon_012", "demon_011", "demon_011",
-	"spell_006", "spell_006", "spell_012", "spell_012", "spell_007", "spell_007",
-	"spell_001", "spell_001",
+	"demon_027", "demon_027", "demon_028", "demon_028", "demon_013", "demon_013", "demon_015", "demon_015", "demon_012", "demon_012", 
+	"demon_011", "demon_011", "spell_006", "spell_006", "spell_012", "spell_012", "spell_007", "spell_007", "spell_001", "spell_001", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009"
 ]
 const NORMAL_DECKS: Array = [NORMAL_01, NORMAL_02, NORMAL_03, NORMAL_04, NORMAL_05, NORMAL_06, NORMAL_07, NORMAL_08, NORMAL_09, NORMAL_10, NORMAL_11, NORMAL_12]
 
 # HARD decks (12) — mythics, legendaries, powerful combos
 const HARD_01 = [
-	"demon_021", "demon_022", "demon_023", "demon_042", "demon_043", "demon_019",
-	"demon_019", "demon_020", "demon_016", "demon_016", "demon_017", "demon_017",
-	"spell_003", "spell_003", "spell_010", "spell_010", "spell_015", "spell_017",
-	"demon_030", "demon_030",
+	"demon_021", "demon_022", "demon_023", "demon_042", "demon_043", "demon_019", "demon_019", "demon_020", "demon_016", "demon_016", 
+	"demon_017", "demon_017", "spell_003", "spell_003", "spell_010", "spell_010", "spell_015", "spell_017", "demon_030", "demon_030", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009"
 ]
 const HARD_02 = [
-	"demon_029", "demon_041", "demon_022", "demon_021", "demon_042", "demon_026",
-	"demon_026", "demon_025", "demon_025", "demon_017", "demon_017", "demon_016",
-	"spell_004", "spell_017", "spell_010", "spell_010", "spell_003", "spell_003",
-	"demon_030", "demon_030",
+	"demon_029", "demon_041", "demon_022", "demon_021", "demon_042", "demon_026", "demon_026", "demon_025", "demon_025", "demon_017", 
+	"demon_017", "demon_016", "spell_004", "spell_017", "spell_010", "spell_010", "spell_003", "spell_003", "demon_030", "demon_030", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009"
 ]
 const HARD_03 = [
-	"demon_023", "demon_021", "demon_022", "demon_042", "demon_043", "demon_039",
-	"demon_039", "demon_020", "demon_020", "demon_016", "demon_016", "demon_019",
-	"spell_010", "spell_010", "spell_015", "spell_004", "spell_003", "spell_003",
-	"demon_030", "demon_030",
+	"demon_023", "demon_021", "demon_022", "demon_042", "demon_043", "demon_039", "demon_039", "demon_020", "demon_020", "demon_016", 
+	"demon_016", "demon_019", "spell_010", "spell_010", "spell_015", "spell_004", "spell_003", "spell_003", "demon_030", "demon_030", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009"
 ]
 const HARD_04 = [
-	"demon_041", "demon_029", "demon_022", "demon_021", "demon_026", "demon_026",
-	"demon_017", "demon_017", "demon_016", "demon_016", "demon_019", "demon_020",
-	"spell_017", "spell_004", "spell_010", "spell_015", "spell_003", "spell_003",
-	"demon_030", "demon_040",
+	"demon_041", "demon_029", "demon_022", "demon_021", "demon_026", "demon_026", "demon_017", "demon_017", "demon_016", "demon_016", 
+	"demon_019", "demon_020", "spell_017", "spell_004", "spell_010", "spell_015", "spell_003", "spell_003", "demon_030", "demon_040", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009"
 ]
 const HARD_05 = [
-	"demon_023", "demon_042", "demon_043", "demon_021", "demon_022", "demon_019",
-	"demon_019", "demon_020", "demon_017", "demon_016", "demon_016", "demon_039",
-	"spell_010", "spell_010", "spell_015", "spell_003", "spell_003", "spell_004",
-	"demon_030", "demon_030",
+	"demon_023", "demon_042", "demon_043", "demon_021", "demon_022", "demon_019", "demon_019", "demon_020", "demon_017", "demon_016", 
+	"demon_016", "demon_039", "spell_010", "spell_010", "spell_015", "spell_003", "spell_003", "spell_004", "demon_030", "demon_030", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009"
 ]
 const HARD_06 = [
-	"demon_029", "demon_041", "demon_023", "demon_042", "demon_021", "demon_022",
-	"demon_017", "demon_017", "demon_026", "demon_025", "demon_016", "demon_016",
-	"spell_017", "spell_004", "spell_015", "spell_010", "spell_003", "spell_003",
-	"demon_030", "demon_040",
+	"demon_029", "demon_041", "demon_023", "demon_042", "demon_021", "demon_022", "demon_017", "demon_017", "demon_026", "demon_025", 
+	"demon_016", "demon_016", "spell_017", "spell_004", "spell_015", "spell_010", "spell_003", "spell_003", "demon_030", "demon_040", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009"
 ]
 ## Burn / super-aggro: only Haste demons + direct damage spells (face, bolt, AoE burn).
 ## Curve is max speed: eight 1-drops (Lava Imp, Shade, Blaze Imp, Herald) + two 2-drop Amalgams.
 const HARD_07 = [
-	"demon_106", "demon_106", "demon_060", "demon_060", "demon_063", "demon_063",
-	"demon_067", "demon_067", "demon_072", "demon_072",
-	"spell_001", "spell_001", "spell_005", "spell_010", "spell_010", "spell_013",
-	"spell_026", "spell_026", "spell_033", "spell_033",
+	"demon_106", "demon_106", "demon_060", "demon_060", "demon_063", "demon_063", "demon_067", "demon_067", "demon_072", "demon_072", 
+	"spell_001", "spell_001", "spell_005", "spell_010", "spell_010", "spell_013", "spell_026", "spell_026", "spell_033", "spell_033", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009"
 ]
 ## Big hive: same bug core + poison threats; Ancient Rites / Soul Barter to slam 4-drops fast.
 const HARD_08 = [
-	"demon_003", "demon_003", "demon_047", "demon_022", "demon_081", "demon_096", "demon_096",
-	"demon_104", "demon_104", "demon_105", "demon_105", "demon_058", "demon_058", "demon_055", "demon_055",
-	"spell_026", "spell_026", "spell_011", "spell_011", "spell_004",
+	"demon_003", "demon_003", "demon_047", "demon_022", "demon_081", "demon_096", "demon_096", "demon_104", "demon_104", "demon_105", 
+	"demon_105", "demon_058", "demon_058", "demon_055", "demon_055", "spell_026", "spell_026", "spell_011", "spell_011", "spell_004", 
+	"demon_001", "demon_001", "demon_004", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009", "demon_014", "demon_014"
 ]
 ## Chaos / high-rarity: sixteen epics (draw, AoE, Pyroclasm, Wrath) + four one-of legendaries (Baphomet, Arcane Bolt, Plague, Final Hour).
 ## Booster copy refers to epics as "mythic"; all these high slots use rarity "epic" in data.
 const HARD_09 = [
-	"demon_023", "demon_026", "demon_026", "demon_046", "demon_046", "demon_081", "demon_081",
-	"demon_052", "demon_052", "spell_004", "spell_004", "spell_011", "spell_011", "spell_030", "spell_030",
-	"spell_041", "spell_041", "spell_013", "spell_015", "spell_017",
+	"demon_023", "demon_026", "demon_026", "demon_046", "demon_046", "demon_081", "demon_081", "demon_052", "demon_052", "spell_004", 
+	"spell_004", "spell_011", "spell_011", "spell_030", "spell_030", "spell_041", "spell_041", "spell_013", "spell_015", "spell_017", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009"
 ]
 ## Abyssal wave: sea epics + Seraph + Lich; recursion and burn from hand.
 const HARD_10 = [
-	"demon_021", "demon_088", "demon_088", "demon_092", "demon_092", "demon_083", "demon_083",
-	"demon_070", "demon_070",
-	"spell_008", "spell_038", "spell_036", "spell_036", "spell_027", "spell_027",
-	"spell_012", "spell_012", "spell_004", "spell_004", "spell_040",
+	"demon_021", "demon_088", "demon_088", "demon_092", "demon_092", "demon_083", "demon_083", "demon_070", "demon_070", "spell_008", 
+	"spell_038", "spell_036", "spell_036", "spell_027", "spell_027", "spell_012", "spell_012", "spell_004", "spell_004", "spell_040", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009"
 ]
 ## Undying horde: Lich + wisps + undying fiends + removal and big burn.
 const HARD_11 = [
-	"demon_021", "demon_051", "demon_051", "demon_059", "demon_059", "demon_005", "demon_005",
-	"demon_014", "demon_014", "demon_030", "demon_030", "demon_016",
-	"spell_008", "spell_004", "spell_003", "spell_003", "spell_010", "spell_010",
-	"spell_005", "spell_005",
+	"demon_021", "demon_051", "demon_051", "demon_059", "demon_059", "demon_005", "demon_005", "demon_014", "demon_014", "demon_030", 
+	"demon_030", "demon_016", "spell_008", "spell_004", "spell_003", "spell_003", "spell_010", "spell_010", "spell_005", "spell_005", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009"
 ]
 ## Colossus ramp: pitch + draw into Chimera / Tidal Terror; Fallen Goddess refills hand.
 const HARD_12 = [
-	"demon_043", "demon_043", "demon_083", "demon_083", "demon_026", "demon_026",
-	"demon_025", "demon_025", "demon_024", "demon_024", "demon_018", "demon_018",
-	"demon_007",
-	"spell_012", "spell_012", "spell_011", "spell_011", "spell_014", "spell_014", "spell_004",
+	"demon_043", "demon_043", "demon_083", "demon_083", "demon_026", "demon_026", "demon_025", "demon_025", "demon_024", "demon_024", 
+	"demon_018", "demon_018", "demon_007", "spell_012", "spell_012", "spell_011", "spell_011", "spell_014", "spell_014", "spell_004", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009"
 ]
 const HARD_DECKS: Array = [HARD_01, HARD_02, HARD_03, HARD_04, HARD_05, HARD_06, HARD_07, HARD_08, HARD_09, HARD_10, HARD_11, HARD_12]
 
@@ -423,12 +405,35 @@ const META_DEATH_PING: Array = [
 	"demon_003", "demon_003", "spell_008", "spell_016", "spell_016",
 ]
 
-## Tidal Terror: spam cheap spells to fill GY → play Tidal Terror for free; Pyromancer AoE engine.
+## Tolarian Terror (meta-decks / design name): spam cheap spells to fill GY → Tidal Terror (demon_083) for free; Pyromancer AoE engine.
 const META_TIDAL_TERROR: Array = [
 	"spell_013", "spell_026", "spell_026", "spell_048", "spell_048",
 	"spell_019", "spell_039", "demon_048", "spell_036", "spell_036",
 	"demon_007", "demon_075", "demon_075", "spell_027", "spell_027",
 	"spell_016", "spell_016", "spell_046", "demon_083", "demon_083",
+]
+
+## Kabba deck (from provided list): midrange shell with durable beasts, regalia pressure, and Plague reset.
+const META_KABBA_DECK: Array = [
+	"demon_102", "demon_102",
+	"demon_104", "demon_104",
+	"demon_022",
+	"demon_010", "demon_010",
+	"demon_029",
+	"demon_019", "demon_019",
+	"demon_017", "demon_017",
+	"demon_028",
+	"demon_012", "demon_012",
+	"spell_015",
+	"demon_026", "demon_026",
+	"demon_008",
+	"demon_126",
+	"demon_020", "demon_020",
+	"demon_053", "demon_053",
+	"demon_069", "demon_069",
+	"demon_100", "demon_100",
+	"spell_008",
+	"demon_021",
 ]
 
 ## Reanimator: discard fat demons to GY → Resurrection / Final Hour; Chaos King Dragon finisher.
@@ -444,54 +449,39 @@ static func meta_deck(archetype: String) -> Array:
 	_ensure_init()
 	match archetype:
 		"death_ping": return _build_enemy(META_DEATH_PING.duplicate())
-		"tidal_terror": return _build_enemy(META_TIDAL_TERROR.duplicate())
+		"tidal_terror", "tolarian_terror": return _build_enemy(META_TIDAL_TERROR.duplicate())
+		"kabba_deck": return _build_enemy(META_KABBA_DECK.duplicate())
 		"reanimator": return _build_enemy(META_REANIMATOR.duplicate())
 	push_warning("CardDB.meta_deck: unknown archetype '%s'" % archetype)
 	return enemy_deck_for_difficulty("hard")
 
 # ── test decks ─────────────────
 const TEST_1 = [
-	"demon_080", "demon_081",
-	"demon_082", "demon_083",
-	"demon_084", "demon_085",
-	"demon_086", "demon_087",
-	"demon_088", "demon_089",
-	"demon_090", "demon_091",
-	"demon_092", "demon_093",
-	"demon_094", "demon_095",
-	"demon_096", "demon_097",
-	"demon_098", "demon_099",
+	"demon_080", "demon_081", "demon_082", "demon_083", "demon_084", "demon_085", "demon_086", "demon_087", "demon_088", "demon_089", 
+	"demon_090", "demon_091", "demon_092", "demon_093", "demon_094", "demon_095", "demon_096", "demon_097", "demon_098", "demon_099", 
+	"demon_001", "demon_001", "demon_003", "demon_003", "demon_004", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009"
 ]
 
 const CHAOS_KING = [
-	"demon_044", "demon_044",
-	"demon_013", "demon_017", "demon_024", "demon_062", "demon_063", "demon_067", "demon_072", "demon_118", "demon_119",
-	"demon_001", "demon_004", "demon_007", "demon_011", "demon_015", "demon_016", "demon_018", "demon_025", "demon_030",
+	"demon_044", "demon_002", "demon_013", "demon_017", "demon_024", "demon_062", "demon_063", "demon_067", "demon_072", "demon_118",
+	"demon_119", "demon_001", "demon_004", "demon_007", "demon_011", "demon_015", "demon_016", "demon_018", "demon_025", "demon_030", 
+	"demon_001", "demon_003", "demon_003", "demon_004", "demon_006", "demon_006", "demon_009", "demon_009", "demon_014", "demon_014"
 ]
 
 
-# ── Player starter deck (20 cards: 10 Skeleton + 10 Skeleton Soldier) ───────
+# ── Player starter deck (30 cards: 15 Skeleton + 15 Skeleton Soldier) ───────
 # Both skeleton types have "skeleton_horde" — no copy limit applies.
 const STARTER_DECK = [
-	"demon_124", "demon_124", "demon_124", "demon_124", "demon_124",
-	"demon_124", "demon_124", "demon_124", "demon_124", "demon_124",
-	"demon_125", "demon_125", "demon_125", "demon_125", "demon_125",
-	"demon_125", "demon_125", "demon_125", "demon_125", "demon_125",
+	"demon_124", "demon_124", "demon_124", "demon_124", "demon_124", "demon_124", "demon_124", "demon_124", "demon_124", "demon_124", 
+	"demon_124", "demon_124", "demon_124", "demon_124", "demon_124", "demon_125", "demon_125", "demon_125", "demon_125", "demon_125", 
+	"demon_125", "demon_125", "demon_125", "demon_125", "demon_125", "demon_125", "demon_125", "demon_125", "demon_125", "demon_125"
 ]
 
-# ── Enemy deck (20 cards, aggressive, max 2 per id) ─────────────
+# ── Enemy deck (30 cards, aggressive, max 2 per id) ─────────────
 const ENEMY_DECK = [
-	"demon_001", "demon_001",
-	"demon_002", "demon_002",
-	"demon_003", "demon_003",
-	"demon_004", "demon_004",
-	"demon_009", "demon_009",
-	"demon_014",
-	"demon_016",
-	"demon_011", "demon_011",
-	"demon_012", "demon_013",
-	"spell_001", "spell_001",
-	"spell_005", "spell_005",
+	"demon_001", "demon_001", "demon_002", "demon_002", "demon_003", "demon_003", "demon_004", "demon_004", "demon_009", "demon_009", 
+	"demon_014", "demon_016", "demon_011", "demon_011", "demon_012", "demon_013", "spell_001", "spell_001", "spell_005", "spell_005", 
+	"demon_006", "demon_006", "demon_014", "demon_024", "demon_024", "demon_018", "demon_018", "demon_013", "demon_015", "demon_015"
 ]
 
 ## Dev / stress-test list (high variance; not used as default fallback — see [method starter_deck]).
@@ -552,7 +542,8 @@ const ALL_CARDS = [
 	{"id": "demon_033", "name": "Head of Osiris", "type": "demon", "subtype": "neutra", "cost": 1, "mana_value": 1, "atk": 1, "hp": 1, "rarity": "legendary", "ability": "osiris_piece", "ability_desc": "If you hold all 5 Osiris pieces, win instantly.", "desc": "\"The god looked upon humans and knew: it was looking at itself.\" — Fragment III, Shattered Codex"},
 	{"id": "demon_034", "name": "Left Leg of Osiris", "type": "demon", "subtype": "neutra", "cost": 0, "mana_value": 1, "atk": 1, "hp": 1, "rarity": "legendary", "ability": "osiris_piece", "ability_desc": "If you hold all 5 Osiris pieces, win instantly.", "desc": "\"It tried to flee. But humans had inherited the god's own speed.\" — Fragment IV"},
 	{"id": "demon_035", "name": "Right Leg of Osiris", "type": "demon", "subtype": "neutra", "cost": 0, "mana_value": 1, "atk": 1, "hp": 1, "rarity": "legendary", "ability": "osiris_piece", "ability_desc": "If you hold all 5 Osiris pieces, win instantly.", "desc": "\"The war ended not with blood, but with betterment. And silence.\" — Fragment V, The Last Council"},
-	{"id": "god_card", "name": "ROGER'S CARD — ◈ THE FIRST ONE ◈", "type": "demon", "subtype": "neutra", "cost": 0, "mana_value": 0, "atk": 0, "hp": 0, "rarity": "legendary", "ability": "god_card", "ability_desc": "◈ CARD KING ◈ — You are now god. The world bows to your will.", "desc": "\"I found it. I held it. I laughed. Then I hid it again, because some doors should only be opened once.\"\n— R.D. Roger, Last Entry", "no_pack": true},
+	{"id": "god_card", "name": "ROGER'S CARD — ◈ THE FIRST ONE ◈", "type": "demon", "subtype": "neutra", "cost": 0, "mana_value": 0, "atk": 0, "hp": 0, "rarity": "legendary", "ability": "god_card", "ability_desc": "◈ CARD KING ◈ — You are now god. The world bows to your will.", "desc": "\"I found it. I held it. I laughed. Then I hid it again, because some doors should only be opened once.\"\n— R.D. Roger, Last Entry", "no_pack": true, "set": "promo", "set_number": 2},
+	{"id": "demon_126", "name": "Fenrir", "type": "demon", "subtype": "terresta", "cost": 2, "mana_value": 2, "atk": 4, "hp": 4, "rarity": "legendary", "ability": "pitcher", "ability_desc": "Pitcher — pitches for 2 mana.", "desc": "Kabba's prize card. It tears through stone and silence alike.", "no_pack": true, "set": "promo", "set_number": 1},
 	{"id": "demon_036", "name": "Goblin Assassin", "type": "demon", "subtype": "regalia", "cost": 2, "mana_value": 1, "atk": 2, "hp": 2, "rarity": "common", "ability": "battlecry_reposition_ally", "ability_desc": "Battlecry: Move one of your demons between rows.", "desc": "Slips allies into position before the enemy notices."},
 	{"id": "demon_037", "name": "Goblin Mage", "type": "demon", "subtype": "regalia", "cost": 2, "mana_value": 1, "atk": 2, "hp": 2, "rarity": "common", "ability": "battlecry_reposition_enemy", "ability_desc": "Battlecry: Force an enemy front demon to the rear.", "desc": "Pushes enemies out of formation with a hex."},
 	{"id": "demon_038", "name": "Goblin Sniper", "type": "demon", "subtype": "terresta", "cost": 3, "mana_value": 1, "atk": 3, "hp": 1, "rarity": "common", "ability": "battlecry_rear_strike", "ability_desc": "Battlecry: Deal 1 damage to enemy for each demon in their rear row.", "desc": "One arrow per coward hiding in the back."},
@@ -852,6 +843,7 @@ const FLAVOR_DB: Dictionary = {
 	"spell_056": "Weakened, all of them. It can happen like that.",
 	"spell_060": "Cold and stillness, all at once.",
 	"god_card": "He got tired of being God. Left this behind somewhere. Hoped someone worth it would find it.",
+	"demon_126": "A promo relic from Kabba's hoard. It pitches like a tome and bites like a god-beast.",
 }
 
 ## Returns the flavor text for a card id, or empty string if none.

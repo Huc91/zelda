@@ -1,0 +1,21 @@
+[gd_scene load_steps=4 format=3 uid="uid://bflhqt757sdwm"]
+
+[ext_resource type="Script" uid="uid://bjnoifbirw4ou" path="res://data/actors/enemies/bosses/Kabba/kabba_boss.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://b73u0pt2h7685" path="res://data/actors/enemies/bosses/Kabba/frame_r.png" id="2_frame_r"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_kabba"]
+size = Vector2(19, 23)
+
+[node name="KabbaBoss" type="Marker2D"]
+gizmo_extents = 0.0
+script = ExtResource("1_script")
+
+[node name="Body" type="StaticBody2D" parent="."]
+
+[node name="Sprite2D" type="Sprite2D" parent="Body"]
+position = Vector2(0, -28)
+texture = ExtResource("2_frame_r")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Body"]
+position = Vector2(-0.5, -23.5)
+shape = SubResource("RectangleShape2D_kabba")

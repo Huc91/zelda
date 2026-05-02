@@ -255,6 +255,48 @@ func _best_unlock_card_value_for_pitch_candidate(pitch_idx: int) -> int:
 	return _max_unlock_card_value_after_pitch(mana_after, pitch_idx)
 
 
+func _best_reachable_pitch_target_index(stash_i: int) -> int:
+	var pool_mana: int = b.enemy_mana
+	for i in b.enemy_hand.size():
+		if i == stash_i:
+			continue
+		pool_mana += int(b.enemy_hand[i].get("mana_value", 1))
+	var best_i: int = -1
+	var best_v: int = -1
+	for i in b.enemy_hand.size():
+		var c: Dictionary = b.enemy_hand[i]
+		if is_enemy_card_playable(c):
+			continue
+		var cost: int = _enemy_effective_cost(c)
+		if str(c.get("type", "")) == "spell":
+			cost += b.ai_spell_tax_for_enemy()
+		var effective_pool: int = pool_mana
+		if i != stash_i:
+			effective_pool -= int(c.get("mana_value", 1))
+		if cost <= b.enemy_mana or cost > effective_pool:
+			continue
+		var v: int = card_play_value(c)
+		if v > best_v:
+			best_v = v
+			best_i = i
+	return best_i
+
+
+func _pick_pitch_to_progress_target(stash_i: int, target_i: int) -> int:
+	if target_i < 0 or target_i >= b.enemy_hand.size():
+		return -1
+	var best_i: int = -1
+	var best_w: int = 999999
+	for i in b.enemy_hand.size():
+		if i == stash_i or i == target_i:
+			continue
+		var w: int = pitch_keep_weight(i)
+		if w < best_w:
+			best_w = w
+			best_i = i
+	return best_i
+
+
 func _enemy_board_behind_player() -> bool:
 	return _player_demon_count() > _enemy_demon_count() + 2
 
@@ -277,6 +319,107 @@ func _enemy_mana_gain_would_apply(amount: int) -> bool:
 
 func _enemy_heal_would_apply(amount: int) -> bool:
 	return amount > 0 and b.enemy_hp < b.enemy_hp_cap
+
+
+func _peek_deck_cards(deck: Array, count: int) -> Array:
+	var out: Array = []
+	var lim: int = mini(count, deck.size())
+	for i: int in range(lim):
+		if typeof(deck[i]) == TYPE_DICTIONARY:
+			out.append(deck[i])
+	return out
+
+
+func _player_future_card_threat(card: Dictionary) -> int:
+	var ctype: String = str(card.get("type", ""))
+	var effect: String = str(card.get("effect", ""))
+	var ab: String = str(card.get("ability", ""))
+	var val: int = int(card.get("value", 0))
+	var threat: int = 0
+	if ctype == "spell":
+		if effect in ["deal_face", "deal_face_if_low", "deal_face_drain", "deal_and_gain_mana", "poison_face"]:
+			threat = 10 + val * 4
+		elif effect in ["damage", "chaos_damage"]:
+			threat = 8 + val * 3
+		elif effect in ["aoe_enemy", "aoe_demon_dmg", "aoe_enemy_and_face", "freeze_all_enemy",
+				"freeze_one_demon", "destroy", "destroy_low_atk", "destroy_damaged",
+				"return_demon", "steal_demon", "transform_1_1", "silence_demon",
+				"blizzard_freeze_dmg"]:
+			threat = 9 + val * 2
+		elif effect in ["draw", "gain_mana", "mana_boost", "mana_per_graveyard", "mana_per_demon", "hp_for_draw"]:
+			threat = 5 + val * 2
+		elif effect in ["buff_atk_all", "buff_all_stats", "buff_target_stats", "buff_hp_all", "give_divine_shield"]:
+			threat = 6 + val * 2
+		else:
+			threat = maxi(0, val)
+		return threat
+	var atk: int = int(card.get("atk", 0))
+	var hp: int = int(card.get("hp", 1))
+	threat = atk * 2 + mini(hp, 4)
+	if "haste" in ab:
+		threat += 8 + atk * 2
+	if "unblockable" in ab:
+		threat += 8 + atk * 2
+	if "double_attack" in ab:
+		threat += 8 + atk * 2
+	if "battlecry_damage_player_2" in ab:
+		threat += 10
+	if "battlecry_destroy" in ab or "battlecry_aoe" in ab or "battlecry_freeze_target" in ab:
+		threat += 8
+	if "mana_per_turn" in ab or "aura_front" in ab or "spell_aoe" in ab:
+		threat += 6
+	if "taunt" in ab:
+		threat += 2
+	return threat
+
+
+func _player_future_refresh_pressure(turns: int) -> int:
+	if turns <= 0:
+		return 0
+	var per_turn: int = CardBattleConstants.STARTING_HAND
+	var cards: Array = _peek_deck_cards(b.player_deck, per_turn * turns)
+	var score: int = 0
+	for i: int in range(cards.size()):
+		var card: Dictionary = cards[i]
+		var turn_idx: int = int(i / per_turn)
+		var weight: int = 3 if turn_idx == 0 else 2
+		score += int((_player_future_card_threat(card) * weight) / 3)
+	return score
+
+
+func _enemy_future_refresh_payoff() -> int:
+	var cards: Array = _peek_deck_cards(b.enemy_deck, CardBattleConstants.STARTING_HAND)
+	var best: int = 0
+	var total: int = 0
+	for i: int in range(cards.size()):
+		var card: Dictionary = cards[i]
+		var val: int = card_play_value(card)
+		best = maxi(best, val)
+		total += mini(val, 40)
+	return best + int(total / 4)
+
+
+func _card_is_greedy_setup(card: Dictionary) -> bool:
+	var effect: String = str(card.get("effect", ""))
+	if effect in ["draw", "gain_mana", "mana_boost", "mana_per_graveyard", "mana_per_demon", "hp_for_draw"]:
+		return true
+	if str(card.get("type", "")) != "demon":
+		return false
+	return demon_is_support(card)
+
+
+func _card_is_defensive_tool(card: Dictionary) -> bool:
+	var ctype: String = str(card.get("type", ""))
+	var effect: String = str(card.get("effect", ""))
+	var ab: String = str(card.get("ability", ""))
+	if ctype == "spell":
+		return effect in ["damage", "heal", "aoe_enemy", "aoe_demon_dmg", "destroy", "debuff_atk",
+			"debuff_atk_all", "destroy_low_atk", "destroy_damaged", "silence_demon", "transform_1_1",
+			"freeze_all_enemy", "freeze_one_demon", "steal_demon", "return_demon", "deal_face_drain",
+			"poison_all_enemy", "poison_one_enemy", "blizzard_freeze_dmg", "aoe_enemy_and_face"]
+	if "taunt" in ab or "divine_shield" in ab:
+		return true
+	return "battlecry_destroy" in ab or "battlecry_aoe" in ab or "battlecry_freeze_target" in ab
 
 
 func _estimated_player_open_face_damage_next_turn() -> int:
@@ -519,6 +662,8 @@ func play_priority(card: Dictionary) -> int:
 	var co: int = maxi(1, card.get("cost", 0))
 	var eff: int = int((float(v) * 240.0) / float(co))
 	var pri: int = eff + v * 3
+	var future_player_pressure: int = _player_future_refresh_pressure(2)
+	var future_enemy_payoff: int = _enemy_future_refresh_payoff()
 	# Prefer flooding the board with demons over most spells
 	if card.get("type", "") == "demon":
 		pri += 150
@@ -544,6 +689,20 @@ func play_priority(card: Dictionary) -> int:
 				need = maxi(need, cc - b.enemy_mana)
 		if need > 0:
 			pri += 20 * mini(card.get("value", 0) + 1, 10)
+	if future_player_pressure >= 34:
+		if _card_is_defensive_tool(card):
+			pri += 180
+		if _card_is_greedy_setup(card):
+			pri -= 120
+		if card.get("type", "") == "demon" and "taunt" in str(card.get("ability", "")):
+			pri += 120
+	elif future_player_pressure <= 14:
+		if _card_is_greedy_setup(card):
+			pri += 55
+		if card.get("type", "") == "demon" and demon_is_support(card):
+			pri += 25
+	if future_enemy_payoff >= 44 and _card_is_greedy_setup(card):
+		pri += 35
 	pri += _archetype_priority_bonus(card)
 	return pri
 
@@ -884,30 +1043,17 @@ func spell_play_value(card: Dictionary) -> int:
 func pick_pitch_index() -> int:
 	if b.enemy_hand.is_empty(): return -1
 	var stash_i: int = _stash_candidate_index()
-	# Total mana from pitching all non-stash cards (used as ceiling per target check)
+	var target_i: int = _best_reachable_pitch_target_index(stash_i)
+	var can_unlock: bool = target_i >= 0
 	var pool_mana: int = b.enemy_mana
 	for i in b.enemy_hand.size():
-		if i == stash_i: continue
-		pool_mana += b.enemy_hand[i].get("mana_value", 1)
-	# For each unplayable card: check if we can afford it by pitching OTHER non-stash cards.
-	# Exclude the card's own mana_value from the pool to avoid circular "pitch-to-play-itself".
-	var can_unlock: bool = false
-	for i in b.enemy_hand.size():
-		var c: Dictionary = b.enemy_hand[i]
-		if is_enemy_card_playable(c): continue
-		var cost: int = c.get("cost", 0)
-		if str(c.get("type", "")) == "spell":
-			cost += b.ai_spell_tax_for_enemy()
-		var effective_pool: int = pool_mana
-		if i != stash_i:
-			effective_pool -= c.get("mana_value", 1)
-		if cost > b.enemy_mana and cost <= effective_pool:
-			can_unlock = true
-			break
+		if i == stash_i:
+			continue
+		pool_mana += int(b.enemy_hand[i].get("mana_value", 1))
 	# Also check if pitching would afford the arsenal card (which isn't in hand)
 	if not can_unlock and not b.enemy_arsenal.is_empty():
 		var ac: Dictionary = b.enemy_arsenal
-		var ac_cost: int = ac.get("cost", 0)
+		var ac_cost: int = int(ac.get("cost", 0))
 		if str(ac.get("type", "")) == "spell":
 			ac_cost += b.ai_spell_tax_for_enemy()
 		var ac_pool: int = pool_mana
@@ -942,12 +1088,23 @@ func pick_pitch_index() -> int:
 	var pitched_v: int = card_play_value(b.enemy_hand[best_i])
 	if unlock_v >= 0:
 		if unlock_v <= pitched_v - PITCH_OPPORTUNITY_MARGIN:
-			return -1
+			best_i = -1
 	else:
 		if _enemy_board_behind_player() and pitched_v > PITCH_CHAIN_PREMIUM_WHEN_BEHIND \
 				and b.ai_get_ai_type() != "tidal_terror":
-			return -1
-	return best_i
+			best_i = -1
+	if best_i >= 0:
+		return best_i
+	if target_i < 0:
+		return -1
+	var progress_i: int = _pick_pitch_to_progress_target(stash_i, target_i)
+	if progress_i < 0:
+		return -1
+	var target_v: int = card_play_value(b.enemy_hand[target_i])
+	var progress_v: int = card_play_value(b.enemy_hand[progress_i])
+	if target_v <= progress_v - PITCH_OPPORTUNITY_MARGIN and b.ai_get_ai_type() != "tidal_terror":
+		return -1
+	return progress_i
 
 
 func pick_pitcher_to_pitch_index() -> int:
@@ -983,6 +1140,11 @@ func pick_pitcher_to_pitch_index() -> int:
 func pitch_keep_weight(i: int) -> int:
 	var c: Dictionary = b.enemy_hand[i]
 	var v: int = card_play_value(c)
+	var future_player_pressure: int = _player_future_refresh_pressure(2)
+	if future_player_pressure >= 34 and _card_is_defensive_tool(c):
+		return v + 240
+	if _enemy_future_refresh_payoff() >= 44 and _card_is_greedy_setup(c):
+		return v + 80
 	if is_enemy_card_playable(c):
 		return v + 400
 	var effect: String = c.get("effect", "")

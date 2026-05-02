@@ -258,11 +258,11 @@ func _start_battle() -> void:
 
 func _enemy_hp_for_difficulty(diff: String) -> int:
 	match diff:
-		"easy": return 10
-		"normal": return randi_range(12, 14)
-		"hard": return randi_range(15, 20)
-		"boss": return randi_range(22, 30)
-		_: return 10
+		"easy": return 12
+		"normal": return randi_range(16, 18)
+		"hard": return randi_range(20, 24)
+		"boss": return randi_range(24, 32)
+		_: return 12
 
 
 ## Mandatory draws (opening + end-of-turn refresh). Draw up to n; stop if deck runs dry (no cards forced from empty deck).

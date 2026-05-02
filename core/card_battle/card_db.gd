@@ -243,8 +243,8 @@ static func enemy_deck_for_difficulty(difficulty: String) -> Array:
 	var pool: Array
 	match difficulty:
 		"easy": pool = EASY_DECKS
-		"normal": pool = NORMAL_DECKS
-		"hard": pool = HARD_DECKS
+		"normal": pool = NORMAL_CHALLENGE_DECKS
+		"hard", "boss": pool = HARD_CHALLENGE_DECKS
 		_: pool = EASY_DECKS
 	var chosen: Array = pool[randi() % pool.size()]
 	return _build_enemy(chosen.duplicate())
@@ -373,6 +373,7 @@ const NORMAL_12 = [
 ]
 const NORMAL_DECKS: Array = [NORMAL_01, NORMAL_02, NORMAL_03, NORMAL_04, NORMAL_05, NORMAL_06, NORMAL_07, NORMAL_08, NORMAL_09, NORMAL_10, NORMAL_11, NORMAL_12]
 
+
 # HARD decks (12) — mythics, legendaries, powerful combos
 const HARD_01 = [
 	"demon_021", "demon_022", "demon_023", "demon_042", "demon_043", "demon_019", "demon_019", "demon_020", "demon_016", "demon_016", 
@@ -490,6 +491,29 @@ const META_REANIMATOR: Array = [
 	"spell_019", "demon_042", "demon_007", "spell_017",
 	"demon_019", "demon_019", "demon_021", "spell_008",
 	"demon_006", "demon_006", "demon_026", "demon_026", "demon_059", "demon_059",
+]
+
+## Normal fights should pressure the player with real synergy instead of low-impact filler.
+const NORMAL_CHALLENGE_DECKS: Array = [
+	NORMAL_08,
+	NORMAL_09,
+	NORMAL_10,
+	NORMAL_11,
+	NORMAL_12,
+	HARD_07,
+	HARD_08,
+	HARD_11,
+]
+
+## Hard fights use the most coherent pressure, burn, recursion, and ramp shells.
+const HARD_CHALLENGE_DECKS: Array = [
+	HARD_07,
+	HARD_08,
+	HARD_09,
+	HARD_10,
+	HARD_11,
+	HARD_12,
+	META_KABBA_DECK,
 ]
 
 ## Return a built meta deck by archetype name. Falls back to a random hard deck if unknown.

@@ -97,6 +97,29 @@ var kabba_spare_dialogue_step: int = 0
 ## True once Fenrir was dropped to the world by Kabba.
 var kabba_fenrir_dropped: bool = false
 
+## Hidden stat (human/boss kill vs shadow kill). May be negative.
+var karma: int = 0
+
+## Runtime overworld shadows: each { "map_path", "kind", "deck_ids", "display_name" }.
+var overworld_shadows: Array = []
+
+## duelist_id -> int state (DUELIST_ST_*).
+var duelist_states: Dictionary = {}
+
+const OVERWORLD_MAP_PATH: String = "res://data/maps/overworld.tscn"
+const PLAYER_SHADOW_NAME: String = "Kuro"
+
+const SHADOW_SPAWN_SECTOR_GRID: Array[Vector2i] = [
+	Vector2i(9, 3), Vector2i(13, 5), Vector2i(13, 6), Vector2i(6, 6), Vector2i(6, 7),
+	Vector2i(11, 3), Vector2i(13, 4), Vector2i(10, 5),
+]
+
+const DUELIST_ST_ALIVE: int = 0
+const DUELIST_ST_MERCY_PENDING: int = 1
+const DUELIST_ST_SPARED_HIDDEN: int = 2
+const DUELIST_ST_KILLED_SKULL: int = 3
+const DUELIST_ST_SKULL_DONE: int = 4
+
 ## Fired when a dialogue sequence ends with an event string.
 signal dialogue_event(event_name: String, npc_id: String)
 
@@ -138,6 +161,25 @@ func _ready() -> void:
 	_init_card_collection()
 	if dev_mode:
 		_apply_dev_mode()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not event.is_pressed() or event.is_echo():
+		return
+	if not event is InputEventKey:
+		return
+	var k: InputEventKey = event as InputEventKey
+	if not k.shift_pressed:
+		return
+	if k.keycode != KEY_F9 and k.physical_keycode != KEY_F9:
+		return
+	var on: bool = not BattleFileLogger.file_logging_enabled
+	BattleFileLogger.set_file_logging_enabled(on)
+	print(
+		"Battle file logging: ",
+		"ON (Shift+F9 to disable)" if on else "OFF (Shift+F9 to re-enable)",
+	)
+	get_viewport().set_input_as_handled()
 
 
 ## Snapshot of real player state so we can restore it when leaving dev mode.
@@ -188,6 +230,10 @@ func reset_new_game() -> void:
 	kabba_encounter_map_path = ""
 	kabba_spare_dialogue_step = 0
 	kabba_fenrir_dropped = false
+	karma = 0
+	overworld_shadows.clear()
+	duelist_states.clear()
+	CardDB.clear_runtime_cards()
 	player_items.clear()
 	base_set_packs = 0
 	card_collection.clear()
@@ -461,17 +507,25 @@ func set_battle_deck_index(i: int) -> void:
 	battle_deck_index = clampi(i, 0, player_decks.size() - 1)
 
 
-func get_battle_deck_card_ids() -> Array:
+func _string_card_ids_from_raw(raw: Variant) -> Array[String]:
+	var out: Array[String] = []
+	if typeof(raw) != TYPE_ARRAY:
+		return out
+	for v: Variant in raw as Array:
+		if typeof(v) == TYPE_STRING:
+			out.append(v as String)
+	return out
+
+
+func get_battle_deck_card_ids() -> Array[String]:
 	if player_decks.is_empty():
-		return CardDB.STARTER_DECK.duplicate()
+		return _string_card_ids_from_raw(CardDB.STARTER_DECK)
 	battle_deck_index = clampi(battle_deck_index, 0, player_decks.size() - 1)
 	var raw: Variant = player_decks[battle_deck_index].get("card_ids", [])
-	var ids: Array = []
-	if typeof(raw) == TYPE_ARRAY:
-		ids = raw
+	var ids: Array[String] = _string_card_ids_from_raw(raw)
 	if ids.is_empty() or not CardDB.deck_ids_legal(ids):
 		push_warning("Active deck is invalid — falling back to starter deck.")
-		return CardDB.STARTER_DECK.duplicate()
+		return _string_card_ids_from_raw(CardDB.STARTER_DECK)
 	return ids.duplicate()
 
 
@@ -625,6 +679,10 @@ func save_game() -> void:
 		"kabba_encounter_map_path": kabba_encounter_map_path,
 		"kabba_spare_dialogue_step": kabba_spare_dialogue_step,
 		"kabba_fenrir_dropped": kabba_fenrir_dropped,
+		"karma": karma,
+		"overworld_shadows": overworld_shadows.duplicate(true),
+		"duelist_states": duelist_states.duplicate(),
+		"runtime_cards": CardDB.runtime_cards_for_save(),
 	}
 	data["dev_mode"] = dev_mode
 	var f: FileAccess = FileAccess.open(_active_save_path(), FileAccess.WRITE)
@@ -690,6 +748,20 @@ func load_game() -> bool:
 	kabba_encounter_map_path = str(data.get("kabba_encounter_map_path", ""))
 	kabba_spare_dialogue_step = int(data.get("kabba_spare_dialogue_step", 0))
 	kabba_fenrir_dropped = bool(data.get("kabba_fenrir_dropped", false))
+	karma = int(data.get("karma", 0))
+	var os: Variant = data.get("overworld_shadows", [])
+	if typeof(os) == TYPE_ARRAY:
+		overworld_shadows = (os as Array).duplicate(true)
+	else:
+		overworld_shadows.clear()
+	var dst: Variant = data.get("duelist_states", {})
+	if typeof(dst) == TYPE_DICTIONARY:
+		duelist_states = (dst as Dictionary).duplicate()
+	else:
+		duelist_states.clear()
+	var rc: Variant = data.get("runtime_cards", [])
+	if typeof(rc) == TYPE_ARRAY:
+		CardDB.load_runtime_cards_from_save(rc as Array)
 	money_changed.emit(money)
 	hp_changed.emit(player_hp, get_effective_max_hp())
 	lives_changed.emit(_hp_to_lives())
@@ -844,3 +916,175 @@ func sell_one_copy(card_id: String, is_foil: bool) -> int:
 	dict[card_id] = dict.get(card_id, 0) - 1
 	add_money(price)
 	return price
+
+
+func add_karma(delta: int) -> void:
+	karma += delta
+
+
+func snapshot_active_deck_ids() -> Array[String]:
+	return get_battle_deck_card_ids()
+
+
+func remove_overworld_shadow_uid(uid: String) -> void:
+	for i: int in range(overworld_shadows.size() - 1, -1, -1):
+		if str((overworld_shadows[i] as Dictionary).get("uid", "")) == uid:
+			overworld_shadows.remove_at(i)
+			return
+
+
+func enqueue_overworld_shadow(display_name: String, deck_ids: Array) -> void:
+	var ids: Array[String] = []
+	for v: Variant in deck_ids:
+		if typeof(v) == TYPE_STRING:
+			ids.append(v as String)
+	if ids.is_empty():
+		ids = snapshot_active_deck_ids()
+	var kinds: Array[String] = ["octorok", "moblin", "knuckle"]
+	var kind: String = kinds[randi() % kinds.size()]
+	overworld_shadows.append({
+		"uid": str(Time.get_ticks_usec()) + "_" + str(randi()),
+		"map_path": OVERWORLD_MAP_PATH,
+		"kind": kind,
+		"deck_ids": ids,
+		"display_name": display_name,
+	})
+
+
+func pick_overworld_shadow_spawn_cell(map: Map) -> Vector2i:
+	var cs: Vector2 = GridCamera.CELL_SIZE
+	for _attempt in range(120):
+		var sec: Vector2i = SHADOW_SPAWN_SECTOR_GRID[randi() % SHADOW_SPAWN_SECTOR_GRID.size()]
+		var wx: float = randf_range(sec.x * cs.x + 12.0, (sec.x + 1.0) * cs.x - 12.0)
+		var wy: float = randf_range(sec.y * cs.y + 12.0, (sec.y + 1.0) * cs.y - 12.0)
+		var cell: Vector2i = map.local_to_map(Vector2(wx, wy))
+		if map.is_walkable_cell(cell):
+			return cell
+	var fb_sec: Vector2i = SHADOW_SPAWN_SECTOR_GRID[0]
+	var approx: Vector2i = map.local_to_map(Vector2(
+		float(fb_sec.x) * cs.x + cs.x * 0.5,
+		float(fb_sec.y) * cs.y + cs.y * 0.5
+	))
+	for r: int in range(0, 10):
+		for dy: int in range(-r, r + 1):
+			for dx: int in range(-r, r + 1):
+				if maxi(absi(dx), absi(dy)) != r:
+					continue
+				var try_cell: Vector2i = approx + Vector2i(dx, dy)
+				if map.is_walkable_cell(try_cell):
+					return try_cell
+	return approx
+
+
+func card_ids_from_built_deck(built: Array) -> Array[String]:
+	var ids: Array[String] = []
+	for cv: Variant in built:
+		if typeof(cv) != TYPE_DICTIONARY:
+			continue
+		var s: String = str((cv as Dictionary).get("id", ""))
+		if not s.is_empty():
+			ids.append(s)
+	return ids
+
+
+func _promo_skeleton_id_for_name(enemy_name: String) -> String:
+	var slug: String = enemy_name.to_lower()
+	var cleaned: String = ""
+	for i: int in range(slug.length()):
+		var ch: String = slug[i]
+		if (ch >= "a" and ch <= "z") or (ch >= "0" and ch <= "9"):
+			cleaned += ch
+		elif ch == " " or ch == "_":
+			cleaned += "_"
+	if cleaned.is_empty():
+		cleaned = "duelist"
+	return "promo_sk_%s_%d" % [cleaned, absi(enemy_name.hash())]
+
+
+func make_duellist_promo_skeleton_card(enemy_name: String) -> String:
+	var base: Dictionary = CardDB.get_card("demon_125")
+	if base.is_empty():
+		base = CardDB.get_card("demon_124")
+	var cid: String = _promo_skeleton_id_for_name(enemy_name)
+	if not CardDB.get_card(cid).is_empty():
+		return cid
+	var card: Dictionary = base.duplicate(true)
+	card["id"] = cid
+	card["name"] = "%s Skeleton" % enemy_name
+	card["atk"] = int(card.get("atk", 2)) + 1
+	card["hp"] = int(card.get("hp", 2)) + 1
+	card["rarity"] = "legendary"
+	card["set"] = "promo"
+	card["set_number"] = 99
+	card["no_pack"] = true
+	card["desc"] = "A legendary echo of a fallen duelist."
+	card["ability"] = str(base.get("ability", ""))
+	card["ability_desc"] = str(base.get("ability_desc", ""))
+	CardDB.register_runtime_card(card)
+	return cid
+
+
+## Skull absorb: 2%% promo skeleton; else 15%% random card from deck_ids; else nothing. Always consume skull.
+func try_duelist_skull_absorb(deck_ids: Array[String], enemy_name: String) -> Dictionary:
+	var roll: float = randf()
+	if roll < 0.02:
+		var pid: String = make_duellist_promo_skeleton_card(enemy_name)
+		collect_card(pid, false)
+		return {"message": "Absorbed — legendary card!", "consume": true}
+	if roll < 0.02 + 0.15:
+		if deck_ids.is_empty():
+			return {"message": "Nothing left here.", "consume": true}
+		var pick: String = deck_ids[randi() % deck_ids.size()]
+		collect_card(pick, false)
+		return {"message": "Absorbed a card echo.", "consume": true}
+	return {"message": "The skull crumbles to dust.", "consume": true}
+
+
+func apply_post_kill_world_rules(enemy: Node, was_human_or_boss_kill: bool) -> void:
+	if not is_instance_valid(enemy):
+		return
+	var deck_src: Array = []
+	if enemy.has_method("get_battle_deck"):
+		deck_src = enemy.call("get_battle_deck") as Array
+	var ids: Array[String] = card_ids_from_built_deck(deck_src)
+	if ids.is_empty() and enemy.has_method("get_shadow_source_deck_ids"):
+		ids = _string_card_ids_from_raw(enemy.call("get_shadow_source_deck_ids"))
+	if ids.is_empty() and "difficulty" in enemy:
+		var fallback: Array = CardDB.enemy_deck_for_difficulty(str(enemy.difficulty))
+		ids = card_ids_from_built_deck(fallback)
+	if ids.is_empty():
+		return
+	if was_human_or_boss_kill:
+		add_karma(-4)
+	var label: String = "Unknown"
+	if enemy.has_method("get_name_label"):
+		label = str(enemy.call("get_name_label"))
+	enqueue_overworld_shadow("%s Shadow" % label, ids)
+
+
+func apply_shadow_defeat_karma() -> void:
+	add_karma(1)
+
+
+func instantiate_overworld_shadow_actor(entry: Dictionary) -> Node:
+	var kind: String = str(entry.get("kind", "octorok"))
+	var scene: PackedScene
+	match kind:
+		"moblin":
+			scene = preload("res://data/actors/enemies/shadow_moblin.tscn")
+		"knuckle":
+			scene = preload("res://data/actors/enemies/shadow_iron_knuckle.tscn")
+		_:
+			scene = preload("res://data/actors/enemies/shadow_octorok.tscn")
+	var node: Node = scene.instantiate()
+	var deck_raw: Variant = entry.get("deck_ids", [])
+	var ids: Array[String] = []
+	if typeof(deck_raw) == TYPE_ARRAY:
+		for x: Variant in deck_raw:
+			if typeof(x) == TYPE_STRING:
+				ids.append(x)
+	var dname: String = str(entry.get("display_name", "Shadow"))
+	var u: String = str(entry.get("uid", ""))
+	if node.has_method("setup_overworld_shadow"):
+		node.call("setup_overworld_shadow", ids, dname, u)
+	return node

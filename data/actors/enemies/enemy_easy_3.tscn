@@ -74,6 +74,7 @@ speed = 48.0
 hearts = 0.5
 damage = 0.5
 difficulty = "easy"
+offers_card_battle_mercy = true
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 sprite_frames = SubResource("SpriteFrames_easy3")

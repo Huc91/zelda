@@ -1,0 +1,17 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bsvtm50bj1tws"
+
+[deps]
+
+files=["res://exports/legal_cards.name.translation", "res://exports/legal_cards.type.translation", "res://exports/legal_cards.subtype.translation", "res://exports/legal_cards.cost.translation", "res://exports/legal_cards.mana.translation", "res://exports/legal_cards.atk.translation", "res://exports/legal_cards.hp.translation", "res://exports/legal_cards.rarity.translation", "res://exports/legal_cards.max.translation", "res://exports/legal_cards.ability.translation", "res://exports/legal_cards.ability.translation", "res://exports/legal_cards.effect.translation", "res://exports/legal_cards.value.translation", "res://exports/legal_cards.nb.translation", "res://exports/legal_cards.set.translation", "res://exports/legal_cards.set.translation", "res://exports/legal_cards.desc.translation"]
+
+source_file="res://exports/legal_cards.csv"
+dest_files=["res://exports/legal_cards.name.translation", "res://exports/legal_cards.type.translation", "res://exports/legal_cards.subtype.translation", "res://exports/legal_cards.cost.translation", "res://exports/legal_cards.mana.translation", "res://exports/legal_cards.atk.translation", "res://exports/legal_cards.hp.translation", "res://exports/legal_cards.rarity.translation", "res://exports/legal_cards.max.translation", "res://exports/legal_cards.ability.translation", "res://exports/legal_cards.ability.translation", "res://exports/legal_cards.effect.translation", "res://exports/legal_cards.value.translation", "res://exports/legal_cards.nb.translation", "res://exports/legal_cards.set.translation", "res://exports/legal_cards.set.translation", "res://exports/legal_cards.desc.translation"]
+
+[params]
+
+compress=true
+delimiter=0

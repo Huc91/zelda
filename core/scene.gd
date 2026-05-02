@@ -29,6 +29,25 @@ func _enter_tree():
 	map.add_child(player)
 	player.position = map.map_to_local(entrance)
 	player.last_safe_position = player.position
+	call_deferred("_spawn_overworld_shadow_entries")
+
+
+func _spawn_overworld_shadow_entries() -> void:
+	if _map_path != Global.OVERWORLD_MAP_PATH:
+		return
+	for ev: Variant in Global.overworld_shadows:
+		if typeof(ev) != TYPE_DICTIONARY:
+			continue
+		var entry: Dictionary = ev as Dictionary
+		if str(entry.get("map_path", "")) != _map_path:
+			continue
+		var cell: Vector2i = Global.pick_overworld_shadow_spawn_cell(map)
+		var sh: Node = Global.instantiate_overworld_shadow_actor(entry)
+		map.add_child(sh)
+		if sh is CharacterBody2D:
+			(sh as CharacterBody2D).position = map.map_to_local(cell)
+		if sh is Actor:
+			(sh as Actor).last_safe_position = (sh as Actor).position
 
 
 func _remove_collected_pickups() -> void:

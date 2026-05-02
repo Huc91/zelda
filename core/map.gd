@@ -6,9 +6,9 @@ var scene: GameScene
 
 enum Layer {STATIC, DYNAMIC}
 class UniqueTile:
-	var source_id : int
-	var atlas_coords : Vector2i
-	var alternative_tile : int
+	var source_id: int
+	var atlas_coords: Vector2i
+	var alternative_tile: int
 	
 	func _init(id, ac, at) -> void:
 		source_id = id
@@ -152,6 +152,13 @@ func nav_find_path(from_world: Vector2, to_world: Vector2) -> PackedVector2Array
 	return result
 
 
+func is_walkable_cell(cell: Vector2i) -> bool:
+	var data: TileData = get_cell_tile_data(Layer.STATIC, cell)
+	if data == null:
+		return false
+	return data.get_collision_polygons_count(0) == 0
+
+
 ## Gameplay ##
 ##############
 
@@ -246,6 +253,32 @@ func _can_push_to(dest: Vector2i) -> bool:
 	return true
 
 
+const PUSH_TILE_DURATION: float = 0.24
+
+
+func _push_tile_draw_pos(cell: Vector2i, td: TileData) -> Vector2:
+	return map_to_local(cell) + Vector2(td.get_texture_origin())
+
+
+func _make_push_tile_sprite(atlas_source: TileSetAtlasSource, atlas_coords: Vector2i, td: TileData) -> Sprite2D:
+	if atlas_source.texture == null:
+		return null
+	var region: Rect2i = atlas_source.get_tile_texture_region(atlas_coords)
+	if region.size.x <= 0 or region.size.y <= 0:
+		return null
+	var at := AtlasTexture.new()
+	at.atlas = atlas_source.texture
+	at.region = region
+	at.filter_clip = true
+	var spr := Sprite2D.new()
+	spr.texture = at
+	spr.centered = true
+	spr.flip_h = td.flip_h
+	spr.flip_v = td.flip_v
+	spr.z_index = 1
+	return spr
+
+
 ## Slides the pushable DYNAMIC tile at `from` one step in `dir`.
 ## Returns true if the push succeeded.
 func push_tile_animated(from: Vector2i, dir: Vector2i) -> bool:
@@ -260,9 +293,28 @@ func push_tile_animated(from: Vector2i, dir: Vector2i) -> bool:
 	var alternative: int = get_cell_alternative_tile(Layer.DYNAMIC, from)
 	erase_cell(Layer.DYNAMIC, from)
 	_spawn_push_dust(map_to_local(from))
-	var tw: Tween = create_tween()
-	tw.tween_interval(0.12)
-	tw.tween_callback(func() -> void:
+	var source: TileSetSource = tile_set.get_source(source_id)
+	if source is TileSetAtlasSource:
+		var sprite: Sprite2D = _make_push_tile_sprite(source as TileSetAtlasSource, atlas_coords, data)
+		if sprite != null:
+			sprite.position = _push_tile_draw_pos(from, data)
+			add_child(sprite)
+			var tw: Tween = create_tween()
+			tw.tween_property(
+				sprite,
+				"position",
+				_push_tile_draw_pos(dest, data),
+				PUSH_TILE_DURATION,
+			).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tw.tween_callback(func() -> void:
+				set_cell(Layer.DYNAMIC, dest, source_id, atlas_coords, alternative)
+				sprite.queue_free()
+				_spawn_push_dust(map_to_local(dest))
+			)
+			return true
+	var tw_fallback: Tween = create_tween()
+	tw_fallback.tween_interval(0.12)
+	tw_fallback.tween_callback(func() -> void:
 		set_cell(Layer.DYNAMIC, dest, source_id, atlas_coords, alternative)
 		_spawn_push_dust(map_to_local(dest))
 	)

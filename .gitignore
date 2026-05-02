@@ -1,2 +1,9 @@
 # Godot 4+ specific ignores
 .godot/
+
+# Python tooling (export_legal_cards.py)
+.venv/
+
+# Battle replay logs (written next to project; remove this line to commit samples)
+battle_logs/*
+!battle_logs/analysis.md

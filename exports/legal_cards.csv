@@ -1,0 +1,196 @@
+﻿id,name,type,subtype,cost,mana_value,atk,hp,rarity,max_copies_deck,ability,ability_desc,effect,value,no_pack,set,set_number,desc
+demon_001,Imp,demon,obscura,1,1,1,1,common,2,haste,Haste — can attack immediately.,,,,,,Bites ankles. Survives mostly by accident.
+demon_003,Plague Rat,demon,terresta,1,1,1,1,common,2,poisonous,Poisonous — kills any demon it damages.,,,,,,One scratch. It never understood why that was enough.
+demon_018,Dusk Faerie,demon,obscura,1,1,1,1,common,2,battlecry_draw_1,Battlecry: Draw 1 card.,,,,,,Leaves something useful at your door before dawn. Never stays long enough to explain.
+demon_002,Hellhound,demon,obscura,2,1,3,2,common,2,haste,Haste — can attack immediately.,,,,,,Somebody loved this dog once. Things change.
+demon_004,Shadow Hound,demon,obscura,3,1,3,3,common,2,,,,,,,,No name. No tricks. No grievances. Just teeth.
+demon_006,Specter,demon,obscura,2,1,2,2,common,2,unblockable,Unblockable — can always attack the enemy directly.,,,,,,Walks through walls. Through guards. Through everything.
+demon_007,Fallen Goddess,demon,obscura,2,1,1,3,legendary,1,battlecry_draw_2,Battlecry: Draw 2 cards.,,,,,,She fell from grace. Drew two cards on the way down.
+demon_008,Wing Imp,demon,obscura,2,1,2,2,rare,2,aerial lifesteal,Aerial. Lifesteal — heals you for damage it deals.,,,,,,Heals you by drinking from your enemies. Effective. Uncomfortable to watch.
+demon_005,Bone Knight,demon,obscura,3,1,3,3,common,2,deathrattle_damage_2,Deathrattle: Deal 2 damage to the enemy when destroyed.,,,,,,Died doing its job. Still doing its job. Very professional.
+demon_011,Banshee,demon,obscura,3,1,1,5,common,2,taunt,Taunt — enemies must attack this first.,,,,,,It just wants to be heard. Loudly. By everyone within a mile.
+demon_013,Ifrit,demon,regalia,3,1,3,3,common,2,battlecry_aoe_1,Battlecry: Deal 1 damage to all enemy demons.,,,,,,Born of smokeless fire. Has very strong opinions about entering a room.
+demon_014,Mummy,demon,terresta,4,1,4,4,common,2,,,,,,,,Found in a back storage room. Still had the original wrapping. Nobody asked who put it there.
+demon_015,Crystal Crawler,demon,obscura,3,1,2,2,common,2,divine_shield,Divine Shield — absorbs the first hit.,,,,,,The crystal grew around it slowly. Neither of them agreed to this arrangement.
+demon_009,Treant,demon,terresta,4,1,2,5,common,2,taunt,Taunt — enemies must attack this first.,,,,,,"Peaceful tree, once. Ask the village. Nobody from the village is available to ask."
+demon_010,Cerberus Cat,demon,terresta,2,1,3,3,rare,2,,,,,,,,Three heads. None of them agree. All of them bite.
+demon_012,Minotaur,demon,terresta,4,1,2,6,common,2,rage,Rage — gains +1 ATK every time it takes damage.,,,,,,Pain makes it stronger. It has known this for a long time.
+demon_016,Nightmare,demon,obscura,4,1,5,4,rare,2,battlecry_damage_player_2,Battlecry: Deal 2 damage to the enemy.,,,,,,Its arrival alone causes pain.
+demon_017,Iron Djinn,demon,regalia,4,1,4,4,rare,2,battlecry_buff_all_hp,Battlecry: All your other demons gain +2 HP.,,,,,,Fortifies every ally around it. Never explains why it cares.
+demon_019,Horned Demon,demon,regalia,4,1,4,3,rare,2,haste_lifesteal,Haste. Lifesteal — heals you for damage it deals.,,,,,,Gores first. Drinks the wound second.
+demon_020,Medusa,demon,terresta,4,1,2,5,rare,2,battlecry_destroy_strongest,Battlecry: Destroy the highest-ATK enemy demon.,,,,,,People keep telling her she has a strong gaze. Fewer and fewer people every year.
+demon_021,Lich King,demon,obscura,4,1,5,5,legendary,1,deathrattle_summon_zombie,Deathrattle: Summon a 2/2 Zombie when destroyed.,,,,,,Death is just a setback. It has had many setbacks. Still here.
+demon_022,Beelzebub,demon,obscura,4,1,3,5,legendary,1,battlecry_summon_imps aerial,Aerial. Battlecry: Summon 2 Imps (1/1 Haste).,,,,,,Lord of Flies. Never answers messages. Always surrounded by people anyway.
+demon_023,Baphomet,demon,regalia,4,1,5,5,legendary,1,battlecry_destroy_all,Battlecry: Destroy all enemy demons.,,,,,,Dark god of annihilation.
+spell_009,Mana Surge,spell,,0,1,,,common,2,,Gain 2 mana this turn.,mana_boost,2,True,,,
+spell_004,Dark Pact,spell,,2,1,,,epic,2,,Draw 2 cards.,draw,2,,,,
+spell_016,Summon Familiar,spell,,0,1,,,common,2,,Summon an Imp (1/1).,summon_imp,0,,,,
+spell_002,Heal,spell,,1,1,,,common,2,,Restore 2 life.,heal,2,,,,
+spell_006,Blood Shield,spell,,1,1,,,common,2,,Give a friendly demon +2 HP.,buff_hp,2,,,,
+spell_013,Arcane Bolt,spell,,1,1,,,legendary,1,,Deal 2 damage to the enemy.,damage,2,,,,
+spell_001,Fireball,spell,,2,1,,,common,2,,Deal 2 damage to the enemy.,damage,2,,,,
+spell_007,Hex,spell,,1,1,,,common,2,,Reduce an enemy demon's ATK by 2.,debuff_atk,2,,,,
+spell_011,Chain Lightning,spell,,1,1,,,epic,2,,Deal 1 damage to all enemy demons.,aoe_demon_dmg,1,,,,
+spell_012,Soul Harvest,spell,,3,1,,,epic,2,,Gain 1 life per friendly demon.,life_per_demon,1,,,,
+spell_015,Plague,spell,,4,1,,,legendary,1,,All demons lose 3 HP.,aoe_all_hp,3,,,,
+spell_003,Soul Drain,spell,,4,1,,,rare,2,,Destroy target enemy demon.,destroy,1,,,,
+spell_005,Inferno,spell,,4,1,,,rare,2,,Deal 2 damage to all enemy demons.,aoe_enemy,2,,,,
+spell_008,Resurrection,spell,,1,1,,,legendary,1,,Summon target demon from your graveyard onto the battlefield.,resurrect,1,,,,
+spell_010,Doom,spell,,4,1,,,rare,2,,Deal 4 damage to the enemy.,damage,4,,,,
+spell_014,Blood Moon,spell,,1,1,,,epic,2,,All demons on the battlefield permanently gain +1/+1.,blood_moon_buff,1,,,,
+spell_017,Final Hour,spell,,6,1,,,legendary,1,,"Destroy all your demons, then fill all slots with random demons from your graveyard.",final_hour,0,,,,
+spell_018,Soul Recall,spell,,1,1,,,legendary,1,,Put a demon from your graveyard directly onto the field.,reanimate_demon,0,True,,,
+demon_024,Arcane Tome,demon,regalia,1,2,0,1,common,2,pitcher,Pitcher — pitches for 2 mana.,,,,,,Technically alive. Pitches mana. Doesn't like being rushed.
+demon_025,Elder Tome,demon,neutra,1,2,0,1,rare,2,pitcher battlecry_draw_1,Pitcher. Battlecry: Draw 1 card.,,,,,,An ancient grimoire. The annotations in the margins are more interesting than the text.
+demon_026,Thousand Eyes,demon,neutra,1,2,0,1,epic,2,pitcher battlecry_draw_2,Pitcher. Battlecry: Draw 2 cards.,,,,,,Sees everything. Draws two cards when played.
+demon_027,Cultist Leader,demon,regalia,2,1,2,2,common,2,aura_front_atk_1,Aura: Other front row demons get +1 ATK.,,,,,,Chants drive the front line to slaughter.
+demon_028,Komainu,demon,regalia,2,1,2,2,rare,2,aura_front_hp_2,Aura: Other front row demons get +2 HP.,,,,,,Stone guardian. Its presence alone hardens allies.
+demon_029,Goblin King,demon,regalia,4,1,0,4,legendary,1,aura_front_haste,Aura: Other front row demons gain Haste.,,,,,,His goblins move on his command. They move fast.
+demon_030,Death Knell,demon,obscura,2,1,1,1,rare,2,any_death_drain,"Whenever any demon dies, the opponent loses 1 HP.",,,,,,Every fallen soul feeds its curse.
+demon_031,Left Arm of Osiris,demon,neutra,1,1,0,1,legendary,1,osiris_piece,"If you hold all 5 Osiris pieces, win instantly.",,,,,,"""...the left arm reached for mercy but found only chains."" — Fragment I, House of Silence"
+demon_032,Right Arm of Osiris,demon,neutra,1,1,0,1,legendary,1,osiris_piece,"If you hold all 5 Osiris pieces, win instantly.",,,,,,"""...it struck the Council but they had already become something the old god could not harm."" — Fragment II"
+demon_033,Head of Osiris,demon,neutra,1,1,1,1,legendary,1,osiris_piece,"If you hold all 5 Osiris pieces, win instantly.",,,,,,"""The god looked upon humans and knew: it was looking at itself."" — Fragment III, Shattered Codex"
+demon_034,Left Leg of Osiris,demon,neutra,0,1,1,1,legendary,1,osiris_piece,"If you hold all 5 Osiris pieces, win instantly.",,,,,,"""It tried to flee. But humans had inherited the god's own speed."" — Fragment IV"
+demon_035,Right Leg of Osiris,demon,neutra,0,1,1,1,legendary,1,osiris_piece,"If you hold all 5 Osiris pieces, win instantly.",,,,,,"""The war ended not with blood, but with betterment. And silence."" — Fragment V, The Last Council"
+god_card,ROGER'S CARD — ◈ THE FIRST ONE ◈,demon,neutra,0,0,0,0,legendary,1,god_card,◈ CARD KING ◈ — You are now god. The world bows to your will.,,,True,promo,2,"""I found it. I held it. I laughed. Then I hid it again, because some doors should only be opened once.""
+— R.D. Roger, Last Entry"
+demon_126,Fenrir,demon,terresta,2,2,4,4,legendary,1,pitcher,Pitcher — pitches for 2 mana.,,,True,promo,1,Kabba's prize card. It tears through stone and silence alike.
+demon_036,Goblin Assassin,demon,regalia,2,1,2,2,common,2,battlecry_reposition_ally,Battlecry: Move one of your demons between rows.,,,,,,Slips allies into position before the enemy notices.
+demon_037,Goblin Mage,demon,regalia,2,1,2,2,common,2,battlecry_reposition_enemy,Battlecry: Force an enemy front demon to the rear.,,,,,,Pushes enemies out of formation with a hex.
+demon_038,Goblin Sniper,demon,terresta,3,1,3,1,common,2,battlecry_rear_strike,Battlecry: Deal 1 damage to enemy for each demon in their rear row.,,,,,,One arrow per coward hiding in the back.
+demon_039,Mimic,demon,neutra,2,1,0,0,rare,2,mimic_board_count,ATK and HP equal total demons on the battlefield.,,,,,,Opens its lid. Copies everything it sees.
+demon_040,Imp Matron,demon,obscura,3,1,2,3,common,2,battlecry_summon_imp,Battlecry: Summon a 1/1 Imp.,,,,,,She never fights alone.
+demon_041,Chaos Ouroboros,demon,neutra,4,1,4,4,legendary,1,battlecry_equalize_hp,Battlecry: Set both players' HP to 5.,,,,,,The serpent that eats itself. Resets everything.
+demon_042,Demon Lord,demon,obscura,7,1,8,8,legendary,1,,,,,,,,One of the great lords. Nothing soft about it.
+demon_043,Chimera,demon,neutra,10,1,12,12,epic,2,,,,,,,,Three beasts. One nightmare. No weaknesses.
+demon_044,Chaos King Dragon,demon,neutra,0,1,6,6,legendary,1,chaos_dragon,Special: Remove 3 Regalia & 3 Obscura cards from graveyard to summon. Battlecry: Deal 2 dmg per card in enemy graveyard.,,,,,,Cannot be summoned normally.
+demon_045,Twin Fury,demon,terresta,3,1,2,2,rare,2,double_attack,Can attack twice per turn.,,,,,,Strikes before you can breathe.
+demon_046,Grave Glutton,demon,obscura,1,1,1,1,epic,2,feed_on_death,Gains +1/+1 whenever any demon dies.,,,,,,It gorges on every fallen soul.
+demon_047,Carrion Beetle,demon,obscura,1,1,1,1,legendary,1,ally_death_mana,"Whenever a friendly demon dies, gain 1 mana.",,,,,,Death is currency.
+demon_048,Echo Scholar,demon,neutra,2,1,2,1,legendary,1,battlecry_replay_spell,Battlecry: Replay the last spell in your graveyard for free.,,,,,,Every incantation echoes twice.
+demon_049,Shadow Raider,demon,obscura,2,1,3,1,rare,2,haste_face_draw,"Haste. When this deals face damage, draw 1 card.",,,,,,Strikes the mind as well as the body.
+demon_050,Soul Collector,demon,obscura,3,1,1,5,rare,2,any_death_draw_own_turn,"On your turn: whenever any demon dies, draw 1 card (once per turn).",,,,,,Watches from the void. Learning.
+demon_051,Necrotic Wisp,demon,obscura,1,1,0,1,common,2,deathrattle_buff_all,Deathrattle: Give all your other demons +1/+1.,,,,,,A tiny sacrifice that fuels the rest.
+demon_052,Blood Cultist,demon,obscura,2,1,2,2,epic,2,ally_death_lifegain,"Whenever a friendly demon dies, gain 1 HP.",,,,,,Drinks deep from every death nearby.
+demon_053,Night Stalker,demon,obscura,2,1,3,1,rare,2,haste_unblockable,Haste. Unblockable.,,,,,,It does not fight. It just kills.
+demon_054,Lich's Familiar,demon,obscura,1,1,1,2,common,2,spell_lifegain,Gain 1 HP whenever you play a spell.,,,,,,Feeds on arcane energy.
+demon_055,Plague Bearer,demon,obscura,3,1,2,4,common,2,poisonous,Poisonous — kills any demon it damages.,,,,,,It reeks of the end.
+demon_056,Specter Assassin,demon,obscura,3,1,3,3,rare,2,battlecry_destroy_weak,Battlecry: Destroy an enemy demon with 3 or less HP.,,,,,,It picks off the wounded first.
+demon_057,Mind Shredder,demon,obscura,3,1,2,4,common,2,battlecry_discard_enemy,Battlecry: Enemy discards their top card.,,,,,,Tears knowledge from the mind.
+demon_058,Dusk Predator,demon,obscura,3,1,4,2,rare,2,haste_poisonous,Haste. Poisonous.,,,,,,One scratch. One corpse.
+demon_059,Undying Fiend,demon,obscura,5,1,4,3,rare,2,deathrattle_return_hand,Deathrattle: Return this to your hand when destroyed.,,,,,,It refuses to stay dead.
+demon_060,Larcenous Shade,demon,obscura,1,1,1,1,common,2,face_damage_mana,"When this deals face damage, gain 1 mana.",,,,,,Steals more than just HP.
+demon_061,Iron Warden,demon,terresta,2,1,2,2,rare,2,tax_spells,Enemy spells cost 1 extra mana.,,,,,,Her presence alone slows the enemy.
+demon_062,Kappa Samurai,demon,regalia,3,1,2,3,common,2,battlecry_heal_3,Battlecry: Restore 3 HP.,,,,,,Blessed by the stars.
+demon_063,Thunder Amalgam,demon,regalia,2,1,2,2,common,2,haste,Haste.,,,,,,Fast as a bolt.
+demon_064,Radiant Sentinel,demon,regalia,3,1,1,4,rare,2,taunt_regen_2,Taunt. Restores 2 HP to itself at end of your turn.,,,,,,Endures through sheer divine will.
+demon_065,Star Prophet,demon,regalia,2,1,1,2,legendary,1,draw_pings,"During your turn: whenever you draw a card (not your opening or refreshed hand), deal 1 damage to the enemy.",,,,,,Each revelation strikes like a blade.
+demon_066,Holy Knight,demon,regalia,4,1,3,4,rare,2,divine_shield,Divine Shield — absorbs the first hit.,,,,,,No blade has yet drawn its blood.
+demon_067,Lightning Herald,demon,regalia,1,1,1,2,common,2,haste,Haste.,,,,,,Arrives with the speed of thunder.
+demon_068,Macho Rooster,demon,regalia,4,1,3,3,rare,2,battlecry_buff_target_2_2,Battlecry: Give a random friendly demon +2/+2.,,,,,,Crows loudly and pumps up the crew.
+demon_069,Kamestoise,demon,regalia,4,1,2,6,rare,2,taunt,Taunt.,,,,,,Will not yield.
+demon_070,Seraph,demon,regalia,4,1,3,5,epic,2,divine_shield,Divine Shield — absorbs the first hit.,,,,,,Heaven's last line of defence.
+demon_071,Ember Thief,demon,regalia,1,1,1,1,epic,2,haste_face_mana,"Haste. When this deals face damage, gain 1 mana.",,,,,,Steals breath with every strike.
+demon_072,Blaze Imp,demon,regalia,1,1,2,1,common,2,haste,Haste.,,,,,,Burns bright and fast.
+demon_073,Lava Golem,demon,regalia,4,1,2,4,common,2,battlecry_damage_random_2,Battlecry: Deal 2 damage to a random enemy demon.,,,,,,Erupts on arrival.
+demon_074,Infernal Drake,demon,regalia,2,1,3,2,common,2,rage,Rage — gains +1 ATK every time it takes damage.,,,True,,,Pain makes it stronger.
+demon_075,Pyromancer,demon,regalia,2,1,1,3,rare,2,spell_aoe,"Whenever you play a spell, deal 1 damage to all enemy demons.",,,,,,Every word of power scorches the enemy.
+demon_076,Magma Titan,demon,regalia,4,1,4,4,rare,2,battlecry_aoe_rear_2,Battlecry: Deal 2 damage to all enemy rear row demons.,,,,,,Reaches over the front line.
+demon_077,Hellfire Imp,demon,regalia,2,1,1,1,common,2,deathrattle_draw_1,Deathrattle: Draw 1 card when destroyed.,,,,,,"Burns out fast, but leaves a gift."
+demon_078,Maced Troll,demon,regalia,3,1,2,3,common,2,on_attack_buff_2,"Whenever this attacks a demon, gain +2 ATK until end of turn.",,,,,,Gets faster the more it swings.
+demon_079,Phoenix,demon,terresta,4,1,2,2,rare,2,deathrattle_return_hand,Deathrattle: Return this to your hand when destroyed.,,,,,,Rises from its own ashes.
+demon_080,Green Mamba,demon,terresta,1,1,1,1,common,2,poisonous on_kill_both_lose_life,"Poisonous. When it kills a demon, both players lose 1 life.",,,,,,One bite ends everything.
+demon_081,Wormoyf,demon,neutra,1,1,0,1,epic,2,wormoyf_power,Battlecry: Gains +1/+1 for each unique creature subtype across both graveyards.,,,,,,It feeds on chaos and variety.
+demon_082,Gajasura,demon,terresta,5,1,5,5,rare,2,battlecry_aoe_all_1,"Battlecry: Deal 1 damage to ALL demons on the field, including your own.",,,,,,The ground cracks beneath its steps.
+demon_083,Tidal Terror,demon,terresta,7,1,5,5,epic,2,spell_cost_reduce_per_spell_gy,Costs 1 less for each spell in your graveyard (min 0).,,,,,,The tide rises with every spell cast.
+demon_084,Frost Mage,demon,regalia,2,1,1,3,common,2,battlecry_freeze_target,Battlecry: Exhaust (freeze) one enemy demon for a turn.,,,,,,A touch and the enemy slows.
+demon_085,Trick Wall,demon,terresta,3,1,0,6,rare,2,divine_shield taunt,Divine Shield — absorbs the first hit. Taunt.,,,,,,It looks like an opening. It is not.
+demon_086,Ocean Lancer,demon,terresta,4,1,3,2,common,2,unblockable,Unblockable.,,,,,,Strikes through the line where the sea meets the shore.
+demon_087,Leachtrio,demon,neutra,2,1,1,3,common,2,lifesteal,Lifesteal.,,,,,,Drains the arcane from the living.
+demon_088,Sea Serpent,demon,terresta,7,1,6,8,epic,2,battlecry_freeze_all,Battlecry: Exhaust all enemy demons.,,,,,,Rises from the deep. None may stop it.
+demon_089,Channeling Plant,demon,terresta,2,1,0,2,common,2,mana_per_turn,"At the start of your turn, gain 1 mana.",,,,,,Roots into the ley line. Feeds power upward.
+demon_090,Storm Surge,demon,terresta,3,1,3,3,common,2,rage,Rage — gains +1 ATK every time it takes damage.,,,,,,The storm intensifies.
+demon_091,Giant Crab,demon,terresta,2,1,0,4,common,2,taunt,Taunt.,,,,,,Sideways and stubborn. It will not move.
+demon_092,Deep Lurkers,demon,terresta,4,1,4,4,epic,2,unblockable_lifesteal,Unblockable. Lifesteal.,,,,,,Surface only to feed.
+demon_093,Mana Dryad,demon,terresta,1,1,1,1,common,2,mana_per_turn,"At the start of your turn, gain 1 mana.",,,,,,Channels the land's energy every turn.
+demon_094,Elder Treant,demon,terresta,2,1,1,2,common,2,mana_per_turn,"At the start of your turn, gain 1 mana.",,,,,,Ancient and unyielding.
+demon_095,Sabertooth,demon,terresta,3,1,3,1,common,2,haste,Haste.,,,,,,Pounces before you can react.
+demon_096,Giant Wasp,demon,terresta,3,1,2,2,common,2,aerial,"Aerial — can attack any enemy demon freely, ignoring front row.",,,,,,Strikes from above. No front line stops it.
+demon_097,Dinobeast,demon,terresta,3,1,3,3,common,2,,,,,,,,Old blood. Won't go down easy.
+demon_098,Pack Alpha,demon,terresta,3,1,3,3,rare,2,battlecry_buff_beast,Battlecry: Give all other friendly Terresta demons +1 ATK.,,,,,,"Where it howls, the pack surges."
+demon_099,Thunderous Rex,demon,neutra,5,1,5,4,epic,2,haste aerial,Haste. Aerial — can attack any enemy demon freely.,,,,,,It charges from above. Nothing stands in its way.
+demon_100,Elder Dragon,demon,neutra,5,1,6,6,epic,2,aerial battlecry_aoe_2,Aerial. Battlecry: Deal 2 damage to all enemy demons.,,,,,,The oldest hunter. Strikes from above.
+demon_101,Dire Wolf,demon,terresta,2,1,2,2,common,2,battlecry_buff_random_ally_1_atk,Battlecry: Give a random friendly demon +1 ATK.,,,,,,Leads the pack to victory.
+demon_102,Ancient Tortoise,demon,terresta,3,1,1,7,rare,2,taunt,Taunt.,,,,,,Unmovable.
+demon_103,Primal Dragon,demon,terresta,5,1,5,6,common,2,battlecry_buff_all_atk,Battlecry: All your other demons gain +1 ATK.,,,True,,,Its roar inspires even the damned.
+demon_104,Armored Beetle,demon,terresta,4,1,3,6,rare,2,,,,,,,,Thick shell. Hits hard. That is all.
+demon_105,Nest Warden,demon,terresta,2,1,1,1,common,2,aerial deathrattle_summon_2_imps,Aerial. Deathrattle: Summon two 1/1 Imps when destroyed.,,,,,,Swoops down. Its young scatter when it falls.
+spell_019,Dark Lotus,spell,,0,1,,,legendary,1,dark_lotus,Gain 3 mana this turn. Only 1 copy allowed in a deck.,gain_mana,3,,,,
+spell_021,Ancient Rites,spell,,1,1,,,common,2,,Gain 4 mana this turn.,gain_mana,4,True,,,
+spell_022,Mana Convergence,spell,,1,1,,,epic,2,,"Destroy all your demons, gain 2 mana.",destroy_own_get_mana,0,,,,
+spell_023,Soul Barter,spell,,0,1,,,common,2,,Gain 1 mana per demon you control.,mana_per_demon,1,True,,,
+spell_024,Rite of Power,spell,,1,1,,,rare,2,,Gain 1 mana per card in your graveyard (max 5).,mana_per_graveyard,5,True,,,
+spell_025,Essence Surge,spell,,1,1,,,common,2,,Deal 2 to the enemy. Gain 2 mana.,deal_and_gain_mana,2,True,,,
+spell_026,Bolt,spell,,0,1,,,common,2,,Deal 1 damage to a random enemy demon.,damage_random_demon,1,,,,
+spell_027,Shock,spell,,1,1,,,epic,2,,Deal 1 damage to the enemy.,deal_face,1,,,,
+spell_028,Lava Burst,spell,,2,1,,,common,2,,Deal 5 damage to the enemy.,deal_face,5,True,,,
+spell_029,Volcanic Blast,spell,,3,1,,,rare,2,,Deal 7 damage to the enemy.,deal_face,7,True,,,
+spell_030,Pyroclasm,spell,,3,1,,,epic,2,,Deal 2 damage to ALL demons on both sides.,aoe_all_2,2,,,,
+spell_031,Searing Touch,spell,,1,1,,,rare,2,,Deal 5 to the enemy if they have 5 or less HP.,deal_face_if_low,5,True,,,
+spell_032,Fire Storm,spell,,3,1,,,rare,2,,Deal 3 to all enemy demons and to the enemy.,aoe_enemy_and_face,3,True,,,
+spell_033,Chaos Bolt,spell,,2,1,,,rare,2,,Deal 1–4 random damage to a random target (any player or demon).,chaos_damage,4,,,,
+spell_034,Death Toll,spell,,0,1,,,rare,2,,Deal 1 damage to the enemy for each card in your graveyard.,face_per_graveyard,1,True,,,
+spell_035,Twin Bolt,spell,,2,1,,,common,2,,Deal 4 damage to the enemy.,deal_face,4,True,,,
+spell_036,Ember Rain,spell,,0,1,,,epic,2,,Deal 1 damage to all enemy demons.,aoe_demon_dmg,1,,,,
+spell_037,Frost Nova,spell,,2,1,,,epic,2,,Exhaust all enemy demons for one turn.,freeze_all_enemy,0,,,,
+spell_038,Mind Control,spell,,4,1,,,legendary,1,,Take control of the weakest enemy demon.,steal_demon,0,,,,
+spell_039,Disruption,spell,,1,1,,,rare,2,,Return the strongest enemy demon to their hand.,return_demon,0,,,,
+spell_040,Drain Life,spell,,3,1,,,rare,2,,Deal 2 to the enemy. Gain 2 HP.,deal_face_drain,2,,,,
+spell_041,Wrath,spell,,4,1,,,epic,2,,Destroy ALL demons on both sides.,destroy_all_both,0,,,,
+spell_042,Silence,spell,,1,1,,,common,2,,Remove the ability from the strongest enemy demon.,silence_demon,0,True,,,
+spell_043,Transformation,spell,,2,1,,,rare,2,,Transform target enemy demon into a 1/1 with no ability.,transform_1_1,0,,,,
+spell_044,Frost Bolt,spell,,1,1,,,common,2,,Exhaust one enemy demon for a turn.,freeze_one_demon,0,,,,
+spell_045,Execute,spell,,1,1,,,rare,2,,Destroy an enemy demon that has taken damage this turn.,destroy_damaged,0,,,,
+spell_046,Terror,spell,,1,1,,,common,2,,Destroy an enemy demon with 2 or less ATK.,destroy_low_atk,2,,,,
+spell_047,Blood Draw,spell,,0,1,,,rare,2,,Lose 8 HP. Draw 2 cards.,hp_for_draw,8,,,,
+spell_048,Cantrip,spell,,0,1,,,common,2,,Draw 1 card.,draw,1,,,,
+spell_049,Arcane Study,spell,,5,1,,,common,2,,Draw 2 cards.,draw,2,,,,
+spell_050,Rally,spell,,3,1,,,rare,2,,Give all your demons +1/+1 until end of turn.,buff_all_stats,1,,,,
+spell_051,Battle Frenzy,spell,,5,1,,,rare,2,,Give all your demons +2 ATK until end of turn.,buff_atk_all_turn,2,,,,
+spell_052,Divine Favor,spell,,1,1,,,common,2,,Give all your demons +1 HP.,buff_hp_all,1,,,,
+spell_053,Spectral Shield,spell,,2,1,,,rare,2,,Give a friendly demon Divine Shield.,give_divine_shield,0,,,,
+spell_054,Battle Hardened,spell,,4,1,,,rare,2,,Give a friendly demon +3/+3.,buff_target_stats,3,,,,
+spell_055,Reanimate,spell,,2,1,,,rare,2,,Summon the highest-cost demon from your graveyard.,reanimate_top,0,True,,,
+spell_056,Cursed Ground,spell,,3,1,,,rare,2,,All enemy demons lose 2 ATK.,debuff_atk_all,2,,,,
+spell_057,Arcane Mastery,spell,,0,1,,,legendary,1,,Your next spell this turn is cast twice.,double_next_spell,0,True,,,
+spell_058,Soul Link,spell,,1,1,,,rare,2,,Deal 2 to the enemy. Gain 2 HP.,deal_face_drain,2,True,,,
+demon_106,Lava Imp,demon,regalia,1,1,2,1,common,2,haste,Haste — can attack immediately.,,,,,,Born screaming from a volcanic vent.
+demon_107,Cinder Hound,demon,regalia,2,1,3,2,common,2,haste_poisonous,Haste. Poisonous — kills any demon it damages.,,,,,,Ash in its lungs. Fire in its bite.
+demon_108,Parasitex,demon,regalia,3,1,2,2,common,2,taunt,Taunt — enemies must attack this first.,,,,,,Clings to the front and won't let go.
+demon_109,Assault Skeleton,demon,neutra,3,1,4,1,rare,2,haste,Haste — can attack immediately.,,,,,,Charges before it can be stopped.
+demon_110,Ember Phoenix,demon,terresta,4,1,4,4,rare,2,deathrattle_summon_ash_wraith,Deathrattle: Summon a 2/2 Ash Wraith when destroyed.,,,True,,,Death is not the end. It never was on this island.
+demon_111,Volcano Lord,demon,regalia,4,1,5,5,legendary,1,battlecry_damage_player_2,Battlecry: Deal 2 damage to the enemy.,,,True,,,"""The mountain speaks. You will not like what it says."" — Magma King"
+demon_112,Frost Rat,demon,terresta,1,1,1,2,common,2,poisonous,Poisonous — kills any demon it damages.,,,True,,,Its bite freezes the blood solid.
+demon_113,Blizzard Imp,demon,terresta,1,1,2,1,common,2,haste,Haste — can attack immediately.,,,True,,,Moves through snow like it is not there.
+demon_114,Glacier Drake,demon,terresta,2,1,2,5,common,2,taunt,Taunt — enemies must attack this first.,,,True,,,An ancient predator. Older than the ice itself.
+demon_115,Frost Wraith,demon,terresta,3,1,3,3,common,2,unblockable,Unblockable — can always attack the enemy directly.,,,True,,,Cold beyond cold. A draft that kills.
+demon_116,Permafrost Titan,demon,terresta,4,1,4,7,rare,2,taunt,Taunt — enemies must attack this first.,,,True,,,The north does not move. The north waits.
+demon_117,Glacial Sovereign,demon,regalia,4,1,6,4,legendary,1,battlecry_aoe_1,Battlecry: Deal 1 damage to all enemy demons.,,,True,,,"""The Final Council met here. In the cold. Before everything ended."" — Fragment VII, Frost Inscription"
+spell_059,Magma Burst,spell,,2,1,,,rare,2,,Deal 5 damage. The volcano does not miss.,damage,5,True,,,
+spell_060,Blizzard,spell,,4,1,,,epic,2,,Deal 2 damage to all demons and freeze all enemy demons.,blizzard_freeze_dmg,2,,,,
+spell_061,Lava Shield,spell,,1,1,,,common,2,,Give a friendly demon +4 HP. Hardened from within.,buff_hp,4,True,,,
+spell_062,Toxic Cloud,spell,,2,1,,,common,2,,Poison all enemy demons for 3 turns (1 dmg/turn).,poison_all_enemy,3,True,,,
+spell_063,Venom Strike,spell,,1,1,,,common,2,,Poison one enemy demon for 4 turns (1 dmg/turn).,poison_one_enemy,4,True,,,
+spell_064,Cure,spell,,1,1,,,common,2,,Remove all poison from your demons.,cure_all_friendly,0,True,,,
+spell_065,Plague Surge,spell,,3,1,,,rare,2,,"Deal 2 damage now, then 2 more each turn for 2 turns.",poison_face,2,True,,,
+demon_118,Spark Imp,demon,regalia,1,1,2,1,common,2,haste,Haste — can attack immediately.,,,True,,,Born in a lightning strike. Gone in the next.
+demon_119,Storm Hound,demon,regalia,2,1,3,2,common,2,haste_poisonous,Haste. Poisonous — kills any demon it damages.,,,True,,,The thunder carries it. The lightning is its bite.
+demon_120,Tempest Knight,demon,regalia,3,1,2,6,common,2,taunt,Taunt — enemies must attack this first.,,,True,,,Stands in the eye of the storm. Unmoved.
+demon_121,Thunder Drake,demon,regalia,3,1,5,2,rare,2,haste,Haste — can attack immediately.,,,True,,,Strikes from the clouds before you can react.
+demon_122,Stormcaller,demon,regalia,4,1,3,5,rare,2,battlecry_aoe_2,Battlecry: Deal 2 damage to all enemy demons.,,,True,,,"""The storm does not choose its victims. It teaches them."" — Stormcaller IX"
+demon_123,Thunder Sovereign,demon,regalia,5,1,6,6,legendary,1,battlecry_damage_player_2,Battlecry: Deal 2 damage to the enemy.,,,True,,,"""He who commands the storm commands all. And I command the storm."" — Thunder Sovereign"
+spell_066,Lightning Bolt,spell,,2,1,,,rare,2,,Deal 6 damage. The sky does not warn you.,damage,6,True,,,
+spell_067,Chain Lightning,spell,,3,1,,,rare,2,,Deal 2 damage to all enemy demons. The chain never ends.,aoe_enemy,2,True,,,
+spell_068,Thunder Ward,spell,,1,1,,,common,2,,Give a friendly demon +3 HP. Hardened by lightning strikes.,buff_hp,3,True,,,
+demon_124,Skeleton,demon,neutra,1,1,1,1,common,30,skeleton_horde,Skeleton Horde — no copy limit in your deck.,,,,,,A rookie in the infernal army.
+demon_125,Skeleton Soldier,demon,neutra,2,1,2,2,common,30,skeleton_horde,Skeleton Horde — no copy limit in your deck.,,,,,,Frontline of the infernal army.

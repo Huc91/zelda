@@ -1,30 +1,30 @@
-[gd_scene load_steps=11 format=3 uid="uid://en_normal1_sc"]
+[gd_scene load_steps=11 format=3 uid="uid://duelist_enemy01"]
 
-[ext_resource type="Script" uid="uid://humanoid0001" path="res://data/actors/enemies/humanoid.gd" id="1_normal1"]
-[ext_resource type="Texture2D" uid="uid://en_normal1_tx" path="res://data/actors/enemies/enemy_normal_1.png" id="2_normal1"]
+[ext_resource type="Script" path="res://data/actors/enemies/duelist_enemy.gd" id="1_duel"]
+[ext_resource type="Texture2D" uid="uid://en_normal1_tx" path="res://data/actors/enemies/enemy_normal_1.png" id="2_tx"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_normal1d0"]
-atlas = ExtResource("2_normal1")
+atlas = ExtResource("2_tx")
 region = Rect2(0, 0, 16, 16)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_normal1d1"]
-atlas = ExtResource("2_normal1")
+atlas = ExtResource("2_tx")
 region = Rect2(48, 0, 16, 16)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_normal1s0"]
-atlas = ExtResource("2_normal1")
+atlas = ExtResource("2_tx")
 region = Rect2(32, 0, 16, 16)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_normal1s1"]
-atlas = ExtResource("2_normal1")
+atlas = ExtResource("2_tx")
 region = Rect2(80, 0, 16, 16)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_normal1u0"]
-atlas = ExtResource("2_normal1")
+atlas = ExtResource("2_tx")
 region = Rect2(16, 0, 16, 16)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_normal1u1"]
-atlas = ExtResource("2_normal1")
+atlas = ExtResource("2_tx")
 region = Rect2(64, 0, 16, 16)
 
 [sub_resource type="SpriteFrames" id="SpriteFrames_normal1"]
@@ -66,15 +66,16 @@ animations = [{
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_normal1"]
 size = Vector2(8, 8)
 
-[node name="EnemyNormal1" type="CharacterBody2D"]
+[node name="Duelist" type="CharacterBody2D"]
 motion_mode = 1
-script = ExtResource("1_normal1")
+script = ExtResource("1_duel")
 actor_type = 0
 speed = 56.0
 hearts = 1.0
 damage = 1.0
 difficulty = "normal"
-offers_card_battle_mercy = true
+duelist_id = "duelist_default"
+display_name = "Duelist"
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 sprite_frames = SubResource("SpriteFrames_normal1")

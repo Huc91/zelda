@@ -326,6 +326,16 @@ static func get_kabba_post_victory_mercy() -> Dictionary:
 	}
 
 
+static func get_duelist_post_victory_mercy() -> Dictionary:
+	return {
+		"lines": ["..."],
+		"choices": [
+			{"text": "Spare", "event": "duelist_spare"},
+			{"text": "Kill", "event": "duelist_kill"},
+		],
+	}
+
+
 ## Returns the sequence dict for `dialogue_id` at the given progress index.
 static func get_sequence(dialogue_id: String, seq_idx: int) -> Dictionary:
 	var entry: Dictionary = DB.get(dialogue_id, DB.get("default", {}))

@@ -52,6 +52,8 @@ func activate(u: Actor) -> void:
 
 
 func _physics_process(_delta: float) -> void:
+	if get_tree().paused:
+		return
 	_check_actor_hits()
 	_check_front_hits()
 	_check_map_slash()
@@ -92,6 +94,8 @@ func _try_hit_front(a: Actor) -> void:
 
 
 func _try_hit_actor(a: Actor) -> void:
+	if get_tree().paused:
+		return
 	if a.actor_type == actor_type or a.in_battle:
 		return
 	var actor_id: int = a.get_instance_id()
@@ -124,6 +128,8 @@ func _on_swing_finished() -> void:
 
 
 func _on_body_entered(body: Node) -> void:
+	if get_tree().paused:
+		return
 	if body is Map:
 		var map: Map = body as Map
 		var cell: Vector2i = map.local_to_map(target_cell_position)

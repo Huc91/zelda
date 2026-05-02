@@ -157,6 +157,8 @@ var _view: _View
 var _arrow_overlay: _ArrowOverlay
 var _battle_font: Font
 var _ai_runner: CardBattleAIRunner
+## NDJSON battle log under `battle_logs/` (project) or `user://battle_logs/` (null if disabled / could not open).
+var _battle_file_logger: BattleFileLogger = null
 signal battle_ended(player_won: bool)
 
 const _DUEL_GLOVE_ATTACK_PATH: String = "res://data/items/duel-glove-attack.png"
@@ -244,6 +246,7 @@ func _start_battle() -> void:
 	player_hp_cap = Global.get_effective_max_hp()
 	if not _draw_mandatory_refresh(player_hand, player_deck, CardBattleConstants.STARTING_HAND, true): return
 	if not _draw_mandatory_refresh(enemy_hand, enemy_deck, CardBattleConstants.STARTING_HAND, false): return
+	_battle_file_open_session(diff)
 	_log("Battle started!")
 	_show_toast("Battle Start!")
 	_view.queue_redraw()
@@ -297,6 +300,7 @@ func _check_auto_lose_no_resources(is_player_side: bool) -> void:
 func _schedule_empty_resources_loss(is_player_side: bool) -> void:
 	if _ended: return
 	_ended = true
+	_battle_file_finalize("win" if not is_player_side else "lose")
 	if is_player_side:
 		_log("You're out of cards and minions — you lose.")
 		_show_toast("Out of resources!")
@@ -343,6 +347,7 @@ func _log(s: String) -> void:
 	_log_scroll = maxi(0, flat.size() - CardBattleConstants.LOG_VISIBLE)
 	_clamp_log_scroll()
 	_view.queue_redraw()
+	_battle_file_log_ui(s)
 
 
 func _log_colored(s: String, color: Color) -> void:
@@ -351,6 +356,118 @@ func _log_colored(s: String, color: Color) -> void:
 	_log_scroll = maxi(0, flat.size() - CardBattleConstants.LOG_VISIBLE)
 	_clamp_log_scroll()
 	_view.queue_redraw()
+	_battle_file_log_ui(s)
+
+
+func _battle_file_open_session(diff: String) -> void:
+	var logger: BattleFileLogger = BattleFileLogger.new()
+	var enemy_label: String = ""
+	if is_instance_valid(enemy_actor):
+		if enemy_actor.has_method("get_name_label"):
+			enemy_label = str(enemy_actor.call("get_name_label"))
+		else:
+			enemy_label = str(enemy_actor.name)
+	var meta: Dictionary = {
+		"player_first": player_first,
+		"ai_type": _ai_type,
+		"difficulty": diff,
+		"enemy_label": enemy_label,
+		"player_deck_ids": BattleFileLogger.deck_card_ids(player_deck),
+		"enemy_deck_ids": BattleFileLogger.deck_card_ids(enemy_deck),
+		"opening_hand_p": BattleFileLogger.hand_card_ids(player_hand),
+		"opening_hand_e": BattleFileLogger.hand_card_ids(enemy_hand),
+		"snapshot": BattleFileLogger.build_snapshot(self),
+	}
+	if logger.open_session(meta, self):
+		_battle_file_logger = logger
+
+
+func _detach_battle_file_logger() -> void:
+	_battle_file_logger = null
+
+
+func _battle_file_log_ui(line: String) -> void:
+	if _battle_file_logger == null or line.is_empty():
+		return
+	_battle_file_logger.log_event({"t": "ui_log", "line": line})
+
+
+func _battle_file_snapshot(phase: String) -> void:
+	if _battle_file_logger == null:
+		return
+	_battle_file_logger.log_event({
+		"t": "snapshot",
+		"phase": phase,
+		"board": BattleFileLogger.build_snapshot(self),
+	})
+
+
+func _battle_file_finalize(outcome: String) -> void:
+	if _battle_file_logger == null:
+		return
+	var lg: BattleFileLogger = _battle_file_logger
+	_battle_file_logger = null
+	lg.close_session(outcome, BattleFileLogger.build_snapshot(self))
+
+
+func _battle_file_log_summon(is_player: bool, card: Dictionary, to_front: bool) -> void:
+	if _battle_file_logger == null:
+		return
+	_battle_file_logger.log_event({
+		"t": "summon",
+		"side": "player" if is_player else "enemy",
+		"id": str(card.get("id", "")),
+		"name": str(card.get("name", "")),
+		"to_front": to_front,
+		"cost": int(card.get("cost", 0)),
+		"snapshot": BattleFileLogger.build_snapshot(self),
+	})
+
+
+func _battle_file_log_spell_pending(is_player: bool, card: Dictionary, pending_kind: String) -> void:
+	if _battle_file_logger == null:
+		return
+	_battle_file_logger.log_event({
+		"t": "spell_pending",
+		"side": "player" if is_player else "enemy",
+		"pending": pending_kind,
+		"id": str(card.get("id", "")),
+		"name": str(card.get("name", "")),
+		"effect": str(card.get("effect", "")),
+		"snapshot": BattleFileLogger.build_snapshot(self),
+	})
+
+
+func _battle_file_log_spell_resolved(is_player: bool, card: Dictionary) -> void:
+	if _battle_file_logger == null:
+		return
+	_battle_file_logger.log_event({
+		"t": "spell_resolved",
+		"side": "player" if is_player else "enemy",
+		"id": str(card.get("id", "")),
+		"name": str(card.get("name", "")),
+		"effect": str(card.get("effect", "")),
+		"snapshot": BattleFileLogger.build_snapshot(self),
+	})
+
+
+func _battle_file_log_combat(att_is_player: bool, att_is_front: bool, att: Dictionary,
+		def_is_front: bool, def_: Dictionary, type_bonus: int) -> void:
+	if _battle_file_logger == null:
+		return
+	_battle_file_logger.log_event({
+		"t": "combat",
+		"attacker_side": "player" if att_is_player else "enemy",
+		"attacker_front": att_is_front,
+		"defender_side": "enemy" if att_is_player else "player",
+		"defender_front": def_is_front,
+		"attacker": str(att["data"].get("name", "?")),
+		"defender": str(def_["data"].get("name", "?")),
+		"att_atk": int(att.get("atk", 0)),
+		"def_atk": int(def_.get("atk", 0)),
+		"type_bonus": type_bonus,
+		"snapshot": BattleFileLogger.build_snapshot(self),
+	})
 
 
 func _start_player_turn() -> void:
@@ -369,10 +486,18 @@ func _start_player_turn() -> void:
 	_atk_drag_idx = -1
 	_rear_pick_idx = -1
 	_pending_card = {}
+	## Side that goes second in the duel draws 1 on their first turn (opening hand stays; no full refresh yet).
+	if player_turn_num == 1 and not player_first:
+		_log("You went second — you draw a card.")
+		_draw_one(player_hand, player_deck)
+		_check_auto_lose_no_resources(true)
+		if _ended:
+			return
 	_begin_turn_refresh_exhaustion_for_side(true)
 	_refresh_mimic_minions_and_front_atk_auras()
 	_apply_start_of_turn_board_effects(true)
 	_log("--- Your turn %d — %d mana (play cards; pitch only to pay costs) ---" % [player_turn_num, player_mana])
+	_battle_file_snapshot("player_turn_start")
 	_show_toast("Your Turn")
 	_view.queue_redraw()
 
@@ -466,17 +591,26 @@ func _start_enemy_turn() -> void:
 	_enemy_stashed_this_turn = false
 	_enemy_soul_collector_drew_this_turn = false
 	## Previous turn’s unplayed hand — graveyard (pitched cards already left hand earlier).
-	## Skip on turn 1: hand was just drawn in _start_battle and hasn’t been played yet.
 	if enemy_turn_num > 1:
 		for c in enemy_hand: enemy_gy.append(c)
 		enemy_hand.clear()
-	if not _draw_mandatory_refresh(enemy_hand, enemy_deck, CardBattleConstants.STARTING_HAND, false):
-		_animating = false
-		return
+		if not _draw_mandatory_refresh(enemy_hand, enemy_deck, CardBattleConstants.STARTING_HAND, false):
+			_animating = false
+			return
+	else:
+		## Turn 1: keep opening hand from _start_battle. Second player draws 1 (no second full refresh).
+		if player_first:
+			_log("Enemy went second — draws a card.")
+			_draw_one(enemy_hand, enemy_deck)
+			_check_auto_lose_no_resources(false)
+			if _ended:
+				_animating = false
+				return
 	_begin_turn_refresh_exhaustion_for_side(false)
 	_refresh_mimic_minions_and_front_atk_auras()
 	_apply_start_of_turn_board_effects(false)
 	_log("--- Enemy turn %d ---" % enemy_turn_num)
+	_battle_file_snapshot("enemy_turn_start")
 	_view.queue_redraw()
 	await _ai_runner.play_phase()
 	if _ended: return
@@ -603,6 +737,7 @@ func _complete_choose_enemy_target_spell(target: Dictionary, is_front: bool) -> 
 			else:
 				_process_deaths(enemy_rear, false, false)
 			_log("%s destroys %s!" % [str(card.get("name", "Spell")), str(target["data"].get("name", "?"))])
+	_battle_file_log_spell_resolved(true, card)
 	_apply_after_spell_cast(true)
 	_refresh_mimic_minions_and_front_atk_auras()
 	_check_game_over()
@@ -653,6 +788,7 @@ func _complete_choose_ally_target(target: Dictionary) -> void:
 			target["hp"] += val
 			target["hp_intrinsic"] = target.get("hp_intrinsic", int(target["data"].get("hp", 1))) + val
 			_log("%s: +%d/+%d to %s!" % [cname, val, val, tname])
+	_battle_file_log_spell_resolved(true, card)
 	_finish_choose_ally_target_idle()
 	_apply_after_spell_cast(true)
 	_refresh_mimic_minions_and_front_atk_auras()
@@ -741,6 +877,7 @@ func _summon(card: Dictionary, is_player: bool, to_front: bool) -> void:
 		else: return
 	var d := _make_board_demon(card)
 	row.append(d)
+	_battle_file_log_summon(is_player, card, row == pf)
 	if "mimic_board_count" in ab:
 		var tot: int = player_front.size() + player_rear.size() + enemy_front.size() + enemy_rear.size()
 		d["atk"] = tot
@@ -1002,6 +1139,7 @@ func _resolve_battlecry(d: Dictionary, is_player: bool) -> void:
 func _schedule_instant_win(msg: String) -> void:
 	if _ended: return
 	_ended = true
+	_battle_file_finalize("win")
 	_log(msg)
 	_show_toast("YOU WIN!")
 	_view.queue_redraw()
@@ -1012,6 +1150,7 @@ func _schedule_instant_win(msg: String) -> void:
 func _schedule_instant_lose(msg: String) -> void:
 	if _ended: return
 	_ended = true
+	_battle_file_finalize("lose")
 	_log(msg)
 	_show_toast("YOU LOSE...")
 	_view.queue_redraw()
@@ -1676,10 +1815,12 @@ func _resolve_spell(card: Dictionary, is_player: bool) -> void:
 		var pf: Array = player_front
 		var pr: Array = player_rear
 		if not pf.is_empty() or not pr.is_empty():
+			_battle_file_log_spell_pending(is_player, card, "ally_target")
 			_begin_choose_ally_target(str(card.get("name", "Spell")), card)
 			return
 	if is_player and str(card.get("effect", "")) in ENEMY_TARGET_EFFECTS:
 		if not enemy_front.is_empty() or not enemy_rear.is_empty():
+			_battle_file_log_spell_pending(is_player, card, "enemy_target")
 			_begin_choose_enemy_target_for_spell(card)
 			return
 	var eff: String = str(card.get("effect", ""))
@@ -1688,6 +1829,7 @@ func _resolve_spell(card: Dictionary, is_player: bool) -> void:
 	elif eff in _THUNDER_EFFECTS:
 		Sound.play(preload("res://data/sfx/to use/Thunder.wav"))
 	CardBattleSpellEffects.resolve(self , card, is_player)
+	_battle_file_log_spell_resolved(is_player, card)
 	_apply_after_spell_cast(is_player)
 	_refresh_mimic_minions_and_front_atk_auras()
 
@@ -1710,6 +1852,7 @@ func _do_combat(a_board: Array, a_idx: int, a_is_player: bool, a_is_front: bool,
 	var type_bonus: int = _type_advantage(att_sub, def_sub)
 	if type_bonus > 0:
 		_log("%s has type advantage over %s (+%d dmg)!" % [att["data"].get("name", "?"), def_["data"].get("name", "?"), type_bonus])
+	_battle_file_log_combat(a_is_player, a_is_front, att, d_is_front, def_, type_bonus)
 	Sound.play(preload("res://data/sfx/to use/Gun.wav"))
 	_spawn_float(CardBattleLayout.board_world_pos(_get_row(a_is_player, a_is_front), a_is_player, a_is_front, a_idx), "-%d" % def_atk, CardBattleConstants.C_HP_RED)
 	_spawn_float(CardBattleLayout.board_world_pos(_get_row(not a_is_player, d_is_front), not a_is_player, d_is_front, d_idx), "-%d" % (att_atk + type_bonus), CardBattleConstants.C_HP_RED)
@@ -1839,14 +1982,18 @@ func _deal_damage_to_enemy(n: int) -> void:
 func _check_game_over() -> bool:
 	if _ended: return true
 	if enemy_hp <= 0:
-		_ended = true; _log("YOU WIN!")
+		_ended = true
+		_battle_file_finalize("win")
+		_log("YOU WIN!")
 		_show_toast("YOU WIN!")
 		_view.queue_redraw()
 		await get_tree().create_timer(2.5, true).timeout
 		Global.set_hp(player_hp)
 		battle_ended.emit(true); return true
 	if player_hp <= 0:
-		_ended = true; _log("YOU LOSE!")
+		_ended = true
+		_battle_file_finalize("lose")
+		_log("YOU LOSE!")
 		_show_toast("YOU LOSE...")
 		_view.queue_redraw()
 		await get_tree().create_timer(2.5, true).timeout
@@ -1878,11 +2025,16 @@ func ai_enemy_resolve_spell(card: Dictionary) -> void:
 	_resolve_spell(card, false)
 
 
-func ai_enemy_pitch_idx(i: int) -> void:
-	_enemy_pitch_card(i)
+func ai_enemy_pitch_idx(i: int, reason_trace: Array = []) -> void:
+	_enemy_pitch_card(i, reason_trace)
 
 
-func ai_log_line(s: String) -> void:
+func ai_log_line(s: String, reason_trace: Array = []) -> void:
+	if _battle_file_logger != null:
+		var ev: Dictionary = {"t": "ai", "line": s, "snapshot": BattleFileLogger.build_snapshot(self)}
+		if not reason_trace.is_empty():
+			ev["reason"] = reason_trace
+		_battle_file_logger.log_event(ev)
 	_log(s)
 
 
@@ -1961,7 +2113,7 @@ func ai_type_advantage(att_sub: String, def_sub: String) -> int:
 	return _type_advantage(att_sub, def_sub)
 
 
-func _enemy_pitch_card(i: int) -> void:
+func _enemy_pitch_card(i: int, reason_trace: Array = []) -> void:
 	if i < 0 or i >= enemy_hand.size(): return
 	var card: Dictionary = enemy_hand[i]
 	var mv: int = card.get("mana_value", 1)
@@ -1969,6 +2121,18 @@ func _enemy_pitch_card(i: int) -> void:
 	_enemy_pitched_this_turn.append(card)
 	enemy_hand.remove_at(i)
 	_log("Enemy pitches %s (+%d mana)" % [card["name"], mv])
+	if _battle_file_logger != null:
+		var pev: Dictionary = {
+			"t": "pitch",
+			"side": "enemy",
+			"id": str(card.get("id", "")),
+			"name": str(card.get("name", "")),
+			"mana_gain": mv,
+			"snapshot": BattleFileLogger.build_snapshot(self),
+		}
+		if not reason_trace.is_empty():
+			pev["reason"] = reason_trace
+		_battle_file_logger.log_event(pev)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -2650,6 +2814,15 @@ func _pitch_card(i: int) -> void:
 	_ctx_is_front = true
 	_rear_pick_idx = -1
 	_log("Pitched %s (+%d mana)" % [card["name"], mv])
+	if _battle_file_logger != null:
+		_battle_file_logger.log_event({
+			"t": "pitch",
+			"side": "player",
+			"id": str(card.get("id", "")),
+			"name": str(card.get("name", "")),
+			"mana_gain": mv,
+			"snapshot": BattleFileLogger.build_snapshot(self),
+		})
 	_view.queue_redraw()
 	_check_auto_lose_no_resources(true)
 

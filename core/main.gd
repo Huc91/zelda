@@ -31,6 +31,8 @@ func _headless_battle_smoke_requested() -> bool:
 
 
 func _ready():
+	## Battle bootstrap uses await; must finish even when the world tree is paused (dialogue, etc.).
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	if _headless_battle_smoke_requested():
 		call_deferred("_run_headless_battle_smoke")
 		return
@@ -45,16 +47,29 @@ func _show_title_screen() -> void:
 	await title.tree_exited
 	match choice:
 		TitleScreen.Choice.CONTINUE:
-			Global.reset_new_game()
+			if not Global.load_game():
+				push_warning("Continue: could not load save; starting a new game.")
+				Global.reset_new_game()
 		TitleScreen.Choice.NEW_GAME:
 			Global.reset_new_game()
 		TitleScreen.Choice.DEV_MODE:
 			Global.reset_new_game()
 			Global.dev_mode = true
 			Global._apply_dev_mode()
+	var start_map: String = STARTING_MAP
+	var start_entrance: Vector2i = STARTING_ENTRANCE
+	if choice == TitleScreen.Choice.CONTINUE \
+			and Global.last_bonfire_map != "" \
+			and ResourceLoader.exists(Global.last_bonfire_map) \
+			and Global.last_bonfire_position != null:
+		start_map = Global.last_bonfire_map
+		var tmp_map: Map = load(start_map).instantiate() as Map
+		if tmp_map != null:
+			start_entrance = tmp_map.local_to_map(Global.last_bonfire_position as Vector2)
+			tmp_map.queue_free()
 	_ensure_player()
 	await ScreenFX.fade_white_in()
-	initialize_scene(STARTING_MAP, STARTING_ENTRANCE)
+	await initialize_scene(start_map, start_entrance)
 	# UI must be a sibling of Screen, not a child of SubViewportContainer, or mouse hits the
 	# embedded SubViewport first and Control buttons (e.g. deck DELETE) never receive clicks.
 	add_child(_ensure_ui())
@@ -85,8 +100,13 @@ var _guide_npcs: Array[Node] = []
 func initialize_scene(map: String, entrance: Vector2i) -> void:
 	get_tree().paused = false
 	Global.current_map_path = map
+	var p: Actor = _ensure_player()
 	var old_scene: GameScene = current_scene
-	current_scene = GameScene.new(map, entrance, _ensure_player())
+	if old_scene != null and is_instance_valid(old_scene):
+		if is_instance_valid(old_scene.map) and p.get_parent() == old_scene.map:
+			old_scene.map.remove_child(p)
+		old_scene.queue_free()
+	current_scene = GameScene.new(map, entrance, p)
 	current_scene.map_changed.connect(initialize_scene)
 	screen.add_child(current_scene)
 	await ScreenFX.fade_white_out()
@@ -139,7 +159,20 @@ func _on_bonfire_rested() -> void:
 	Global.apply_kabba_spare_despawn_if_pending(Global.current_map_path)
 
 
+func _clear_stuck_overworld_battle_flags() -> void:
+	Global.in_battle = false
+	for n: Node in get_tree().get_nodes_in_group("actor"):
+		if is_instance_valid(n) and n is Actor:
+			(n as Actor).in_battle = false
+
+
 func _on_card_battle_requested(p_first: bool, enemy: Node) -> void:
+	if not is_instance_valid(enemy):
+		return
+	## If we disconnect but never finish bootstrapping (pause/timing), the signal stays dead and actors keep in_battle.
+	if get_tree().paused:
+		_clear_stuck_overworld_battle_flags()
+		return
 	Global.in_battle = true
 	Global.card_battle_requested.disconnect(_on_card_battle_requested)
 	for actor in get_tree().get_nodes_in_group("actor"):
@@ -168,6 +201,9 @@ func _on_battle_ended(player_won: bool, battle: Node, enemy: Node) -> void:
 	await ScreenFX.fade_white_in()
 	battle.queue_free()
 	if player_won and is_instance_valid(enemy):
+		if enemy.is_in_group("shadow_enemy"):
+			Global.apply_shadow_defeat_karma()
+		var is_boss_encounter: bool = "difficulty" in enemy and str(enemy.difficulty) == "boss"
 		var defer_reward_until_mercy: bool = false
 		if enemy.has_method("defer_battle_reward_until_mercy"):
 			defer_reward_until_mercy = bool(enemy.call("defer_battle_reward_until_mercy"))
@@ -190,35 +226,22 @@ func _on_battle_ended(player_won: bool, battle: Node, enemy: Node) -> void:
 		# Post-battle dialogue only after returning to the overworld (not on the white hold).
 		if is_instance_valid(enemy) and enemy.has_method("offer_post_victory_mercy"):
 			await enemy.offer_post_victory_mercy()
-		if defer_reward_until_mercy and is_instance_valid(enemy):
+		if defer_reward_until_mercy and is_instance_valid(enemy) and not is_boss_encounter:
 			var skip_reward: bool = false
 			if enemy.has_method("should_skip_battle_reward"):
 				skip_reward = bool(enemy.call("should_skip_battle_reward"))
 			if not skip_reward:
 				_give_battle_reward(enemy)
+		if is_instance_valid(enemy) and "difficulty" in enemy and str(enemy.difficulty) == "boss":
+			if not enemy.is_in_group("kabba_boss") and not enemy.is_in_group("duelist_enemy"):
+				if not enemy.has_method("offer_post_victory_mercy"):
+					Global.apply_post_kill_world_rules(enemy, true)
 		Global.card_battle_requested.connect(_on_card_battle_requested)
 	else:
-		# Player lost
-		var diff: String = "easy"
-		if is_instance_valid(enemy) and "difficulty" in enemy:
-			diff = str(enemy.difficulty)
-		var lethal: bool = diff == "hard" or diff == "boss"
-		if lethal:
-			Global.set_hp(0)
-			await ScreenFX.fade_white_out()
-			_show_game_over()
-		else:
-			# Skirmish loss — survive at 1 HP
-			Global.set_hp(1)
-			if is_instance_valid(enemy) and enemy is Actor:
-				(enemy as Actor).in_battle = false
-			for actor in get_tree().get_nodes_in_group("actor"):
-				if is_instance_valid(actor) and actor is Actor:
-					actor.set_physics_process(true)
-					(actor as Actor).in_battle = false
-			_ensure_player().invulnerable_timer = 3.0
-			await ScreenFX.fade_white_out()
-			Global.card_battle_requested.connect(_on_card_battle_requested)
+		Global.set_hp(0)
+		await ScreenFX.fade_white_out()
+		await _show_game_over(enemy)
+		Global.card_battle_requested.connect(_on_card_battle_requested)
 
 
 func _respawn_at_bonfire() -> void:
@@ -227,57 +250,90 @@ func _respawn_at_bonfire() -> void:
 	if Global.last_bonfire_position != null:
 		p.position = Global.last_bonfire_position as Vector2
 		p.last_safe_position = p.position
-	else:
-		# No bonfire activated yet — fall back to starting entrance
+	elif current_scene != null and is_instance_valid(current_scene.map):
 		p.position = current_scene.map.map_to_local(STARTING_ENTRANCE)
 		p.last_safe_position = p.position
 	p.invulnerable_timer = 3.0
 	await ScreenFX.fade_white_out()
 
 
-func _show_game_over() -> void:
+func _respawn_player_at_last_bonfire_after_game_over() -> void:
+	Global.restore_lives()
+	var p: Actor = _ensure_player()
+	p.sprite.show()
+	p.invulnerable_timer = 3.0
+	var bf_map: String = Global.last_bonfire_map
+	var bf_pos: Variant = Global.last_bonfire_position
+	if bf_map.is_empty() or bf_pos == null:
+		await _respawn_at_bonfire()
+		return
+	if current_scene != null and current_scene.map != null and Global.current_map_path == bf_map:
+		p.global_position = bf_pos as Vector2
+		p.last_safe_position = p.position
+		await ScreenFX.fade_white_out()
+		return
+	if p.get_parent() != null:
+		p.get_parent().remove_child(p)
+	if current_scene != null:
+		current_scene.queue_free()
+		current_scene = null
+	var entrance: Vector2i = STARTING_ENTRANCE
+	var tmp: Map = load(bf_map).instantiate() as Map
+	if tmp != null:
+		entrance = tmp.local_to_map(bf_pos as Vector2)
+		tmp.queue_free()
+	Global.current_map_path = bf_map
+	current_scene = GameScene.new(bf_map, entrance, p)
+	current_scene.map_changed.connect(initialize_scene)
+	screen.add_child(current_scene)
+	await ScreenFX.fade_white_out()
+
+
+func _show_game_over(lost_to_enemy: Node) -> void:
+	# Inventory / menus may leave the tree paused; paused routing breaks gui_input on overlays.
+	get_tree().paused = false
+	var deck_snap: Array[String] = Global.snapshot_active_deck_ids()
+	Global.enqueue_overworld_shadow("%s Shadow" % Global.PLAYER_SHADOW_NAME, deck_snap)
 	var go: CanvasLayer = CanvasLayer.new()
 	go.layer = 50
 	go.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(go)
 	var font: Font = PixelFont.nudge_orb()
 	var ctrl: Control = Control.new()
+	ctrl.process_mode = Node.PROCESS_MODE_ALWAYS
 	ctrl.set_anchors_preset(Control.PRESET_FULL_RECT)
 	ctrl.focus_mode = Control.FOCUS_CLICK
 	ctrl.mouse_filter = Control.MOUSE_FILTER_STOP
 	go.add_child(ctrl)
-	var _ready_input: bool = false
+	const GAME_OVER_MSG: String = "You died. You became a shadow."
+	const GAME_OVER_FONT_SIZE: int = 16
 	ctrl.draw.connect(func() -> void:
-		ctrl.draw_rect(Rect2(0, 0, 640, 576), Color(0.0, 0.0, 0.0, 0.88))
+		ctrl.draw_rect(Rect2(0, 0, 640, 576), Color(0.0, 0.0, 0.0, 1.0))
 		if font == null:
 			return
-		var title: String = "GAME OVER"
-		var tw_: float = font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, 28).x
-		ctrl.draw_string(font, Vector2((640.0 - tw_) * 0.5, 262.0), title,
-				HORIZONTAL_ALIGNMENT_LEFT, -1, 28, Color(1.0, 0.15, 0.05))
-		if _ready_input:
-			var hint: String = "PRESS ANY KEY TO RESTART"
-			var hw: float = font.get_string_size(hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 10).x
-			ctrl.draw_string(font, Vector2((640.0 - hw) * 0.5, 302.0), hint,
-					HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 1.0, 1.0, 0.85))
+		var tw_: float = font.get_string_size(
+				GAME_OVER_MSG, HORIZONTAL_ALIGNMENT_LEFT, -1, GAME_OVER_FONT_SIZE).x
+		ctrl.draw_string(
+				font,
+				Vector2((640.0 - tw_) * 0.5, 288.0),
+				GAME_OVER_MSG,
+				HORIZONTAL_ALIGNMENT_LEFT,
+				-1,
+				GAME_OVER_FONT_SIZE,
+				Color(1.0, 1.0, 1.0, 1.0))
 	)
-	ctrl.gui_input.connect(func(event: InputEvent) -> void:
-		if not _ready_input:
-			return
-		var do_restart: bool = false
-		if event is InputEventKey and (event as InputEventKey).pressed:
-			do_restart = true
-		elif event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
-			do_restart = true
-		if do_restart:
-			Global.in_battle = false
-			get_tree().reload_current_scene()
-	)
-	ctrl.grab_focus()
 	ctrl.queue_redraw()
-	await get_tree().create_timer(1.2).timeout
-	_ready_input = true
-	ctrl.queue_redraw()
+	await get_tree().create_timer(2.0, true).timeout
+	Global.in_battle = false
+	go.queue_free()
+	for actor in get_tree().get_nodes_in_group("actor"):
+		if is_instance_valid(actor) and actor is Actor:
+			actor.set_physics_process(true)
+			(actor as Actor).in_battle = false
+	if is_instance_valid(lost_to_enemy) and lost_to_enemy is Actor:
+		(lost_to_enemy as Actor).in_battle = false
+	await _respawn_player_at_last_bonfire_after_game_over()
+	Global.save_game()
 
 
 func _give_battle_reward(enemy: Node) -> void:
@@ -288,6 +344,10 @@ func _give_battle_reward(enemy: Node) -> void:
 	var amount: int = randi_range(int(reward_table["min"]), int(reward_table["max"]))
 	if Global.roll_luck():
 		amount += 10
+	var mult: float = 1.0
+	if enemy.has_method("get_battle_gold_multiplier"):
+		mult = float(enemy.call("get_battle_gold_multiplier"))
+	amount = int(floor(float(amount) * mult))
 	_spawn_coins(enemy.position, amount)
 	# Card drop chance by difficulty
 	var card_drop_chance: float = 0.02

@@ -110,14 +110,6 @@ func _on_draw() -> void:
 	# Background
 	_view.draw_rect(Rect2(0, 0, int(w), int(h)), Color(0.05, 0.05, 0.1))
 
-	# Battle type label
-	var is_lethal: bool = _enemy_difficulty == "hard" or _enemy_difficulty == "boss"
-	var battle_label: String = "LETHAL BATTLE" if is_lethal else "SKIRMISH BATTLE"
-	var label_col: Color = Color(1.0, 0.2, 0.1) if is_lethal else Color(0.2, 0.8, 1.0)
-	var lw: float = _font.get_string_size(battle_label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
-	_view.draw_string(_font, Vector2(int(cx - lw * 0.5), int(cy - 100.0)), battle_label,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 14, label_col)
-
 	# Dice positions
 	var die_scale: float = 3.0
 	var die_w: int = int(float(FRAME_W) * die_scale)

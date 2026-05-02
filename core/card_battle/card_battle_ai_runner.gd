@@ -9,6 +9,11 @@ func _init(p_battle: CardBattle) -> void:
 	b = p_battle
 
 
+## Battle log `reason` entries: which AI function ran and what it returned (for analysis / tuning).
+func _ai_step(fn: String, ret: Variant) -> Dictionary:
+	return {"fn": fn, "ret": ret}
+
+
 func detect_ai_type_from_deck(deck: Array) -> String:
 	var has_death_knell: int = 0
 	var has_tidal_terror: bool = false
@@ -55,14 +60,17 @@ func play_phase() -> void:
 			if card["type"] == "demon":
 				var to_front: bool = enemy_summon_to_front(card)
 				b.ai_enemy_summon(card, to_front)
-				b.ai_log_line("Enemy plays %s!" % card["name"])
+				b.ai_log_line("Enemy plays %s!" % card["name"], [
+					_ai_step("pick_best_play_index", best_i),
+					_ai_step("enemy_summon_to_front", to_front),
+				])
 			else:
 				b.ai_show_enemy_spell_preview(card)
 				await b.get_tree().create_timer(2.0, true).timeout
 				b.ai_clear_enemy_spell_preview()
 				b.ai_enemy_resolve_spell(card)
 				b.enemy_gy.append(card)
-				b.ai_log_line("Enemy casts %s!" % card["name"])
+				b.ai_log_line("Enemy casts %s!" % card["name"], [_ai_step("pick_best_play_index", best_i)])
 			b.ai_queue_redraw()
 			await b.get_tree().create_timer(0.45, true).timeout
 			if b.ai_is_battle_ended(): return
@@ -72,13 +80,13 @@ func play_phase() -> void:
 		# Try pitching a pitcher demon for 2 mana if it enables a better play
 		var pitcher_i: int = pick_pitcher_to_pitch_index()
 		if pitcher_i >= 0:
-			b.ai_enemy_pitch_idx(pitcher_i) # already logs the pitch internally
+			b.ai_enemy_pitch_idx(pitcher_i, [_ai_step("pick_pitcher_to_pitch_index", pitcher_i)])
 			b.ai_queue_redraw()
 			await b.get_tree().create_timer(0.28, true).timeout
 			continue
 		var pi: int = pick_pitch_index()
 		if pi < 0: break
-		b.ai_enemy_pitch_idx(pi)
+		b.ai_enemy_pitch_idx(pi, [_ai_step("pick_pitch_index", pi)])
 		b.ai_queue_redraw()
 		await b.get_tree().create_timer(0.28, true).timeout
 
@@ -117,7 +125,7 @@ func stash_arsenal_at_turn_end() -> void:
 	b.enemy_arsenal = card
 	b.ai_set_enemy_stashed(true)
 	if Global.dev_mode:
-		b.ai_log_line("Enemy stashes %s (Arsenal)" % card["name"])
+		b.ai_log_line("Enemy stashes %s (Arsenal)" % card["name"], [_ai_step("_stash_candidate_index", best_i)])
 
 
 func try_play_from_arsenal() -> bool:
@@ -149,11 +157,14 @@ func try_play_from_arsenal() -> bool:
 	if ac["type"] == "demon":
 		var to_front: bool = enemy_summon_to_front(ac)
 		b.ai_enemy_summon(ac, to_front)
-		b.ai_log_line("Enemy plays %s (Arsenal)!" % ac["name"])
+		b.ai_log_line("Enemy plays %s (Arsenal)!" % ac["name"], [
+			_ai_step("try_play_from_arsenal", true),
+			_ai_step("enemy_summon_to_front", to_front),
+		])
 	else:
 		b.ai_enemy_resolve_spell(ac)
 		b.enemy_gy.append(ac)
-		b.ai_log_line("Enemy casts %s (Arsenal)!" % ac["name"])
+		b.ai_log_line("Enemy casts %s (Arsenal)!" % ac["name"], [_ai_step("try_play_from_arsenal", true)])
 	return true
 
 
@@ -184,8 +195,308 @@ func is_enemy_card_playable(card: Dictionary) -> bool:
 	if cst > b.enemy_mana:
 		return false
 	if card.get("type", "") == "demon":
-		return b.enemy_front.size() < CardBattleConstants.MAX_ROW \
-			or b.enemy_rear.size() < CardBattleConstants.MAX_ROW
+		if not (b.enemy_front.size() < CardBattleConstants.MAX_ROW \
+				or b.enemy_rear.size() < CardBattleConstants.MAX_ROW):
+			return false
+	## Tidal Terror: intentionally run spells into GY even when the effect fizzles.
+	if b.ai_get_ai_type() != "tidal_terror" or str(card.get("type", "")) != "spell":
+		if not enemy_play_has_meaningful_outcome(card):
+			return false
+	return true
+
+
+## Same as is_enemy_card_playable but with an explicit mana pool (for pitch lookahead).
+func _is_enemy_card_playable_with_mana(card: Dictionary, mana: int) -> bool:
+	if "chaos_dragon" in str(card.get("ability", "")):
+		var obscura: int = 0
+		var regalia: int = 0
+		for c: Dictionary in b.enemy_gy:
+			var sub: String = c.get("subtype", "")
+			if sub == "obscura": obscura += 1
+			elif sub == "regalia": regalia += 1
+		if obscura < 3 or regalia < 3:
+			return false
+	var cst: int = _enemy_effective_cost(card)
+	if str(card.get("type", "")) == "spell":
+		cst += b.ai_spell_tax_for_enemy()
+	if cst > mana:
+		return false
+	if card.get("type", "") == "demon":
+		if not (b.enemy_front.size() < CardBattleConstants.MAX_ROW \
+				or b.enemy_rear.size() < CardBattleConstants.MAX_ROW):
+			return false
+	if b.ai_get_ai_type() != "tidal_terror" or str(card.get("type", "")) != "spell":
+		if not enemy_play_has_meaningful_outcome(card):
+			return false
+	return true
+
+
+## Best card_play_value among cards that are **not** playable now but become playable at `mana_after`.
+func _max_unlock_card_value_after_pitch(mana_after: int, exclude_idx: int) -> int:
+	var best: int = -1
+	for i: int in b.enemy_hand.size():
+		if i == exclude_idx:
+			continue
+		var c: Dictionary = b.enemy_hand[i]
+		if _is_enemy_card_playable_with_mana(c, b.enemy_mana):
+			continue
+		if not _is_enemy_card_playable_with_mana(c, mana_after):
+			continue
+		var v: int = card_play_value(c)
+		if v > best:
+			best = v
+	return best
+
+
+func _best_unlock_card_value_for_pitch_candidate(pitch_idx: int) -> int:
+	if pitch_idx < 0 or pitch_idx >= b.enemy_hand.size():
+		return -1
+	var mana_after: int = b.enemy_mana + int(b.enemy_hand[pitch_idx].get("mana_value", 1))
+	return _max_unlock_card_value_after_pitch(mana_after, pitch_idx)
+
+
+func _enemy_board_behind_player() -> bool:
+	return _player_demon_count() > _enemy_demon_count() + 2
+
+
+func _player_demon_count() -> int:
+	return b.player_front.size() + b.player_rear.size()
+
+
+func _enemy_demon_count() -> int:
+	return b.enemy_front.size() + b.enemy_rear.size()
+
+
+func _enemy_board_free_slots() -> int:
+	return CardBattleConstants.MAX_ROW * 2 - _enemy_demon_count()
+
+
+func _enemy_mana_gain_would_apply(amount: int) -> bool:
+	return amount > 0 and b.enemy_mana < 10
+
+
+func _enemy_heal_would_apply(amount: int) -> bool:
+	return amount > 0 and b.enemy_hp < b.enemy_hp_cap
+
+
+func _estimated_player_open_face_damage_next_turn() -> int:
+	var total: int = 0
+	for d: Dictionary in b.player_front:
+		if d.get("frozen", false):
+			continue
+		var swings: int = 1
+		if d.get("double_attack", false):
+			swings = 2
+		total += int(d.get("atk", 0)) * swings
+	return total
+
+
+func _largest_player_front_attack_contribution() -> int:
+	var best: int = 0
+	for d: Dictionary in b.player_front:
+		if d.get("frozen", false):
+			continue
+		var swings: int = 1
+		if d.get("double_attack", false):
+			swings = 2
+		best = maxi(best, int(d.get("atk", 0)) * swings)
+	return best
+
+
+func _single_target_atk_debuff_prevents_open_lethal(val: int) -> bool:
+	var open_dmg: int = _estimated_player_open_face_damage_next_turn()
+	if open_dmg < b.enemy_hp:
+		return true
+	var best_cut: int = 0
+	for d: Dictionary in b.player_front:
+		if d.get("frozen", false):
+			continue
+		var swings: int = 1
+		if d.get("double_attack", false):
+			swings = 2
+		best_cut = maxi(best_cut, mini(val, int(d.get("atk", 0))) * swings)
+	return open_dmg - best_cut < b.enemy_hp
+
+
+func _aoe_atk_debuff_prevents_open_lethal(val: int) -> bool:
+	var open_dmg: int = _estimated_player_open_face_damage_next_turn()
+	if open_dmg < b.enemy_hp:
+		return true
+	var total_cut: int = 0
+	for d: Dictionary in b.player_front:
+		if d.get("frozen", false):
+			continue
+		var swings: int = 1
+		if d.get("double_attack", false):
+			swings = 2
+		total_cut += mini(val, int(d.get("atk", 0))) * swings
+	return open_dmg - total_cut < b.enemy_hp
+
+
+func _single_freeze_prevents_open_lethal() -> bool:
+	var open_dmg: int = _estimated_player_open_face_damage_next_turn()
+	if open_dmg < b.enemy_hp:
+		return true
+	return open_dmg - _largest_player_front_attack_contribution() < b.enemy_hp
+
+
+func _player_weakest_index_any_row() -> int:
+	var wi: int = b.ai_find_weakest(b.player_front)
+	if wi >= 0:
+		return wi
+	return b.ai_find_weakest(b.player_rear)
+
+
+func _player_has_destroy_low_atk_target(max_atk: int) -> bool:
+	for row: Array in [b.player_front, b.player_rear]:
+		for d: Dictionary in row:
+			if int(d.get("atk", 0)) <= max_atk:
+				return true
+	return false
+
+
+func _player_has_damaged_demon() -> bool:
+	for row: Array in [b.player_front, b.player_rear]:
+		for d: Dictionary in row:
+			var max_h: int = int(d["data"].get("hp", d["hp"]))
+			if int(d.get("hp", 0)) < max_h:
+				return true
+	return false
+
+
+func _total_demon_minions_all_sides() -> int:
+	return _player_demon_count() + _enemy_demon_count()
+
+
+func _enemy_draw_would_happen(times: int) -> bool:
+	if times <= 0:
+		return false
+	if b.enemy_hand.size() >= CardBattleConstants.MAX_HAND:
+		return false
+	return not b.enemy_deck.is_empty()
+
+
+func _enemy_gy_has_demon() -> bool:
+	for c: Dictionary in b.enemy_gy:
+		if str(c.get("type", "")) == "demon":
+			return true
+	return false
+
+
+func _enemy_resurrect_all_would_move() -> bool:
+	if b.enemy_hand.size() >= CardBattleConstants.MAX_HAND:
+		return false
+	for c: Dictionary in b.enemy_gy:
+		if str(c.get("type", "")) == "demon":
+			return true
+	return false
+
+
+## Spells / summons that would do nothing are skipped (except tidal_terror spells — GY synergy).
+func enemy_play_has_meaningful_outcome(card: Dictionary) -> bool:
+	if str(card.get("type", "")) == "spell":
+		return enemy_spell_has_meaningful_outcome(card)
+	return enemy_demon_summon_has_meaningful_outcome(card)
+
+
+func enemy_spell_has_meaningful_outcome(card: Dictionary) -> bool:
+	var effect: String = str(card.get("effect", ""))
+	var val: int = int(card.get("value", 0))
+	var p_units: int = _player_demon_count()
+	var e_units: int = _enemy_demon_count()
+	match effect:
+		"damage", "deal_face", "deal_and_gain_mana", "chaos_damage", "poison_face", "deal_face_drain":
+			return val > 0
+		"heal":
+			return _enemy_heal_would_apply(val)
+		"draw":
+			return _enemy_draw_would_happen(val)
+		"aoe_enemy", "aoe_demon_dmg", "freeze_all_enemy", "poison_all_enemy":
+			return p_units > 0
+		"mana_boost", "gain_mana":
+			return _enemy_mana_gain_would_apply(val)
+		"summon_imp":
+			return _enemy_board_free_slots() >= 1
+		"buff_atk_all", "buff_atk_all_turn", "buff_hp_all", "buff_all_stats", "life_per_demon", "mana_per_demon", "cure_all_friendly":
+			return e_units > 0
+		"destroy":
+			return _player_weakest_index_any_row() >= 0
+		"debuff_atk", "debuff_atk_all", "silence_demon", "transform_1_1", "freeze_one_demon":
+			if p_units <= 0:
+				return false
+			if b.enemy_front.is_empty():
+				match effect:
+					"debuff_atk":
+						return _single_target_atk_debuff_prevents_open_lethal(val)
+					"debuff_atk_all":
+						return _aoe_atk_debuff_prevents_open_lethal(val)
+					"freeze_one_demon":
+						return _single_freeze_prevents_open_lethal()
+			return true
+		"destroy_low_atk":
+			return _player_has_destroy_low_atk_target(val)
+		"destroy_damaged":
+			return _player_has_damaged_demon()
+		"return_demon", "steal_demon":
+			return b.ai_find_strongest(b.player_front) >= 0 or b.ai_find_strongest(b.player_rear) >= 0
+		"hp_to_mana":
+			return val > 0 and b.enemy_hp >= val and _enemy_mana_gain_would_apply(val)
+		"hp_for_draw":
+			return val > 0 and b.enemy_hp >= val and _enemy_draw_would_happen(2)
+		"mana_per_graveyard":
+			var add_g: int = mini(val, b.enemy_gy.size())
+			return _enemy_mana_gain_would_apply(add_g) and add_g > 0
+		"face_per_graveyard":
+			return val > 0 and not b.enemy_gy.is_empty()
+		"buff_hp", "buff_target_stats", "give_divine_shield":
+			return e_units > 0
+		"aoe_all_2", "aoe_all_hp":
+			return _total_demon_minions_all_sides() > 0
+		"aoe_enemy_and_face":
+			return val > 0
+		"deal_face_if_low":
+			return val > 0 and b.player_hp <= val
+		"poison_one_enemy":
+			return b.ai_find_strongest(b.player_front) >= 0 or b.ai_find_strongest(b.player_rear) >= 0
+		"resurrect", "reanimate_top", "reanimate_demon":
+			return _enemy_gy_has_demon() and _enemy_board_free_slots() >= 1
+		"resurrect_all":
+			return _enemy_resurrect_all_would_move()
+		"destroy_all_both":
+			return _total_demon_minions_all_sides() > 0
+		"destroy_own_get_mana":
+			return e_units > 0
+		"damage_random_demon":
+			return val > 0 and p_units > 0
+		"blood_moon_buff":
+			return _total_demon_minions_all_sides() > 0
+		"blizzard_freeze_dmg":
+			return p_units > 0
+		"final_hour":
+			return e_units > 0 or _enemy_gy_has_demon()
+		"double_next_spell":
+			return false
+		_:
+			return val > 0 or p_units > 0 or e_units > 0
+
+
+func enemy_demon_summon_has_meaningful_outcome(card: Dictionary) -> bool:
+	var ab: String = str(card.get("ability", ""))
+	var free_now: int = _enemy_board_free_slots()
+	if free_now < 1:
+		return false
+	var after_self: int = free_now - 1
+	if "battlecry_summon_imps" in ab:
+		return after_self >= 2
+	if "battlecry_summon_imp" in ab:
+		return after_self >= 1
+	if "battlecry_replay_spell" in ab:
+		for ii: int in range(b.enemy_gy.size() - 1, -1, -1):
+			if str(b.enemy_gy[ii].get("type", "")) == "spell":
+				return true
+		return false
+	if "battlecry_freeze_target" in ab:
+		return _player_demon_count() > 0
 	return true
 
 
@@ -410,22 +721,80 @@ func is_bad_trade(attacker: Dictionary, target: Dictionary) -> bool:
 	return false
 
 
+func _attack_damage_vs_target(attacker: Dictionary, target: Dictionary) -> int:
+	var a_data: Dictionary = attacker.get("data", {})
+	var t_data: Dictionary = target.get("data", {})
+	var att_sub: String = str(a_data.get("subtype", ""))
+	var def_sub: String = str(t_data.get("subtype", ""))
+	return int(attacker.get("atk", 0)) + b.ai_type_advantage(att_sub, def_sub)
+
+
+func _attack_removes_target(attacker: Dictionary, target: Dictionary) -> bool:
+	if target.get("divine_active", false):
+		return false
+	if attacker.get("poisonous", false) and _attack_damage_vs_target(attacker, target) > 0:
+		return true
+	return _attack_damage_vs_target(attacker, target) >= int(target.get("hp", 1))
+
+
+func _target_on_damage_penalty(attacker: Dictionary, target: Dictionary, has_alternatives: bool) -> int:
+	if not has_alternatives:
+		return 0
+	var t_data: Dictionary = target.get("data", {})
+	var t_ab: String = str(t_data.get("ability", ""))
+	if "rage" in t_ab and _attack_damage_vs_target(attacker, target) < int(target.get("hp", 1)):
+		return 22
+	return 0
+
+
 func pick_best_target_for(attacker: Dictionary, board: Array) -> int:
 	if board.is_empty(): return -1
 	var best_i: int = 0
 	var best_score: int = -99999
 	var a_atk: int = attacker.get("atk", 0)
+	var has_alternatives: bool = board.size() > 1
 	for i in board.size():
 		var tgt: Dictionary = board[i]
 		var score: int = target_threat_score(tgt)
 		if is_bad_trade(attacker, tgt):
 			score -= 25
+		score -= _target_on_damage_penalty(attacker, tgt, has_alternatives)
 		if a_atk >= tgt.get("hp", 1):
 			score += 8
 		if score > best_score:
 			best_score = score
 			best_i = i
 	return best_i
+
+
+func _enemy_open_face_damage_this_turn() -> int:
+	var total: int = 0
+	for d: Dictionary in b.enemy_front:
+		if d.get("exhausted", false):
+			continue
+		var atk: int = int(d.get("atk", 0))
+		if atk <= 0:
+			continue
+		var swings_left: int = 1
+		if d.get("double_attack", false):
+			swings_left = maxi(0, 2 - int(d.get("attacked", 0)))
+		total += atk * swings_left
+	return total
+
+
+func _should_attack_rear_support(attacker: Dictionary, target: Dictionary, ai_type: String) -> bool:
+	var rear_score: int = target_threat_score(target)
+	if _enemy_open_face_damage_this_turn() >= b.player_hp:
+		return false
+	if ai_type == "aggro":
+		if rear_score < 20:
+			return false
+		return _attack_removes_target(attacker, target)
+	if rear_score < 10:
+		return false
+	if _attack_removes_target(attacker, target):
+		return true
+	return rear_score >= 22
 
 
 func spell_play_value(card: Dictionary) -> int:
@@ -545,27 +914,59 @@ func pick_pitch_index() -> int:
 		if ac_cost > b.enemy_mana and ac_cost <= ac_pool:
 			can_unlock = true
 	if not can_unlock: return -1
+	# If some pitch preserves an immediate unlock, don't choose a pitch that strands the turn.
+	var require_immediate_unlock: bool = false
+	for i in b.enemy_hand.size():
+		if i == stash_i: continue
+		if _best_unlock_card_value_for_pitch_candidate(i) >= 0:
+			require_immediate_unlock = true
+			break
 	# Pitch the lowest-value non-stash card
 	var best_i: int = -1
 	var best_w: int = 999999
 	for i in b.enemy_hand.size():
 		if i == stash_i: continue
+		if require_immediate_unlock and _best_unlock_card_value_for_pitch_candidate(i) < 0:
+			continue
 		var w: int = pitch_keep_weight(i)
 		if w < best_w:
 			best_w = w
 			best_i = i
+	if best_i < 0:
+		return -1
+	## Don't burn premium cards to unlock a much weaker immediate play (or to "ramp" when behind).
+	const PITCH_OPPORTUNITY_MARGIN: int = 14
+	const PITCH_CHAIN_PREMIUM_WHEN_BEHIND: int = 22
+	var mana_after: int = b.enemy_mana + b.enemy_hand[best_i].get("mana_value", 1)
+	var unlock_v: int = _max_unlock_card_value_after_pitch(mana_after, best_i)
+	var pitched_v: int = card_play_value(b.enemy_hand[best_i])
+	if unlock_v >= 0:
+		if unlock_v <= pitched_v - PITCH_OPPORTUNITY_MARGIN:
+			return -1
+	else:
+		if _enemy_board_behind_player() and pitched_v > PITCH_CHAIN_PREMIUM_WHEN_BEHIND \
+				and b.ai_get_ai_type() != "tidal_terror":
+			return -1
 	return best_i
 
 
 func pick_pitcher_to_pitch_index() -> int:
 	var stash_i: int = _stash_candidate_index()
+	const PITCH_OPPORTUNITY_MARGIN: int = 14
 	for i in b.enemy_hand.size():
 		if i == stash_i: continue
 		var c: Dictionary = b.enemy_hand[i]
 		if c.get("type", "") != "demon": continue
 		if "pitcher" not in c.get("ability", ""): continue
-		# Check if pitching this for 2 mana would enable a card we can't afford now
 		var mana_after: int = b.enemy_mana + 2
+		var pitcher_v: int = card_play_value(c)
+		var unlock_v: int = _max_unlock_card_value_after_pitch(mana_after, i)
+		if unlock_v >= 0:
+			if unlock_v > pitcher_v - PITCH_OPPORTUNITY_MARGIN:
+				return i
+			continue
+		if _enemy_board_behind_player():
+			continue
 		var pitcher_play_val: int = demon_play_value(c)
 		for other in b.enemy_hand:
 			if other == c: continue
@@ -574,7 +975,7 @@ func pick_pitcher_to_pitch_index() -> int:
 				cost += b.ai_spell_tax_for_enemy()
 			if cost > b.enemy_mana and cost <= mana_after:
 				var other_val: int = card_play_value(other)
-				if other_val > pitcher_play_val + 4:
+				if other_val > pitcher_play_val + 12:
 					return i
 	return -1
 
@@ -620,20 +1021,14 @@ func enemy_summon_to_front(card: Dictionary) -> bool:
 
 func attack_phase() -> void:
 	if b.enemy_front.is_empty() and not b.enemy_rear.is_empty():
-		# Prefer a real frontliner — only advance a support as a last resort to absorb hits
-		var advance_i: int = -1
-		for i in b.enemy_rear.size():
-			var d: Dictionary = b.enemy_rear[i]
-			if not demon_is_support(d.get("data", {})) and d.get("atk", 0) > 0:
-				advance_i = i
-				break
+		var advance_i: int = _pick_rear_advance_index()
 		if advance_i < 0:
 			return # no viable frontliner — protect support demons, skip attack
 		var mover: Dictionary = b.enemy_rear[advance_i]
 		b.enemy_rear.remove_at(advance_i)
 		mover["exhausted"] = mover.get("frozen", false)
 		b.enemy_front.append(mover)
-		b.ai_log_line("Enemy advances %s!" % mover["data"]["name"])
+		b.ai_log_line("Enemy advances %s!" % mover["data"]["name"], [_ai_step("attack_phase_rear_advance_idx", advance_i)])
 		b.ai_queue_redraw()
 		await b.get_tree().create_timer(0.3, true).timeout
 		if b.ai_is_battle_ended(): return
@@ -652,7 +1047,6 @@ func attack_phase() -> void:
 		await _do_attack_with_preview(a_idx)
 		if await b.ai_check_game_over_co(): return
 		await b.get_tree().create_timer(0.15, true).timeout
-
 		if b.ai_is_battle_ended(): return
 		if not attacker["exhausted"] and b.enemy_front.has(attacker):
 			a_idx = b.enemy_front.find(attacker)
@@ -663,6 +1057,45 @@ func attack_phase() -> void:
 				if await b.ai_check_game_over_co(): return
 				await b.get_tree().create_timer(0.15, true).timeout
 				if b.ai_is_battle_ended(): return
+
+
+func _rear_advance_win_score(d: Dictionary) -> int:
+	var atk: int = int(d.get("atk", 0))
+	if atk <= 0:
+		return -1
+	if b.player_front.is_empty():
+		if atk >= b.player_hp:
+			return 1000 + atk
+		return -1
+	var ab: String = str(d.get("data", {}).get("ability", ""))
+	if "any_death_drain" not in ab or b.player_hp > 1:
+		return -1
+	var tgt_idx: int = b.ai_find_taunt(b.player_front)
+	if tgt_idx < 0:
+		tgt_idx = pick_best_target_for(d, b.player_front)
+	if tgt_idx < 0 or tgt_idx >= b.player_front.size():
+		return -1
+	if int(b.player_front[tgt_idx].get("atk", 0)) < int(d.get("hp", 1)):
+		return -1
+	return 500 + atk
+
+
+func _pick_rear_advance_index() -> int:
+	var best_i: int = -1
+	var best_score: int = -1
+	for i in b.enemy_rear.size():
+		var score: int = _rear_advance_win_score(b.enemy_rear[i])
+		if score > best_score:
+			best_score = score
+			best_i = i
+	if best_i >= 0:
+		return best_i
+	# Prefer a real frontliner when there is no immediate winning line.
+	for i in b.enemy_rear.size():
+		var d: Dictionary = b.enemy_rear[i]
+		if not demon_is_support(d.get("data", {})) and d.get("atk", 0) > 0:
+			return i
+	return -1
 
 
 ## Shows the attack arrow for ~0.45 s, then resolves the attack.
@@ -705,11 +1138,10 @@ func pick_attack_target(a_idx: int) -> Dictionary:
 		return {"type": "front", "idx": pick_best_target_for(att, b.player_front)}
 
 	# Front is clear — can go face or hit rear
-	if b.player_rear.is_empty() or ai_type == "aggro":
+	if b.player_rear.is_empty():
 		return {"type": "face", "idx": - 1}
-	# Control/midrange: eliminate high-threat rear support before hitting face
 	var rear_t: int = pick_best_target_for(att, b.player_rear)
-	if target_threat_score(b.player_rear[rear_t]) >= 10:
+	if rear_t >= 0 and _should_attack_rear_support(att, b.player_rear[rear_t], ai_type):
 		return {"type": "rear", "idx": rear_t}
 	return {"type": "face", "idx": - 1}
 
@@ -719,11 +1151,12 @@ func do_attack(a_idx: int) -> void:
 	var att: Dictionary = b.enemy_front[a_idx]
 	var nm: String = att["data"]["name"]
 	if att.get("unblockable", false):
+		var tgt_p: Dictionary = pick_attack_target(a_idx)
 		b.ai_deal_damage_to_player(att["atk"])
 		if att.get("lifesteal", false):
-			b.enemy_hp = mini(b.enemy_hp + att["atk"], CardBattleConstants.STARTING_HP)
+			b.enemy_hp = mini(b.enemy_hp + att["atk"], b.enemy_hp_cap)
 		b.ai_face_attack_followup(att)
-		b.ai_log_line("%s pierces face for %d!" % [nm, att["atk"]])
+		b.ai_log_line("%s pierces face for %d!" % [nm, att["atk"]], [_ai_step("pick_attack_target", tgt_p)])
 		return
 	var tgt: Dictionary = pick_attack_target(a_idx)
 	# Hard rule: cannot hit face or rear while player has front row demons
@@ -733,18 +1166,18 @@ func do_attack(a_idx: int) -> void:
 		"face":
 			b.ai_deal_damage_to_player(att["atk"])
 			if att.get("lifesteal", false):
-				b.enemy_hp = mini(b.enemy_hp + att["atk"], CardBattleConstants.STARTING_HP)
+				b.enemy_hp = mini(b.enemy_hp + att["atk"], b.enemy_hp_cap)
 			b.ai_face_attack_followup(att)
-			b.ai_log_line("%s attacks face for %d!" % [nm, att["atk"]])
+			b.ai_log_line("%s attacks face for %d!" % [nm, att["atk"]], [_ai_step("pick_attack_target", tgt)])
 		"front":
 			var t: int = tgt["idx"]
 			if t < 0 or t >= b.player_front.size(): return
-			b.ai_log_line("%s → %s!" % [nm, b.player_front[t]["data"]["name"]])
+			b.ai_log_line("%s → %s!" % [nm, b.player_front[t]["data"]["name"]], [_ai_step("pick_attack_target", tgt)])
 			b.ai_do_combat(b.enemy_front, a_idx, false, true, b.player_front, t, true)
 		"rear":
 			var t: int = tgt["idx"]
 			if t < 0 or t >= b.player_rear.size(): return
-			b.ai_log_line("%s → rear %s!" % [nm, b.player_rear[t]["data"]["name"]])
+			b.ai_log_line("%s → rear %s!" % [nm, b.player_rear[t]["data"]["name"]], [_ai_step("pick_attack_target", tgt)])
 			b.ai_do_combat(b.enemy_front, a_idx, false, true, b.player_rear, t, false)
 
 

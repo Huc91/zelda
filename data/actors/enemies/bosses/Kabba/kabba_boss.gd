@@ -87,15 +87,12 @@ func get_battle_start_hp() -> int:
 	return 30
 
 
+func get_name_label() -> String:
+	return NPCDialogues.get_speaker_name(dialogue_id)
+
+
 func defer_battle_reward_until_mercy() -> bool:
 	return true
-
-
-func should_skip_battle_reward() -> bool:
-	return Global.kabba_state == Global.KABBA_SPARED_WAITING_SCROLL \
-		or Global.kabba_state == Global.KABBA_SPARED_GONE \
-		or Global.kabba_state == Global.KABBA_KILLED_SKULL \
-		or Global.kabba_state == Global.KABBA_SKULL_DONE
 
 
 func on_card_battle_won() -> void:
@@ -151,6 +148,7 @@ func _mercy_kill_sequence() -> void:
 	_drop_kabba_signature_card()
 	_spawn_skull()
 	Global.kabba_state = Global.KABBA_KILLED_SKULL
+	Global.apply_post_kill_world_rules(self, true)
 
 
 func _drop_kabba_signature_card() -> void:

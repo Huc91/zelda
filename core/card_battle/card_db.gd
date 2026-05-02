@@ -1,12 +1,57 @@
 class_name CardDB extends RefCounted
 
 static var _map: Dictionary = {}
+static var _runtime_cards: Dictionary = {}
 static var _ready_flag := false
 
 
 static func get_card(id: String) -> Dictionary:
 	_ensure_init()
+	if _runtime_cards.has(id):
+		return (_runtime_cards[id] as Dictionary).duplicate(true)
 	return _map.get(id, {}).duplicate(true)
+
+
+## Register a card at runtime (e.g. promo skeleton from absorbed duelist skull). Persist via Global.save_game.
+static func register_runtime_card(card: Dictionary) -> void:
+	_ensure_init()
+	var cid: String = str(card.get("id", ""))
+	if cid.is_empty():
+		push_warning("CardDB.register_runtime_card: missing id")
+		return
+	_runtime_cards[cid] = card.duplicate(true)
+
+
+static func runtime_card_ids() -> Array[String]:
+	_ensure_init()
+	var out: Array[String] = []
+	for k: String in _runtime_cards:
+		out.append(k)
+	return out
+
+
+static func clear_runtime_cards() -> void:
+	_runtime_cards.clear()
+
+
+static func runtime_cards_for_save() -> Array:
+	_ensure_init()
+	var arr: Array = []
+	for k: String in _runtime_cards:
+		arr.append((_runtime_cards[k] as Dictionary).duplicate(true))
+	return arr
+
+
+static func load_runtime_cards_from_save(entries: Array) -> void:
+	clear_runtime_cards()
+	for v: Variant in entries:
+		if typeof(v) == TYPE_DICTIONARY:
+			register_runtime_card(v as Dictionary)
+
+
+## Legal 30-card enemy deck from ids (same rules as player decks).
+static func enemy_deck_from_card_ids(ids: Array) -> Array:
+	return _build_enemy(ids)
 
 
 static func starter_deck() -> Array:
@@ -104,6 +149,9 @@ static func all_collectible_ids() -> Array[String]:
 		if id.is_empty() or id.begins_with("token_"):
 			continue
 		out.append(id)
+	for rid: String in _runtime_cards:
+		if not rid in out:
+			out.append(rid)
 	out.sort()
 	return out
 
@@ -504,7 +552,7 @@ const ALL_CARDS = [
 	{"id": "demon_015", "name": "Crystal Crawler", "type": "demon", "subtype": "obscura", "cost": 3, "mana_value": 1, "atk": 2, "hp": 2, "rarity": "common", "ability": "divine_shield", "ability_desc": "Divine Shield — absorbs the first hit.", "desc": "The crystal grew around it slowly. Neither of them agreed to this arrangement."},
 	{"id": "demon_009", "name": "Treant", "type": "demon", "subtype": "terresta", "cost": 4, "mana_value": 1, "atk": 2, "hp": 5, "rarity": "common", "ability": "taunt", "ability_desc": "Taunt — enemies must attack this first.", "desc": "Peaceful tree, once. Ask the village. Nobody from the village is available to ask."},
 	{"id": "demon_010", "name": "Cerberus Cat", "type": "demon", "subtype": "terresta", "cost": 2, "mana_value": 1, "atk": 3, "hp": 3, "rarity": "rare", "ability": "", "ability_desc": "", "desc": "Three heads. None of them agree. All of them bite."},
-	{"id": "demon_012", "name": "Minotaur", "type": "demon", "subtype": "terresta", "cost": 4, "mana_value": 1, "atk": 3, "hp": 6, "rarity": "common", "ability": "rage", "ability_desc": "Rage — gains +1 ATK every time it takes damage.", "desc": "Pain makes it stronger. It has known this for a long time."},
+	{"id": "demon_012", "name": "Minotaur", "type": "demon", "subtype": "terresta", "cost": 4, "mana_value": 1, "atk": 2, "hp": 6, "rarity": "common", "ability": "rage", "ability_desc": "Rage — gains +1 ATK every time it takes damage.", "desc": "Pain makes it stronger. It has known this for a long time."},
 	{"id": "demon_016", "name": "Nightmare", "type": "demon", "subtype": "obscura", "cost": 4, "mana_value": 1, "atk": 5, "hp": 4, "rarity": "rare", "ability": "battlecry_damage_player_2", "ability_desc": "Battlecry: Deal 2 damage to the enemy.", "desc": "Its arrival alone causes pain."},
 	{"id": "demon_017", "name": "Iron Djinn", "type": "demon", "subtype": "regalia", "cost": 4, "mana_value": 1, "atk": 4, "hp": 4, "rarity": "rare", "ability": "battlecry_buff_all_hp", "ability_desc": "Battlecry: All your other demons gain +2 HP.", "desc": "Fortifies every ally around it. Never explains why it cares."},
 	{"id": "demon_019", "name": "Horned Demon", "type": "demon", "subtype": "regalia", "cost": 4, "mana_value": 1, "atk": 4, "hp": 3, "rarity": "rare", "ability": "haste_lifesteal", "ability_desc": "Haste. Lifesteal — heals you for damage it deals.", "desc": "Gores first. Drinks the wound second."},

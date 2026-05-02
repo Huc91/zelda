@@ -9,7 +9,6 @@ const PUSH_COLLISION_TEST_PX: float = 8.0
 var input_direction: Vector2:
 	get: return Input.get_vector("left", "right", "up", "down")
 
-var last_safe_position: Vector2
 var drown_instantiated := false
 var has_entered: bool = false
 const ENTRY_DISTANCE: int = 64
@@ -97,7 +96,11 @@ func state_respawning() -> void:
 
 
 func _on_attacked(source: Node) -> void:
-	if in_battle: return
+	if in_battle:
+		return
+	# Dialogue, vending, merchant UI pause the tree; attacks must not start a battle anyway.
+	if get_tree().paused:
+		return
 	in_battle = true
 	var enemy: Node = source.user if "user" in source else source
 	Global.request_card_battle(false, enemy)

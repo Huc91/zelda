@@ -7,10 +7,6 @@ static var DROWN_SFX = preload("res://data/sfx/LA_Link_Wade1.wav")
 static var DROWN_VFX = preload("res://data/vfx/drown.tres")
 static var KB_TIME = 0.2
 static var KB_AMT = 100
-const _GDP_ICONS: Texture2D = preload("res://GUI_plugin/GuiAssets/sprites/gdp_icons.png")
-const _ICON_CHEVRON_UP_RECT: Rect2 = Rect2(186, 42, 7, 7)
-const _ICON_CHEVRON_DOWN_RECT: Rect2 = Rect2(186, 52, 7, 7)
-const _ICON_SKULL_RECT: Rect2 = Rect2(122, 32, 7, 7)
 
 @export_enum("Enemy", "Player") var actor_type
 @export var speed := 70.0
@@ -34,11 +30,9 @@ var hitbox: Area2D
 var in_battle := false
 ## Seconds of post-respawn invulnerability remaining. Enemies cannot trigger battle while > 0.
 var invulnerable_timer: float = 0.0
+## Respawn / scene placement (player); overworld shadows also get this set on spawn.
+var last_safe_position: Vector2 = Vector2.ZERO
 var battle_deck: Array = []
-var _difficulty_icon: Sprite2D
-var _last_player_deck_index: int = -1
-var _last_player_deck_power: float = -999999.0
-var _last_enemy_deck_power: float = -999999.0
 var _home_sector: Vector2 = Vector2.ZERO
 var _home_sector_set: bool = false
 
@@ -55,7 +49,6 @@ func _ready() -> void:
 	
 	set_collision_layer_value(1, false)
 	set_collision_layer_value(2, true)
-	_setup_enemy_power_marker()
 	if actor_type == 0:
 		_home_sector = Vector2(
 			floor(position.x / GridCamera.CELL_SIZE.x),
@@ -98,13 +91,6 @@ func _physics_process(delta: float) -> void:
 		sprite.visible = int(invulnerable_timer * 16.0) % 2 == 0
 		if invulnerable_timer == 0.0:
 			sprite.visible = true
-	if actor_type == 0:
-		var cur_power: float = _current_player_deck_power()
-		var cur_enemy_power: float = _enemy_deck_power()
-		if _last_player_deck_index != Global.battle_deck_index \
-				or absf(cur_power - _last_player_deck_power) > 0.001 \
-				or absf(cur_enemy_power - _last_enemy_deck_power) > 0.001:
-			_refresh_enemy_power_marker()
 	_state_process(delta)
 	if actor_type == 0:
 		_constrain_enemy_to_home_sector()
@@ -298,82 +284,7 @@ func drown() -> void:
 	_change_state(state_drown)
 
 
-func _setup_enemy_power_marker() -> void:
-	if actor_type != 0:
-		return
-	battle_deck = CardDB.enemy_deck_for_difficulty(difficulty)
-	_refresh_enemy_power_marker()
-
-
-func _refresh_enemy_power_marker() -> void:
-	_last_player_deck_index = Global.battle_deck_index
-	_last_player_deck_power = _current_player_deck_power()
-	_last_enemy_deck_power = _enemy_deck_power()
-	if _difficulty_icon != null:
-		_difficulty_icon.queue_free()
-		_difficulty_icon = null
-	var marker_type: String = _difficulty_marker_type()
-	if marker_type == "normal":
-		return
-	var marker_tex: AtlasTexture = AtlasTexture.new()
-	marker_tex.atlas = _GDP_ICONS
-	match marker_type:
-		"easy":
-			marker_tex.region = _ICON_CHEVRON_DOWN_RECT
-		"hard":
-			marker_tex.region = _ICON_CHEVRON_UP_RECT
-		"boss":
-			marker_tex.region = _ICON_SKULL_RECT
-	_difficulty_icon = Sprite2D.new()
-	_difficulty_icon.texture = marker_tex
-	_difficulty_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_difficulty_icon.centered = true
-	_difficulty_icon.position = Vector2(0.0, -16.0)
-	_difficulty_icon.z_as_relative = true
-	_difficulty_icon.z_index = 10
-	_difficulty_icon.scale = Vector2(1.0, 1.0)
-	_difficulty_icon.visible = true
-	if marker_type == "easy":
-		_difficulty_icon.modulate = Color(0.0, 1.0, 0.0, 1.0)
-	elif marker_type == "hard":
-		_difficulty_icon.modulate = Color(1.0, 0.0, 0.0, 1.0)
-	add_child(_difficulty_icon)
-
-
 func get_battle_deck() -> Array:
 	if battle_deck.is_empty():
 		battle_deck = CardDB.enemy_deck_for_difficulty(difficulty)
 	return battle_deck.duplicate(true)
-
-
-func _difficulty_marker_type() -> String:
-	if difficulty == "boss":
-		return "boss"
-	var my_idx: int = clampi(Global.battle_deck_index, 0, maxi(0, Global.player_decks.size() - 1))
-	var my_power: float = float(Global.get_deck_power_breakdown(my_idx).get("final_power", 0.0))
-	var enemy_power: float = _enemy_deck_power()
-	var delta: float = enemy_power - my_power
-	if delta >= 3.0:
-		return "boss"
-	if delta > 1.0:
-		return "hard"
-	if delta >= -1.0 and delta <= 1.0:
-		return "normal"
-	return "easy"
-
-
-func _enemy_deck_power() -> float:
-	var enemy_ids: Array = []
-	for cv: Variant in get_battle_deck():
-		if typeof(cv) != TYPE_DICTIONARY:
-			continue
-		var c: Dictionary = cv as Dictionary
-		var cid: String = str(c.get("id", ""))
-		if not cid.is_empty():
-			enemy_ids.append(cid)
-	return float(Global.get_deck_power_breakdown_for_card_ids(enemy_ids).get("final_power", 0.0))
-
-
-func _current_player_deck_power() -> float:
-	var my_idx: int = clampi(Global.battle_deck_index, 0, maxi(0, Global.player_decks.size() - 1))
-	return float(Global.get_deck_power_breakdown(my_idx).get("final_power", 0.0))

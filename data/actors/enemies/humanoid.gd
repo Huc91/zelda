@@ -8,11 +8,24 @@ const DIFF_MODULATE: Dictionary = {
 }
 
 const SWORD_SCENE: PackedScene = preload("res://data/actors/attacks/sword.tscn")
+const GLOVE_SCENE: PackedScene = preload("res://data/actors/attacks/duel_glove.tscn")
+const ENEMY_GLOVE_TINT: Color = Color(1.0, 0.35, 0.35)
+const SKULL_SCENE: PackedScene = preload("res://data/actors/skull.tscn")
+const SKULL_SPAWN_OFFSET: Vector2 = Vector2(0, -24)
 const ATTACK_RANGE: float = 36.0
 const ATTACK_COOLDOWN: float = 0.9
 
 @export var aggro_range: float = 80.0
 @export var wander_time: float = 1.4
+## Human soldiers: after winning the card battle, offer Spare / Kill (same persistence as duelists).
+@export var offers_card_battle_mercy: bool = false
+@export var mercy_display_name: String = "Soldier"
+## Lines before card battle (mercy duelists / human soldiers with spare-kill flow).
+@export var taunt_lines: PackedStringArray = PackedStringArray([
+	"Now we fight.",
+	"Cards. Now.",
+	"You picked the wrong fight.",
+])
 
 var move_direction: Vector2 = Vector2.DOWN
 var _player: Actor = null
@@ -30,6 +43,10 @@ const ATTACK_ALIGN_SLACK: float = 10.0
 const AXIS_LOCK_BIAS: float = 0.1
 const PLAYER_SPACE_RADIUS: float = 14.0
 
+var _mercy_spawn_position: Vector2 = Vector2.ZERO
+var _mercy_ui_active: bool = false
+var _mercy_chose_kill: bool = false
+
 
 func _ready() -> void:
 	super._ready()
@@ -45,10 +62,249 @@ func _ready() -> void:
 	health = hearts
 	_sword_damage = damage
 	damage = 0.0
+	if _mercy_save_key() != "":
+		_mercy_spawn_position = position
+		if not Global.bonfire_rested.is_connected(Callable(self, "_on_mercy_bonfire_rested")):
+			Global.bonfire_rested.connect(_on_mercy_bonfire_rested)
+		_apply_mercy_persistent_state()
+
+
+## Override on duelist (fixed id). Shadows should keep default "".
+func _mercy_save_key() -> String:
+	if not offers_card_battle_mercy:
+		return ""
+	var m: Map = _get_map()
+	var mp: String = m.scene_file_path if m != null else ""
+	return "%s#%s" % [mp, str(name)]
+
+
+## Kabba-style overworld: taunt, red duel glove (not sword), then card battle + spare/kill.
+func _wants_duel_glove_overworld() -> bool:
+	return _mercy_save_key() != ""
+
+
+func get_name_label() -> String:
+	if _mercy_save_key() != "":
+		return mercy_display_name
+	return str(name)
+
+
+func _on_mercy_bonfire_rested() -> void:
+	var k: String = _mercy_save_key()
+	if k == "":
+		return
+	if Global.duelist_states.get(k, Global.DUELIST_ST_ALIVE) != Global.DUELIST_ST_SPARED_HIDDEN:
+		return
+	Global.duelist_states[k] = Global.DUELIST_ST_ALIVE
+	_mercy_chose_kill = false
+	process_mode = Node.PROCESS_MODE_INHERIT
+	visible = true
+	set_collision_layer_value(1, false)
+	set_collision_layer_value(2, true)
+	position = _mercy_spawn_position
+	sprite.show()
+	sprite.modulate = DIFF_MODULATE.get(difficulty, DIFF_MODULATE["easy"])
+
+
+func _apply_mercy_persistent_state() -> void:
+	var k: String = _mercy_save_key()
+	var st: int = int(Global.duelist_states.get(k, Global.DUELIST_ST_ALIVE))
+	match st:
+		Global.DUELIST_ST_SKULL_DONE:
+			queue_free()
+			return
+		Global.DUELIST_ST_KILLED_SKULL:
+			sprite.modulate = Color.BLACK
+			sprite.hide()
+			set_collision_layer_value(1, false)
+			set_collision_layer_value(2, false)
+			process_mode = Node.PROCESS_MODE_DISABLED
+			if get_node_or_null("Skull") == null:
+				_mercy_spawn_skull_remains()
+		Global.DUELIST_ST_MERCY_PENDING:
+			if not Global.in_battle:
+				call_deferred("offer_post_victory_mercy")
+		Global.DUELIST_ST_SPARED_HIDDEN:
+			visible = false
+			set_collision_layer_value(1, false)
+			set_collision_layer_value(2, false)
+			process_mode = Node.PROCESS_MODE_DISABLED
+		_:
+			pass
+
+
+func defer_battle_reward_until_mercy() -> bool:
+	return _mercy_save_key() != ""
+
+
+func should_skip_battle_reward() -> bool:
+	var k: String = _mercy_save_key()
+	if k == "":
+		return false
+	var st: int = int(Global.duelist_states.get(k, Global.DUELIST_ST_ALIVE))
+	## Spare still counts as a won fight — grant loot. Only skip after skull was fully absorbed.
+	return st == Global.DUELIST_ST_SKULL_DONE
+
+
+func get_battle_gold_multiplier() -> float:
+	if _mercy_save_key() == "":
+		return 1.0
+	return 1.2 if _mercy_chose_kill else 1.0
+
+
+func on_card_battle_won() -> void:
+	var k: String = _mercy_save_key()
+	if k != "":
+		Global.duelist_states[k] = Global.DUELIST_ST_MERCY_PENDING
+	else:
+		queue_free()
+
+
+func offer_post_victory_mercy() -> void:
+	var k: String = _mercy_save_key()
+	if k == "":
+		return
+	if int(Global.duelist_states.get(k, Global.DUELIST_ST_ALIVE)) != Global.DUELIST_ST_MERCY_PENDING:
+		return
+	if _mercy_ui_active:
+		return
+	_mercy_ui_active = true
+	get_tree().paused = true
+	var dlg: DialogueBox = DialogueBox.new()
+	get_tree().root.add_child(dlg)
+	dlg.show_sequence(NPCDialogues.get_duelist_post_victory_mercy(), get_name_label())
+	var ev: Variant = await dlg.finished
+	var evs: String = str(ev)
+	if evs == "duelist_spare":
+		await _mercy_spare_sequence()
+	elif evs == "duelist_kill":
+		await _mercy_kill_sequence()
+	get_tree().paused = false
+	_mercy_ui_active = false
+
+
+func _mercy_spare_sequence() -> void:
+	var dlg2: DialogueBox = DialogueBox.new()
+	get_tree().root.add_child(dlg2)
+	dlg2.show_sequence({"lines": ["Next time, then.", "You were lucky."]}, get_name_label())
+	await dlg2.finished
+	var k: String = _mercy_save_key()
+	if k != "":
+		Global.duelist_states[k] = Global.DUELIST_ST_SPARED_HIDDEN
+	await _mercy_walk_off_camera_then_hide()
+
+
+func _mercy_kill_sequence() -> void:
+	_mercy_chose_kill = true
+	get_tree().paused = false
+	var tw: Tween = create_tween()
+	tw.tween_property(sprite, "modulate", Color.BLACK, 0.35)
+	await tw.finished
+	sprite.hide()
+	set_collision_layer_value(1, false)
+	set_collision_layer_value(2, false)
+	_mercy_spawn_skull_remains()
+	var k: String = _mercy_save_key()
+	if k != "":
+		Global.duelist_states[k] = Global.DUELIST_ST_KILLED_SKULL
+	process_mode = Node.PROCESS_MODE_DISABLED
+	Global.apply_post_kill_world_rules(self, true)
+
+
+func _mercy_spawn_skull_remains() -> void:
+	var map: Map = _get_map()
+	if map == null:
+		return
+	var sk: Node = SKULL_SCENE.instantiate()
+	add_child(sk)
+	var skull_world: Vector2 = global_position + SKULL_SPAWN_OFFSET
+	(sk as Node2D).global_position = skull_world
+	if sk.has_method("setup"):
+		sk.call("setup", map.scene_file_path, skull_world, map)
+
+
+func _mercy_walk_off_camera_then_hide() -> void:
+	get_tree().paused = false
+	var map: Map = _get_map()
+	var p: Actor = _get_player()
+	if map == null or p == null:
+		_mercy_apply_spare_hidden_transform()
+		return
+	var my_sec: Vector2i = Vector2i(
+		int(floor(global_position.x / GridCamera.CELL_SIZE.x)),
+		int(floor(global_position.y / GridCamera.CELL_SIZE.y))
+	)
+	var p_sec: Vector2i = Vector2i(
+		int(floor(p.global_position.x / GridCamera.CELL_SIZE.x)),
+		int(floor(p.global_position.y / GridCamera.CELL_SIZE.y))
+	)
+	var delta_sec: Vector2i = my_sec - p_sec
+	if delta_sec == Vector2i.ZERO:
+		delta_sec = Vector2i(1, 0)
+	var signx: int = signi(delta_sec.x)
+	var signy: int = signi(delta_sec.y)
+	if signx == 0:
+		signx = 1
+	if signy == 0:
+		signy = 1
+	var away: Vector2i = my_sec + Vector2i(signx * 3, signy * 3)
+	var tw: Vector2 = GridCamera.CELL_SIZE
+	var target: Vector2 = Vector2(
+		float(away.x) * tw.x + tw.x * 0.5,
+		float(away.y) * tw.y + tw.y * 0.5
+	)
+	var twm: Tween = create_tween()
+	twm.tween_property(self, "position", target, 1.8)
+	await twm.finished
+	_mercy_apply_spare_hidden_transform()
+
+
+func _mercy_apply_spare_hidden_transform() -> void:
+	visible = false
+	set_collision_layer_value(1, false)
+	set_collision_layer_value(2, false)
+	process_mode = Node.PROCESS_MODE_DISABLED
+
+
+func on_world_soul_absorb(_world_soul: Node) -> Dictionary:
+	var k: String = _mercy_save_key()
+	if k == "":
+		return {}
+	var ids: Array[String] = []
+	var built: Array = get_battle_deck()
+	ids = Global.card_ids_from_built_deck(built)
+	return Global.try_duelist_skull_absorb(ids, get_name_label())
+
+
+func on_world_soul_absorbed(_world_soul: Node) -> void:
+	var k: String = _mercy_save_key()
+	if k == "":
+		return
+	Global.duelist_states[k] = Global.DUELIST_ST_SKULL_DONE
+	queue_free()
 
 
 func _on_attacked(_source: Node) -> void:
-	if in_battle: return
+	if in_battle:
+		return
+	if _wants_duel_glove_overworld():
+		_taunt_then_start_card_battle()
+	else:
+		in_battle = true
+		Global.request_card_battle(true, self)
+
+
+func _taunt_then_start_card_battle() -> void:
+	get_tree().paused = true
+	var dlg: DialogueBox = DialogueBox.new()
+	get_tree().root.add_child(dlg)
+	var lines: PackedStringArray = taunt_lines
+	var line: String = "Now we fight."
+	if lines.size() > 0:
+		line = lines[randi() % lines.size()]
+	dlg.show_sequence({"lines": [line]}, get_name_label())
+	await dlg.finished
+	get_tree().paused = false
 	in_battle = true
 	Global.request_card_battle(true, self)
 
@@ -210,9 +466,17 @@ func state_chase() -> void:
 			move_direction = _axis_locked_direction(to_p.normalized())
 			_play_humanoid_walk(move_direction)
 		velocity = Vector2.ZERO
-		var sw: Node = SWORD_SCENE.instantiate()
-		get_parent().add_child(sw)
-		(sw as Attack).activate(self)
+		if _wants_duel_glove_overworld():
+			var gl: Node = GLOVE_SCENE.instantiate()
+			get_parent().add_child(gl)
+			(gl as Attack).activate(self)
+			var spr: Sprite2D = gl.get_node_or_null("Sprite2D") as Sprite2D
+			if spr != null:
+				spr.modulate = ENEMY_GLOVE_TINT
+		else:
+			var sw: Node = SWORD_SCENE.instantiate()
+			get_parent().add_child(sw)
+			(sw as Attack).activate(self)
 		return
 
 	_path_timer -= dt

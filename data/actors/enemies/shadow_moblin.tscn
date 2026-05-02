@@ -1,0 +1,85 @@
+[gd_scene load_steps=11 format=3 uid="uid://shadow_mob01"]
+
+[ext_resource type="Script" path="res://data/actors/enemies/shadow_moblin.gd" id="1_smb"]
+[ext_resource type="Texture2D" path="res://data/actors/enemies/enemy_easy_1.png" id="2_mob01"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_md0"]
+atlas = ExtResource("2_mob01")
+region = Rect2(0, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_md1"]
+atlas = ExtResource("2_mob01")
+region = Rect2(16, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ms0"]
+atlas = ExtResource("2_mob01")
+region = Rect2(32, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ms1"]
+atlas = ExtResource("2_mob01")
+region = Rect2(48, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_mu0"]
+atlas = ExtResource("2_mob01")
+region = Rect2(64, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_mu1"]
+atlas = ExtResource("2_mob01")
+region = Rect2(80, 0, 16, 16)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_mob"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_md0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_md1")
+}],
+"loop": true,
+"name": &"WalkDown",
+"speed": 8.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ms0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ms1")
+}],
+"loop": true,
+"name": &"WalkSide",
+"speed": 8.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_mu0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_mu1")
+}],
+"loop": true,
+"name": &"WalkUp",
+"speed": 8.0
+}]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_mob"]
+size = Vector2(8, 8)
+
+[node name="ShadowMoblin" type="CharacterBody2D"]
+motion_mode = 1
+script = ExtResource("1_smb")
+actor_type = 0
+speed = 48.0
+hearts = 0.5
+damage = 0.5
+difficulty = "easy"
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+sprite_frames = SubResource("SpriteFrames_mob")
+animation = &"WalkDown"
+autoplay = "WalkDown"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+rotation = 0.785398
+shape = SubResource("RectangleShape2D_mob")
